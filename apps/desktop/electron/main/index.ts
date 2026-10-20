@@ -734,8 +734,7 @@ const planRuntime = createPlanRuntime({
   resolveAgentRuntimeLaunch,
   isQuitting: () => mainState.quitting,
   onTurnSettled: async (sessionId, turnId) => {
-    await sessionCollaboration.settle(sessionId, turnId);
-    await projectWorkflow.onTurnSettled(sessionId);
+    await Promise.all([sessionCollaboration.settle(sessionId, turnId), projectWorkflow.onTurnSettled(sessionId)]);
   },
 });
 const {
