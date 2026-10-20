@@ -27,16 +27,17 @@ for (const directory of [home, data, workspace, join(workspace, "main"), join(wo
 const canonicalWorkspace = await realpath(workspace);
 const mainResource = join(canonicalWorkspace, "main"), sideResource = join(canonicalWorkspace, "side");
 const sidePath = join(sideResource, "measurement.json"), candidatePath = join(mainResource, "candidate.txt");
+const json = JSON.stringify;
 const shellResource = join(canonicalWorkspace, "work-shell");
 const shellBuildCommand = `printf 'build\\n' >> ${json(join(shellResource, "build.log"))}; printf 'candidate-v1' > ${json(join(shellResource, "candidate.txt"))}`;
-const shellCheckCommand = `if grep -q 'candidate-v2' ${json(join(shellResource, "candidate.txt"))}; then printf 'check-passed\\n'; else printf 'check-failed\\n'; fi`;
+const shellCheckCommand = `if grep -q 'candidate-v2' ${json(join(shellResource, "candidate.txt"))}; then printf 'check-passed\\n'; else printf 'check-failed\\n'; exit 1; fi`;
+const shellRecheckCommand = `grep -q 'candidate-v2' ${json(join(shellResource, "candidate.txt"))} && printf 'check-passed\\n'`;
 const shellDeniedCommand = `printf 'unsafe' > ${json(join(canonicalWorkspace, "unsafe-bash.txt"))}`;
-const pendingCommand = key => `printf '${key}' > ${json(join(canonicalWorkspace, `pending-${key}.txt`))}`;
+const pendingCommand = key => `printf '${key}\\n' >> ${json(join(canonicalWorkspace, `pending-${key}.txt`))}`;
 const hostBinary = join(root, "target/debug/pi-desktop-host-core");
-const requests = [], checkpoints = [], coverage = [];
+const requests = [], checkpoints = [], coverage = [], conflictRefreshes = [];
 const held = new Map(), runRequests = new Map();
 let sequence = 0, log = "", fixtureFailure, heldMain, projectId, main, page, child;
-const json = JSON.stringify;
 const stamp = () => new Date().toISOString();
 const sleep = ms => new Promise(done => setTimeout(done, ms));
 async function until(check, description, timeout = 45000) {
@@ -66,7 +67,11 @@ function reply(res, model, content, tool) {
 function hold(res, model, key, partial = "") {
   if (partial) res.write(`data: ${json({ id: `workflow-${++sequence}`, object: "chat.completion.chunk", created: 1, model, choices: [{ index: 0, delta: { role: "assistant", content: partial }, finish_reason: null }] })}\n\n`);
   else res.write(": bounded work remains active\n\n");
-  held.set(key, () => reply(res, model, checkpoint(`Completed ${key}`)));
+  held.set(key, () => {
+    if (!partial) return reply(res, model, checkpoint(`Completed ${key}`));
+    res.write(`data: ${json({ id: `workflow-${++sequence}`, object: "chat.completion.chunk", created: 1, model, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n`);
+    res.end("data: [DONE]\n\n");
+  });
 }
 async function absent(path) {
   try { await access(path); return false; } catch (error) { if (error.code === "ENOENT") return true; throw error; }
@@ -110,19 +115,36 @@ const model = createServer(async (req, res) => {
     };
     if (prompt.includes("SHELL_PENDING_PAUSE") || prompt.includes("SHELL_PENDING_CANCEL")) {
       const key = prompt.includes("SHELL_PENDING_PAUSE") ? "pause" : "cancel";
-      assert.equal(runRequests.get(runId), 1, "a revoked pending shell approval never retries the model");
-      reply(res, body.model, null, { id: `pending-shell-${key}`, name: "Bash", args: { command: pendingCommand(key) } });
+      const toolId = `pending-shell-${key}-${runId}`;
+      if (toolResults.some(result => result.tool_call_id === toolId)) {
+        assert.equal(key, "pause", "a cancelled pending command must never execute");
+        assert.equal(await readFile(join(canonicalWorkspace, "pending-pause.txt"), "utf8"), "pause\n", "fresh Resume approval executes exactly once");
+        reply(res, body.model, checkpoint("Resumed the same bounded assignment with fresh Shell approval; executed exactly once"));
+      } else {
+        assert.equal(runRequests.get(runId), 1, "a revoked pending shell approval never retries the model");
+        reply(res, body.model, null, { id: toolId, name: "Bash", args: { command: pendingCommand(key) } });
+      }
     } else if (prompt.includes("SHELL_PIPELINE")) {
       if (prompt.includes("SHELL_DOCUMENT_STEP")) {
         if (!toolResults.some(result => result.tool_call_id === "shell-document")) invokeTool("shell-document", "Write", { path: join(shellResource, "report.md"), content: "Build executed once. Check observed candidate-v1 failure. Typed fix produced candidate-v2. User acceptance pending." });
         else reply(res, body.model, checkpoint("Documented the actual build/check/fix sequence; user review needed"));
+      } else if (prompt.includes("SHELL_RECHECK_STEP")) {
+        if (!toolResults.some(result => result.tool_call_id === "shell-recheck")) reply(res, body.model, null, { id: "shell-recheck", name: "Bash", args: { command: shellRecheckCommand } });
+        else {
+          const result = JSON.parse(toolResults.find(result => result.tool_call_id === "shell-recheck").content);
+          assert.equal(result.exitCode, 0, "actual corrected candidate check exits zero");
+          assert.match(result.stdout, /check-passed/);
+          reply(res, body.model, checkpoint("Actual recheck passed after the bounded fix", { next: { action: "document", resources: [shellResource], prompt: "SHELL_DOCUMENT_STEP: Document actual failing and passing checks plus the fix." } }));
+        }
       } else if (prompt.includes("SHELL_FIX_STEP")) {
         if (!toolResults.some(result => result.tool_call_id === "shell-fix")) invokeTool("shell-fix", "Write", { path: join(shellResource, "candidate.txt"), content: "candidate-v2" });
-        else reply(res, body.model, checkpoint("Fixed the observed candidate-v1 check failure", { next: { action: "document", resources: [shellResource], prompt: "SHELL_DOCUMENT_STEP: Document the check failure and actual fix." } }));
+        else reply(res, body.model, checkpoint("Fixed the observed candidate-v1 check failure", { next: { action: "check", resources: [shellResource], prompt: "SHELL_RECHECK_STEP: Run the actual check against the corrected candidate." } }));
       } else if (prompt.includes("SHELL_CHECK_STEP")) {
         if (!toolResults.some(result => result.tool_call_id === "shell-check")) reply(res, body.model, null, { id: "shell-check", name: "Bash", args: { command: shellCheckCommand } });
         else {
-          assert.match(json(toolResults.find(result => result.tool_call_id === "shell-check")), /check-failed/, "real shell check observes the unfixed candidate");
+          const result = JSON.parse(toolResults.find(result => result.tool_call_id === "shell-check").content);
+          assert.equal(result.exitCode, 1, "the real failed check has integer nonzero exit status");
+          assert.match(result.stdout, /check-failed/, "real shell check observes the unfixed candidate");
           reply(res, body.model, checkpoint("Actual check found candidate-v1; bounded fix required", { next: { action: "implement", resources: [shellResource], prompt: "SHELL_FIX_STEP: Fix the actual failed candidate using typed Write." } }));
         }
       } else if (!toolResults.some(result => result.tool_call_id === "shell-build")) reply(res, body.model, null, { id: "shell-build", name: "Bash", args: { command: shellBuildCommand } });
@@ -226,7 +248,25 @@ async function startApp() {
   main = await connect(ports[1], "node"); page = await connect(ports[0], "page");
   await until(() => page.evaluate("!!window.piDesktop && !!window.__PI_DESKTOP__"), "renderer and public preload");
   await until(() => main.evaluate("typeof globalThis.__PI_DESKTOP_PLAN_UI_PROBE === 'function'"), "main setup probe");
+  await observePermissions();
+}
+async function observePermissions() {
   await page.evaluate("window.__workflowPermissionEvents = []; window.piDesktop.on(window.piDesktop.channels.event.agentMessage, envelope => { if (envelope.event?.type === 'tool_permission_request') window.__workflowPermissionEvents.push(envelope); });");
+}
+async function reloadRenderer() {
+  await page.call("Page.enable", {});
+  const loaded = new Promise((done, reject) => {
+    const timer = setTimeout(() => { page.ws.removeEventListener("message", listener); reject(new Error("Renderer reload did not finish")); }, 30000);
+    function listener({ data }) {
+      if (JSON.parse(String(data)).method !== "Page.loadEventFired") return;
+      clearTimeout(timer); page.ws.removeEventListener("message", listener); done();
+    }
+    page.ws.addEventListener("message", listener);
+  });
+  await page.call("Page.reload", { ignoreCache: true });
+  await loaded;
+  await until(() => page.evaluate("!!window.piDesktop && !!window.__PI_DESKTOP__"), "normal reloaded renderer startup");
+  await observePermissions();
 }
 const invoke = async (key, ...args) => {
   const result = await page.evaluate(`piDesktop.invoke(piDesktop.channels.invoke[${json(key)}],...${json(args)})`);
@@ -234,8 +274,24 @@ const invoke = async (key, ...args) => {
   return result.data;
 };
 const snapshot = () => invoke("projectWorkflowSnapshot", { projectId });
-const mutate = async (kind, fields) => invoke("projectWorkflowMutate", { kind, commandId: `e2e-mutation-${++sequence}`, expectedRevision: (await snapshot()).revision, ...fields });
-const action = async (kind, fields = {}, workstreamId = "work-main") => invoke("projectWorkflowAction", { kind, commandId: `e2e-action-${++sequence}`, expectedRevision: (await snapshot()).revision, projectId, workstreamId, ...fields });
+async function workflowWrite(channel, kind, fields) {
+  // A background terminal receipt may advance the global CAS between the user
+  // snapshot and intent. Only an explicit pre-admission conflict is refreshed;
+  // model/tool failures and admitted commands are never retried here.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const expectedRevision = (await snapshot()).revision;
+    const command = { kind, commandId: `e2e-${channel}-${++sequence}`, expectedRevision, ...fields };
+    const result = await page.evaluate(`piDesktop.invoke(piDesktop.channels.invoke[${json(channel)}],${json(command)})`);
+    if (result.ok) return result.data;
+    assert.equal(result.error?.code, "CONFLICT", `${channel}: ${json(result)}`);
+    const actualRevision = (await snapshot()).revision;
+    assert.notEqual(actualRevision, expectedRevision, "refresh only a genuinely changed authoritative revision");
+    conflictRefreshes.push({ channel, kind, expectedRevision, actualRevision });
+  }
+  throw new Error(`Repeated pre-admission CAS conflicts: ${channel}/${kind}`);
+}
+const mutate = (kind, fields) => workflowWrite("projectWorkflowMutate", kind, fields);
+const action = (kind, fields = {}, workstreamId = "work-main") => workflowWrite("projectWorkflowAction", kind, { projectId, workstreamId, ...fields });
 const workstream = (id, sessionId, goal) => ({ id, projectId, title: id, goal, acceptance: [{ id: "acceptance-1", title: "Measured candidate", status: "pending", evidenceIds: [] }], owner: { kind: "session", ref: sessionId }, status: "ready", priority: 0, order: 0, dependencyIds: [], nextAction: goal, revision: 0, decisionRevision: 0, createdAt: stamp(), updatedAt: stamp() });
 const grant = (id, workstreamId, resources) => mutate("authorization.grant", { authorization: { id, projectId, workstreamId, actions: ["implement", "check", "document"], resources, source: { kind: "user", ref: "explicit-isolated-e2e-authorization" }, permissionCeiling: "auto", maxRuns: 8, stopConditions: [], revoked: false } });
 const seenApprovalIds = new Set();
@@ -244,7 +300,9 @@ async function shellApproval(sessionId, command, label) {
   assert.equal(permission.approvalScope, "workflow-shell");
   assert.equal(permission.argsPreview.command, command, "Host preserves the full exact command for review");
   seenApprovalIds.add(permission.requestId);
+  const detail = await invoke("sessionGet", { id: sessionId });
   await page.evaluate(`window.__PI_DESKTOP__.setPage('chat'); window.__PI_DESKTOP__.selectSession(${json(sessionId)})`);
+  await until(() => page.evaluate(`document.querySelector('.ct-title')?.textContent === ${json(detail.session.title)} && document.querySelector('.permission-card-meta span')?.title === ${json(canonicalWorkspace)}`), `${label} loaded session title and project metadata`);
   const card = await until(() => page.evaluate(`(() => { const card = document.querySelector('.permission-card'); if (!card || !card.querySelector('.permission-card-args')?.textContent.includes(${json(command)})) return null; return { text: card.textContent, command: card.querySelector('.permission-card-args')?.textContent, warning: card.querySelector('[role="note"]')?.textContent, buttons: [...card.querySelectorAll('.permission-card-actions button')].map(button => button.textContent) }; })()`), `${label} actual permission card`);
   assert.ok(card.command.includes(command), "the actual card renders the entire exact command");
   assert.ok(card.warning && /separate approval|单独批准|個別核准/.test(card.warning), `independent Shell approval warning is visible: ${json(card)}`);
@@ -313,6 +371,9 @@ try {
     const sessionId = created.session.id, resource = join(canonicalWorkspace, id);
     await invoke("sessionConfigure", sessionId, { mode: "agent", permissionMode: "auto" });
     assert.equal((await invoke("sessionGet", { id: sessionId })).session.permissionMode, "auto", "the boundary scenario uses an actual auto-permission session");
+    // Direct setup IPC does not perform the normal UI store insertion. A real
+    // renderer reload reads the authoritative session list without injecting it.
+    await reloadRenderer();
     await mkdir(resource);
     await mutate("workstream.create", { workstream: workstream(id, sessionId, goal) });
     await grant(`auth-${id}`, id, [resource]);
@@ -348,12 +409,15 @@ try {
   assert.notEqual(secondShellApproval.requestId, firstShellApproval.requestId, "allow-once for build never becomes approval for the check command");
   assert.equal(await readFile(join(shellResource, "build.log"), "utf8"), "build\n", "one approval runs the build exactly once");
   await clickShellDecision(true);
+  const thirdShellApproval = await shellApproval(shell.sessionId, shellRecheckCommand, "shell-recheck");
+  assert.notEqual(thirdShellApproval.requestId, secondShellApproval.requestId, "the corrected check requires its own allow-once approval");
+  await clickShellDecision(true);
   const shellFinished = await until(async () => { const state = await snapshot(); return state.workstreams.find(work => work.id === "work-shell").status === "awaiting_user" && runsFor(state, "work-shell").every(run => run.state === "completed" && run.completionKey) ? state : null; }, "actual approved build → failed check → typed fix → document");
-  assert.equal(runsFor(shellFinished, "work-shell").length, 4);
+  assert.equal(runsFor(shellFinished, "work-shell").length, 5);
   assert.equal(await readFile(join(shellResource, "candidate.txt"), "utf8"), "candidate-v2");
   assert.match(await readFile(join(shellResource, "report.md"), "utf8"), /Check observed candidate-v1 failure/);
   assert.equal(await readFile(join(shellResource, "build.log"), "utf8"), "build\n");
-  coverage.push("Real Shell build/check each need a distinct exact-command approval card; warnings and no session-grant button; allow-once executes once; observed check failure leads to typed fix and documentation");
+  coverage.push("Real Shell build, failing check(exit1) and successful recheck(exit0) each need a distinct exact-command approval card; warning and no session-grant button; one build execution; actual failure leads to typed fix, passing recheck and documentation");
 
   const adopting = await createWork("work-adopt", "ADOPT_MAIN: Continue under existing bounded authorization when an explicitly adopted decision changes.");
   const old = await adopting.start();
@@ -369,6 +433,9 @@ try {
   assert.equal(proposed.workstreams.find(work => work.id === "work-adopt").decisionRevision, 0);
   assert.equal(runsFor(proposed, "work-adopt").length, 1, "unadopted Explore does not steer or restart Work");
   await action("adopt", { decisionId: proposalId, source: { kind: "user", ref: "explicit-midflight-e2e-adoption" } }, "work-adopt");
+  // Graceful adoption lets the already admitted model step reach its actual
+  // terminal checkpoint; the old revision must then be fenced by the runtime.
+  held.get("adopt-old")();
   const continued = await until(async () => { const state = await snapshot(); const runs = runsFor(state, "work-adopt"); return runs.some(run => run.id !== old.runId && run.decisionRevision === 1 && run.state === "completed" && run.completionKey) ? state : null; }, "automatic authorized continuation observes adopted context without another Start");
   assert.equal(runsFor(continued, "work-adopt").length, 2, "adoption dispatches exactly one bounded successor");
   assert.ok(!continued.artifacts.some(artifact => artifact.id === "must-not-be-current"), "old-decision partial candidate never enters effective artifact state");
@@ -382,18 +449,32 @@ try {
   await until(() => held.has("survivor"), "unrelated survivor real request");
   for (const control of ["pause", "cancel"]) {
     const target = await createWork(`work-${control}`, `SHELL_PENDING_${control.toUpperCase()}: Revoke only this pending Shell request before it executes.`);
-    await target.start();
-    await shellApproval(target.sessionId, pendingCommand(control), `shell-pending-${control}`);
+    const initial = await target.start();
+    const originalApproval = await shellApproval(target.sessionId, pendingCommand(control), `shell-pending-${control}`);
     assert.equal(await absent(join(canonicalWorkspace, `pending-${control}.txt`)), true);
     await action(control, {}, `work-${control}`);
     const controlled = await until(async () => { const state = await snapshot(); return state.workstreams.find(work => work.id === `work-${control}`).status === (control === "pause" ? "paused" : "cancelled") && runsFor(state, `work-${control}`).every(run => !active(run) && run.completionKey) ? state : null; }, `${control} affects only selected workstream`);
     assert.ok(controlled.runs.some(run => run.id === survivorRun.runId && active(run)), "unrelated work survives scoped pause/cancel");
     assert.equal(await absent(join(canonicalWorkspace, `pending-${control}.txt`)), true, `${control} revokes the pending Shell command with no execution`);
     await until(() => page.evaluate("!document.querySelector('.permission-card')"), `${control} clears the revoked actual permission card`);
+    if (control === "pause") {
+      await action("resume", {}, "work-pause");
+      const freshApproval = await shellApproval(target.sessionId, pendingCommand(control), "shell-resumed-pause");
+      assert.notEqual(freshApproval.requestId, originalApproval.requestId, "Resume requires a fresh request, never reuses revoked approval");
+      assert.equal(await absent(join(canonicalWorkspace, "pending-pause.txt")), true, "Resume does not execute before fresh explicit approval");
+      await clickShellDecision(true);
+      const resumed = await until(async () => { const state = await snapshot(); return runsFor(state, "work-pause").some(run => run.id !== initial.runId && run.state === "completed" && run.completionKey) && state.workstreams.find(work => work.id === "work-pause").status === "awaiting_user" ? state : null; }, "Resume continues the same assignment without another Start");
+      const pauseRuns = runsFor(resumed, "work-pause");
+      assert.equal(pauseRuns.length, 2, "one paused no-effect attempt and exactly one resumed run");
+      assert.ok(pauseRuns.every(run => run.authorizationId === "auth-work-pause"), "Resume retains the existing explicit authorization");
+      assert.ok(pauseRuns.every(run => run.effects[0].resource === target.resource), "Resume retains the original bounded resource assignment");
+      assert.equal(await readFile(join(canonicalWorkspace, "pending-pause.txt"), "utf8"), "pause\n");
+      assert.ok(resumed.runs.some(run => run.id === survivorRun.runId && active(run)), "unrelated Work survives pause and Resume approval");
+    }
   }
   held.get("survivor")();
   await until(async () => runsFor(await snapshot(), "work-survivor").every(run => run.state === "completed" && run.completionKey), "unrelated survivor completes normally");
-  coverage.push("Scoped pause/cancel revoke actual pending Shell approvals without execution; unrelated Work survives and completes");
+  coverage.push("Pause revokes pending Shell without effects; Resume (no Start/auth change) retains assignment, requires fresh approval, executes once and terminates; Cancel independently revokes pending Shell without execution or continuation; unrelated Work survives and completes");
 
   // Feedback is retained after the user explicitly closes the old execution grant.
   // This tests candidate identity without accidentally authorizing correction work.
@@ -435,6 +516,7 @@ try {
   await writeFile(join(output, "electron.log"), log);
   await writeFile(join(output, "model-requests.json"), json(requests, null, 2));
   await writeFile(join(output, "model-checkpoints.json"), json(checkpoints, null, 2));
+  await writeFile(join(output, "cas-refreshes.json"), json(conflictRefreshes, null, 2));
   if (lastSnapshot) await writeFile(join(output, "snapshot.json"), json(lastSnapshot, null, 2));
   await stopApp(); model.closeAllConnections(); await new Promise(done => model.close(done));
 }
