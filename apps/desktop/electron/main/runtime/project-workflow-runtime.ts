@@ -7,6 +7,7 @@ import type {
 import { assembleWorkflowContext, WORKFLOW_CHECKPOINT_INSTRUCTIONS } from "./project-workflow-context";
 import { parseWorkflowCheckpoint, type WorkflowCheckpoint, type WorkflowStep } from "./project-workflow-checkpoint";
 import { workflowAssignment } from "./project-workflow-receipt";
+import { conflictingWorkflowRun } from "./project-workflow-resources";
 
 export type WorkflowObservation = { state: WorkflowRun["state"]; content: string; effects: WorkflowRun["effects"] };
 export interface WorkflowExecutionPort {
@@ -60,7 +61,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
   }
   function authorization(w: WorkflowWorkstream, authorizationId: string, step?: WorkflowStep): WorkflowAuthorization {
     const auth = state.authorizations.find((a) => a.id === authorizationId && a.projectId === w.projectId && a.workstreamId === w.id);
-    if (!auth || auth.revoked || auth.source.kind !== "user" || (auth.expiresAt
+    if (!auth || !auth.actions.length || !auth.resources.length || auth.revoked || auth.source.kind !== "user" || (auth.expiresAt
       && (!Number.isFinite(Date.parse(auth.expiresAt)) || Date.parse(auth.expiresAt) <= Date.parse(now())))) {
       fail("UNAUTHORIZED", "A current user authorization is required");
     }
@@ -71,6 +72,10 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     return auth;
   }
   function currentRuns(w: WorkflowWorkstream) { return state.runs.filter((r) => r.workstreamId === w.id && live(r)); }
+  async function assertResourcesAvailable(resources: string[]) {
+    const conflict = await conflictingWorkflowRun(state, resources);
+    if (conflict) fail("CONFLICT", `Resource scope is owned by active run ${conflict.id} in workstream ${conflict.workstreamId}; choose an explicit disjoint authorization or wait for its checkpoint`);
+  }
   function conversation(sessionId: string) { return state.conversations.find((c) => c.sessionId === sessionId); }
   async function link(w: WorkflowWorkstream, sessionId: string, overrides: Partial<WorkflowConversation> = {}) {
     await mutate({ kind: "conversation.link", conversation: {
@@ -89,6 +94,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       })),
       startedAt: now(), updatedAt: now() };
     if (state.runs.some((r) => r.id === run.id)) return;
+    await assertResourcesAvailable(step.resources);
     await mutate({ kind: "run.start", run }, `${run.id}:start`);
     const pending = deliveries.length ? `\nResults to consume:\n${JSON.stringify(deliveries)}` : "";
     let admitted = false;
@@ -142,13 +148,15 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       await transition(w, "blocked", w.nextAction, "The accountable owner is executing another workstream"); return;
     }
     const latest = state.runs.filter((r) => r.workstreamId === w.id && conversation(r.sessionId)?.relation === "main").at(-1);
+    if (!next && w.status === "blocked" && latest?.state === "completed" && latest.decisionRevision === w.decisionRevision) {
+      next = parseWorkflowCheckpoint(latest.outcome).next;
+    }
     if (latest && ["unknown", "interrupted", "failed", "cancelled"].includes(latest.state)
       && !latest.completionKey?.endsWith(":paused-before-start")
       && (!freshUserStart || latest.state === "unknown" || latest.effects.some((effect) => effect.state === "unknown"))) {
       await transition(w, "awaiting_user", "Resolve the last execution outcome before resuming", latest.outcome); return;
     }
-    const authorizationId = authId ?? latest?.authorizationId
-      ?? state.authorizations.filter((a) => a.workstreamId === w.id && !a.revoked).at(-1)?.id;
+    const authorizationId = authId ?? latest?.authorizationId;
     if (!authorizationId) { await transition(w, "awaiting_user", "Authorize the next work step"); return; }
     let auth: WorkflowAuthorization;
     try { auth = authorization(w, authorizationId, next); }
@@ -165,6 +173,8 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     if (!sessionId) { await transition(w, "awaiting_user", "Choose a main execution session"); return; }
     const step = next ?? { action: auth.actions[0], resources: auth.resources, prompt: w.nextAction };
     if (!step.action || !step.prompt || !step.resources.length) { await transition(w, "awaiting_user", "Specify the next bounded action"); return; }
+    const conflict = await conflictingWorkflowRun(state, step.resources);
+    if (conflict) { await transition(w, "blocked", step.prompt, `Resource scope is owned by active run ${conflict.id}; continue after that run checkpoints`); return; }
     await transition(w, "executing", step.prompt);
     await dispatch(work(w.id), sessionId, auth, step, key, deliveries);
   }
@@ -223,7 +233,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       await finish();
       return;
     }
-    if (side) { await continueWork(work(w.id), run.authorizationId, undefined, `${run.id}:consume`); await finish(); return; }
+    if (side) { await continueWork(work(w.id), undefined, undefined, `${run.id}:consume`); await finish(); return; }
     // The main owner already used its own result; a side result needs actual admission above.
     await mutate({ kind: "delivery.consume", ...scope(w), deliveryId: `${run.id}:result`, disposition: "integrated" });
     const current = work(w.id);
@@ -248,19 +258,22 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       let w = work(input.workstreamId, input.projectId);
       let sessionId: string | undefined;
       if (input.kind === "start") {
-        authorization(w, input.authorizationId);
+        const auth = authorization(w, input.authorizationId);
+        await assertResourcesAvailable(auth.resources);
         sessionId = input.sessionId ?? w.mainSessionId ?? await deps.execution.createSession({ projectId: w.projectId, purpose: "work" });
         await link(w, sessionId);
         await mutate({ kind: "workstream.update", ...scope(w), patch: { mainSessionId: sessionId } });
         await transition(work(w.id), "ready", w.nextAction);
         await continueWork(work(w.id), input.authorizationId, undefined, input.commandId, true);
       } else if (input.kind === "discuss") {
+        if (input.sessionId && input.sessionId === w.mainSessionId) fail("CONFLICT", "Discussion needs a separate session; the main session remains owned by Work");
         if (input.pause) { await transition(w, "paused", w.nextAction); await stopRuns(w, false); }
         sessionId = input.sessionId ?? await deps.execution.createSession({ projectId: w.projectId, sourceSessionId: w.mainSessionId, purpose: "explore" });
         await link(w, sessionId, { relation: "branch", purpose: "explore", returnPolicy: "proposal", parentSessionId: w.mainSessionId });
         await deps.execution.appendContext(sessionId, assembleWorkflowContext(state, work(w.id), { discussion: true }), `workflow-discuss:${input.commandId}`);
       } else if (input.kind === "side.create") {
         const auth = input.purpose === "work" ? authorization(w, input.authorizationId ?? "") : undefined;
+        if (auth) await assertResourcesAvailable(auth.resources);
         sessionId = await deps.execution.createSession({ projectId: w.projectId, sourceSessionId: input.sourceSessionId ?? w.mainSessionId, purpose: input.purpose });
         await link(w, sessionId, { relation: "child", purpose: input.purpose, visibility: input.visibility,
           parentSessionId: input.sourceSessionId ?? w.mainSessionId, sourceMessageId: input.sourceMessageId, readContext: input.readContext,
@@ -318,11 +331,12 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       if (event.kind === "feedback.add" && event.workstreamId) {
         const w = work(event.workstreamId);
         const feedback = state.feedback.filter((f) => f.workstreamId === w.id && f.candidateId === w.currentCandidateId).at(-1);
-        const auth = state.authorizations.filter((a) => a.workstreamId === w.id && !a.revoked).at(-1);
+        const mainRun = state.runs.filter((r) => r.workstreamId === w.id && conversation(r.sessionId)?.relation === "main").at(-1);
+        const auth = state.authorizations.find((a) => a.id === mainRun?.authorizationId && !a.revoked);
         if (feedback && auth && !currentRuns(w).length) await continueWork(w, auth.id, { action: auth.actions[0], resources: auth.resources,
           prompt: `Address the user counterexample for acceptance ${feedback.acceptanceId}, candidate ${feedback.candidateId}@${feedback.candidateRevision}, environment ${feedback.environment}: ${feedback.comment}` }, `feedback:${feedback.id}`);
       }
-      if (["workstream.update", "workstream.transition", "delivery.publish", "decision.resolve", "authorization.grant"].includes(event.kind)) {
+      if (["workstream.update", "workstream.transition", "run.observe", "delivery.publish", "decision.resolve", "authorization.grant"].includes(event.kind)) {
         for (const w of [...state.workstreams].sort((a, b) => b.priority - a.priority || a.order - b.order)) {
           if (w.status === "blocked" || (w.id === event.workstreamId && w.status === "ready")
             || state.deliveries.some((d) => d.workstreamId === w.id && d.state === "delivered")) await continueWork(work(w.id));

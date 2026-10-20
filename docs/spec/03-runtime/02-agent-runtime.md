@@ -1906,6 +1906,19 @@ the current user authorization and respect its expiry and total run budget.
 Existing Host/tool/root permissions still decide tool execution. A per-turn
 permission ceiling only narrows the stored session grant and survives queuing.
 
+Declared resource scopes are conservatively reserved while a run is queued,
+executing, paused or has unresolved effects. Generic labels such as `check` do
+not imply read-only access. Overlapping side Work fails with a typed conflict
+before creating a session; an explicitly disjoint side authorization can run
+alongside the main line. Local path/file-URI overlap resolves existing ancestors,
+including symlink aliases and future output paths. Case-only aliases follow the
+target volume's existing directory semantics; unknown semantics reserve them
+conservatively. This arbitration does not grant
+file access or expand the authorization's exact-match resource policy. Main
+continuation uses its own prior authorization, never an inferred side assignment
+grant. Routine successor work blocked on another scope resumes on a host change
+with the checkpoint's original action, resource subset and prompt.
+
 The final assistant output includes one `project-workflow-checkpoint` JSON fence:
 `summary`, optional `next` (`action`, `resources`, `prompt`), `stop`, `artifacts`,
 `evidence`, and `consumedDeliveryIds`. Artifact/evidence records use the shared
@@ -1942,4 +1955,6 @@ unchanged. Integrated composition and rendered acceptance are separate from the
 synthetic lifecycle tests in `project-workflow-runtime-lifecycle.test.mjs`.
 `project-workflow-runtime-host.test.mjs` additionally uses the published real Rust
 Host to cover parallel main/side runs, terminal acknowledgement, pause/resume and
-populated-state restart, with only the provider execution edge synthetic.
+populated-state restart, with only the provider execution edge synthetic. Its main
+and side assignments use explicit disjoint scopes; the fixture actually reads the
+delivered side file into a concrete candidate before acknowledging consumption.

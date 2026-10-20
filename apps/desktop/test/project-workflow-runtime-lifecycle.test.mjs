@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import * as fsPromises from "node:fs/promises";
+import * as nodePath from "node:path";
+import * as nodeUrl from "node:url";
 import crypto from "node:crypto";
 import test from "node:test";
 import ts from "typescript";
@@ -17,6 +20,9 @@ function load(name) {
   new Function("require", "exports", "module", outputText)((id) => {
     if (id === "@pi-desktop/shared") return shared;
     if (id === "node:crypto") return crypto;
+    if (id === "node:fs/promises") return fsPromises;
+    if (id === "node:path") return nodePath;
+    if (id === "node:url") return nodeUrl;
     if (id === "../agent-host-bridge") return { DESKTOP_PRINCIPAL: principal };
     if (id.startsWith("./project-workflow-")) return load(id.slice(2));
     throw new Error(`Unexpected import ${id}`);
@@ -97,6 +103,7 @@ async function setup(modify = () => {}) {
     relation: "main", purpose: "work", visibility: "project", readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, returnPolicy: "delivery", archived: false, order: 0 });
   initial.authorizations.push({ id: "auth-1", projectId: "project-1", workstreamId: "work-1", actions: ["implement", "check", "document"],
     resources: ["/synthetic/project"], source: { kind: "user", ref: "approved-local-work" }, permissionCeiling: "ask", maxRuns: 10, stopConditions: ["Stop at a required user decision"], revoked: false });
+  initial.authorizations.push({ ...structuredClone(initial.authorizations[0]), id: "auth-side", resources: ["/synthetic/side-output"], source: { kind: "user", ref: "explicit-disjoint-side-scope" } });
   modify(initial);
   const host = durableHost(initial);
   const transcripts = new Map([["session-1", []]]);
@@ -192,7 +199,7 @@ test("Ask and unadopted Explore never enter effective Work context", async () =>
 test("Work side delivery is consumed by the durable owner even when its discussion parent is gone", async () => {
   const f = await setup();
   const side = await f.action("side.create", { purpose: "work", visibility: "side_only", sourceSessionId: "closed-parent",
-    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Run a bounded test", authorizationId: "auth-1" });
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Run a bounded test", authorizationId: "auth-side" });
   // Main has no prior run; its explicit authorization is still usable for consumption.
   await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
   await f.finish(side.sessionId, checkpoint("Side test result", undefined));
@@ -333,8 +340,9 @@ test("A queued workflow can pause before execution and resume without repeating 
 test("Queued result delivery remains unconsumed if the pending owner turn is cancelled", async () => {
   const f = await setup();
   await f.agentHost.startTurn(principal, { sessionId: "session-1", input: { text: "Existing unrelated turn" }, context: { requestId: "busy" } });
-  const side = await f.action("side.create", { purpose: "work", visibility: "project", readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Bounded side test", authorizationId: "auth-1" });
+  const side = await f.action("side.create", { purpose: "work", visibility: "project", readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Bounded side test", authorizationId: "auth-side" });
   await f.finish(side.sessionId, checkpoint("Side output awaits actual use", undefined));
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
   let state = await f.host.snapshot();
   assert.equal(state.runs.at(-1).state, "queued");
   assert.equal(state.deliveries[0].state, "delivered");
@@ -416,4 +424,77 @@ test("An explicit corrected Start can recover a known admission rejection withou
   f.host.edit((state) => { state.workstreams[0].nextAction = "Implement using the corrected explicit execution session"; });
   await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
   assert.equal(f.prompts.length, 1);
+});
+
+test("Overlapping side Work fails before session creation; generic check labels do not imply read-only", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  const before = await f.host.snapshot();
+  await assert.rejects(() => f.action("side.create", { purpose: "work", visibility: "project", authorizationId: "auth-1",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Run a check in the same scope" }), { code: "CONFLICT" });
+  const after = await f.host.snapshot();
+  assert.equal(after.runs.length, before.runs.length);
+  assert.equal(after.conversations.length, before.conversations.length);
+  assert.equal(after.workstreams[0].status, "executing");
+  const side = await f.action("side.create", { purpose: "work", visibility: "project", authorizationId: "auth-side",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Use the explicitly disjoint scope" });
+  assert.ok(side.runId); assert.equal(f.prompts.length, 2);
+});
+
+test("Path scope arbitration catches parents and symlink aliases of not-yet-created outputs", async () => {
+  const { resourcesOverlap } = load("project-workflow-resources");
+  const root = await fsPromises.mkdtemp("/tmp/project-workflow-scope-");
+  try {
+    await fsPromises.mkdir(nodePath.join(root, "real"));
+    await fsPromises.symlink(nodePath.join(root, "real"), nodePath.join(root, "alias"));
+    assert.equal(await resourcesOverlap(nodePath.join(root, "real"), nodePath.join(root, "alias", "future.txt")), true);
+    assert.equal(await resourcesOverlap(nodePath.join(root, "real"), nodePath.join(root, "unrelated")), false);
+    assert.equal(await resourcesOverlap("/synthetic/project", "/synthetic/project2"), false);
+  } finally { await fsPromises.rm(root, { recursive: true, force: true }); }
+});
+
+test("Future case-only output names follow the existing target volume's case semantics", async () => {
+  const { resourcesOverlap } = load("project-workflow-resources");
+  const root = await fsPromises.mkdtemp("/tmp/project-workflow-case-");
+  try {
+    const alternate = nodePath.basename(root).replace(/[a-z]/, (letter) => letter.toUpperCase());
+    const original = await fsPromises.stat(root);
+    let sameEntry = false;
+    try {
+      const alias = await fsPromises.stat(nodePath.join(nodePath.dirname(root), alternate));
+      sameEntry = alias.dev === original.dev && alias.ino === original.ino;
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+    assert.equal(await resourcesOverlap(nodePath.join(root, "Output.txt"), nodePath.join(root, "output.txt")), sameEntry);
+    assert.equal(await resourcesOverlap(nodeUrl.pathToFileURL(nodePath.join(root, "Output.txt")).href, nodePath.join(root, "output.txt")), sameEntry);
+  } finally { await fsPromises.rm(root, { recursive: true, force: true }); }
+});
+
+test("A resource-blocked successor resumes its original action and resource subset", async () => {
+  const a = "/synthetic/project/a", b = "/synthetic/project/b";
+  const f = await setup((state) => {
+    state.authorizations.find((auth) => auth.id === "auth-1").resources = [a, b];
+    state.authorizations.find((auth) => auth.id === "auth-side").resources = [a];
+  });
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  await f.finish("session-1", checkpoint("Initial implementation", next("Check B only", "check", [b])));
+  const side = await f.action("side.create", { purpose: "work", visibility: "project", authorizationId: "auth-side",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Work on A independently" });
+  await f.finish("session-1", checkpoint("B checked", next("Document A only", "document", [a])));
+  assert.equal((await f.host.snapshot()).workstreams[0].status, "blocked");
+  assert.equal(f.prompts.length, 3);
+  await f.finish(side.sessionId, checkpoint("A side result", undefined));
+  const state = await f.host.snapshot();
+  const resumed = state.runs.filter((run) => run.sessionId === "session-1").at(-1);
+  assert.equal(state.workstreams[0].status, "executing");
+  assert.equal(f.prompts.length, 4);
+  assert.deepEqual(resumed.effects.map(({ action, resource }) => ({ action, resource })), [{ action: "document", resource: a }]);
+  assert.equal(JSON.parse(resumed.effects[0].detail).step.prompt, "Document A only");
+});
+
+test("Discuss cannot relink the live Work session into a branch", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  await assert.rejects(() => f.action("discuss", { sessionId: "session-1", pause: false }), { code: "CONFLICT" });
+  assert.equal((await f.host.snapshot()).conversations.find((c) => c.sessionId === "session-1").relation, "main");
+  assert.equal(f.stops.length, 0);
 });
