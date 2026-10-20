@@ -1998,6 +1998,7 @@ sklm: {
     allowPrompt: "<highlight>{{tool}}</highlight> 실행을 허용할까요?",
     allowOnce: "한 번 허용",
     allowSession: "이 채팅에서 허용",
+    workflowShellWarning: "셸 명령은 각각 별도 승인이 필요하며 워크플로에서 쓸 수 있는 파일 및 폴더 범위를 벗어난 경로에 접근할 수 있습니다.",
     deny: "거부",
     risk: {
       high: "높은 위험",

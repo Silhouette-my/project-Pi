@@ -1982,6 +1982,7 @@ sklm: {
     "allowPrompt": "Ausführung von <highlight>{{tool}}</highlight> zulassen?",
     "allowOnce": "Einmal zulassen",
     "allowSession": "Für diesen Chat zulassen",
+    "workflowShellWarning": "Jeder Shell-Befehl muss einzeln genehmigt werden und kann auf Pfade außerhalb der für den Workflow beschreibbaren Dateien und Ordner zugreifen.",
     "deny": "Ablehnen",
     "risk": {
       "high": "Hohes Risiko",

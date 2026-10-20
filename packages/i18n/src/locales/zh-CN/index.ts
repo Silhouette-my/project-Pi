@@ -1977,6 +1977,7 @@ sklm: {
     allowPrompt: "允许 <highlight>{{tool}}</highlight> 运行吗？",
     allowOnce: "允许一次",
     allowSession: "允许本次对话",
+    workflowShellWarning: "每条 Shell 命令都需单独批准，且可能访问工作流可写文件和文件夹范围之外的路径。",
     deny: "拒绝",
     risk: {
       high: "高风险",

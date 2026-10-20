@@ -9,7 +9,7 @@ export const workflowCatalog = {
     empty: "다음 결과를 정의할 워크스트림을 만드세요.", chooseWorkstream: "워크스트림 선택", allWorkstreams: "모든 워크스트림", completed: "완료된 작업", attention: "확인 필요",
     currentCandidate: "현재 후보", noCandidate: "기록된 후보가 없습니다", revision: "리비전 {{revision}}", blockerOwner: "담당자: {{owner}}", resumeWhen: "다음 조건에서 재개: {{condition}}",
     openMain: "기본 대화 열기", controls: "작업 제어", start: "작업 시작", discuss: "이어서 논의", pauseDiscuss: "논의를 위해 일시 중지", pause: "작업 일시 중지", resume: "작업 재개", cancelWork: "작업 취소", newSide: "사이드 대화",
-    authority: "실행 범위", selectedAuthority: "승인된 범위", authorityRequired: "작업을 시작하기 전에 실행 범위를 정의하세요.", authorityHint: "정확한 작업 이름(예: implement, check, document)과 쓰기 가능한 로컬 파일 또는 폴더 경로를 한 줄에 하나씩 입력하세요. 표준 참조와 전달된 결과물은 읽기 전용 입력이며, 셸 명령은 사용할 수 없습니다. 기존 도구 승인도 계속 적용됩니다.",
+    authority: "실행 범위", selectedAuthority: "승인된 범위", authorityRequired: "작업을 시작하기 전에 실행 범위를 정의하세요.", authorityHint: "정확한 작업 이름과 쓰기 가능한 로컬 파일 또는 폴더 경로를 한 줄에 하나씩 입력하세요. 참조와 전달된 결과물은 읽기 전용 입력입니다. 셸 명령은 각각 별도 승인이 필요하며 해당 범위를 벗어난 경로에 접근할 수 있습니다.",
     allowedActions: "허용된 작업", allowedResources: "쓰기 가능한 파일/폴더", maxRuns: "최대 시도 횟수", stopConditions: "중지 조건", grant: "이 범위 승인", revokeAuthority: "이 범위 승인 취소", executionSession: "실행 대화", chooseExecutionSession: "Agent 대화 선택", executionHint: "작업을 실행하려면 이 프로젝트에서 실행 가능한 서비스가 설정된 Agent 대화가 필요합니다. Consumer Chat은 논의 전용입니다. 해당 대화에서 서비스를 설정하세요. 제공업체를 자동으로 변경하지 않습니다.", newExecutionSession: "설정할 대화 만들기", purpose: "목적",
     purposes: { ask: "질문", explore: "탐색", work: "작업" }, visibility: "표시 범위", projectVisible: "프로젝트 검색에 표시", sideOnly: "이 사이드 대화에서만",
     policies: { ask: "답변은 이 대화에만 남고 결정은 자동으로 기록되지 않습니다.", explore: "결론은 채택하기 전까지 제안으로 남습니다.", work: "결과와 중요한 부작용은 이 워크스트림으로 돌아옵니다." },

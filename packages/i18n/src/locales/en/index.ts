@@ -2003,6 +2003,7 @@ sklm: {
     allowPrompt: "Allow <highlight>{{tool}}</highlight> to run?",
     allowOnce: "Allow once",
     allowSession: "Allow for this chat",
+    workflowShellWarning: "Each shell command needs separate approval and may access paths beyond the workflow’s writable files and folders.",
     deny: "Deny",
     risk: {
       high: "High risk",

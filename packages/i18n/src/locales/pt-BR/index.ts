@@ -1952,6 +1952,7 @@ export const ptBR = {
     allowPrompt: "Permitir a execução de <highlight>{{tool}}</highlight>?",
     allowOnce: "Permitir uma vez",
     allowSession: "Permitir nesta conversa",
+    workflowShellWarning: "Cada comando de shell exige aprovação separada e pode acessar caminhos fora dos arquivos e pastas graváveis pelo fluxo de trabalho.",
     deny: "Negar",
     risk: {
       high: "Alto risco",

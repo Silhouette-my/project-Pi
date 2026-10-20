@@ -1982,6 +1982,7 @@ sklm: {
     "allowPrompt": "Autoriser <highlight>{{tool}}</highlight> à s'exécuter ?",
     "allowOnce": "Autoriser une fois",
     "allowSession": "Autoriser cette discussion",
+    "workflowShellWarning": "Chaque commande shell nécessite une approbation séparée et peut accéder à des chemins en dehors des fichiers et dossiers modifiables par le flux de travail.",
     "deny": "Refuser",
     "risk": {
       "high": "Risque élevé",
