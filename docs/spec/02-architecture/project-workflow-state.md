@@ -90,8 +90,12 @@ For a bound turn, Host checks authority before permission admission and again
 before execution. `Write` and `Edit` must remain within the captured output
 resources. `Read` may also use effective canonical resources and relevant
 artifact/delivery inputs, without adding write authority. Existing Host/tool
-permissions still apply. Other tools return `WORKFLOW_RESOURCE_DENIED` before
-effects; in particular, a path grant is not a process sandbox for `Bash`.
+permissions still apply. Foreground `Bash` instead requires a separate one-use
+approval of the exact command, even under Auto or prior session grants. Shell
+effects may exceed the captured paths; the permission card makes that boundary
+explicit. Host revalidates the binding and authorization at process admission.
+Other uncontained tools, background and delegated execution return
+`WORKFLOW_RESOURCE_DENIED` before effects. A path grant is not a process sandbox.
 Ordinary turns without a workflow binding retain their existing behavior.
 
 ## Opening a recorded reference
