@@ -14,8 +14,8 @@ export function workflowHost(getHost: () => WorkflowHostConnection | null): Work
 export function workflowChange(command: ProjectWorkflowCommand, revision: number): ProjectWorkflowChanged {
   const event: ProjectWorkflowChanged = { revision, commandId: command.commandId, kind: command.kind };
   if ("projectId" in command) return { ...event, projectId: command.projectId, workstreamId: command.workstreamId };
+  if ("workstream" in command) return { ...event, projectId: command.workstream.projectId, workstreamId: command.workstream.id };
   for (const record of [
-    "workstream" in command ? command.workstream : undefined,
     "conversation" in command ? command.conversation : undefined,
     "resource" in command ? command.resource : undefined,
     "decision" in command ? command.decision : undefined,
@@ -27,8 +27,7 @@ export function workflowChange(command: ProjectWorkflowCommand, revision: number
     "delivery" in command ? command.delivery : undefined,
   ]) {
     if (record) {
-      const workstreamId = command.kind === "workstream.create" ? record.id
-        : "workstreamId" in record ? record.workstreamId : undefined;
+      const workstreamId = record.workstreamId;
       return { ...event, projectId: record.projectId, ...(workstreamId ? { workstreamId } : {}) };
     }
   }
