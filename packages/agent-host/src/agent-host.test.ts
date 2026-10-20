@@ -707,6 +707,37 @@ describe("AgentHost turns", () => {
     expect(runtime.prompts.map((prompt) => prompt.content)).toEqual(["one", "two"]);
     expect(host.queueEntries("s1")).toHaveLength(0);
   });
+
+  it("projects a workflow resource denial as failed and will not later restate it as completed", async () => {
+    const { host } = build();
+    const started = await host.startTurn(controller, {
+      sessionId: "s1",
+      input: { text: "bounded work" },
+      context: { requestId: "workflow-denied" },
+      workflowRunId: "workflow:denied",
+    });
+    host.ingest(envelope("s1", started.turn.id, { type: "agent_start" }));
+
+    host.ingest(envelope("s1", started.turn.id, {
+      type: "error",
+      error: {
+        code: "WORKFLOW_RESOURCE_DENIED",
+        message: "Write requires explicit output resource scope for outside-grant.txt",
+        retriable: false,
+      },
+    }));
+
+    expect(host.getTurn(started.turn.id)).toMatchObject({
+      status: "failed",
+      error: {
+        code: "WORKFLOW_RESOURCE_DENIED",
+        message: "Write requires explicit output resource scope for outside-grant.txt",
+      },
+    });
+    host.endTurn("s1", started.turn.id, "completed");
+    expect(host.getTurn(started.turn.id).status).toBe("failed");
+  });
+
   it("marks a queued turn failed when the runtime rejects it and keeps draining", async () => {
     const { host, runtime, received } = build();
     const first = await host.startTurn(controller, { sessionId: "s1", input: { text: "one" }, context: { requestId: "r1" } });

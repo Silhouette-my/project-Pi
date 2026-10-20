@@ -43,6 +43,17 @@ type PendingApproval = {
 
 const MAX_REMEMBERED_RESULTS = 1000;
 
+function workflowShellSummary(request: ToolPermissionRequest): string {
+  const preview = request.argsPreview;
+  if (typeof preview === "object" && preview !== null && !Array.isArray(preview)
+    && "command" in preview && typeof preview.command === "string") {
+    const otherArgs = Object.fromEntries(Object.entries(preview).filter(([key]) => key !== "command"));
+    return `${request.toolName}: ${request.reason}\nCommand:\n${preview.command}\nArguments: ${JSON.stringify(otherArgs)}`;
+  }
+  const args = typeof preview === "string" ? preview : JSON.stringify(preview);
+  return `${request.toolName}: ${request.reason}\nArguments: ${args}`;
+}
+
 /**
  * Pending approvals as Host state (spec §5.5, §9.3). The first valid decision
  * wins across local and remote clients; later valid responses receive the
@@ -71,7 +82,9 @@ export class ApprovalBroker {
       sessionId: request.sessionId,
       turnId: context.turnId,
       kind: "tool",
-      summary: `${request.toolName}: ${request.reason}`,
+      summary: request.approvalScope === "workflow-shell"
+        ? workflowShellSummary(request)
+        : `${request.toolName}: ${request.reason}`,
       expiresAt: new Date(expiresAtMs).toISOString(),
       revision: context.revision,
       toolName: request.toolName,
@@ -79,7 +92,7 @@ export class ApprovalBroker {
       ...(request.agentName ? { agentName: request.agentName } : {}),
       ...(request.parentToolCallId ? { parentToolCallId: request.parentToolCallId } : {}),
       ...(request.nestedParentToolCallId ? { nestedParentToolCallId: request.nestedParentToolCallId } : {}),
-      allowedDecisions: context.allowSession
+      allowedDecisions: request.approvalScope !== "workflow-shell" && context.allowSession
         ? [...RACP_TOOL_APPROVAL_DECISIONS]
         : RACP_TOOL_APPROVAL_DECISIONS.filter((decision) => decision !== "allow-session"),
     };

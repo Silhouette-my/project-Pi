@@ -157,9 +157,10 @@ export class RuntimeService implements RuntimePort {
         sessionId: string;
         toolCallId: string;
         toolName: string;
-        argsPreview: string;
+        argsPreview: unknown;
         risk: Risk;
         reason: string;
+        approvalScope?: "workflow-shell";
       };
       // A delegate's call is already tracked by the time the host asks: the
       // sidecar forwards tool_start before it executes the tool.
@@ -187,6 +188,7 @@ export class RuntimeService implements RuntimePort {
             argsPreview: permission.argsPreview,
             risk: permission.risk,
             reason: permission.reason,
+            ...(permission.approvalScope ? { approvalScope: permission.approvalScope } : {}),
             ...(asking?.agentName ? { agentName: asking.agentName } : {}),
             ...(asking?.parentToolCallId ? { parentToolCallId: asking.parentToolCallId } : {}),
             ...(asking?.nestedParentToolCallId ? { nestedParentToolCallId: asking.nestedParentToolCallId } : {}),
