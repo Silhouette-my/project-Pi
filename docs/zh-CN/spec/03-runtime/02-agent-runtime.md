@@ -1270,3 +1270,40 @@ retries and images retain physical account/model attribution. Nested immediate
 parent and owning Task remain distinct. The migration does not add coding-agent
 AgentSession, Codemode or virtual routing. See the coding-agent design review for
 future adoption conditions.
+
+## Project workflow continuity runtime
+
+Electron `runtime/project-workflow-runtime.ts` 的
+`createProjectWorkflowRuntime` 实现共享 `ProjectWorkflowRuntimePort`。
+Rust 继续独占 workstream、版本、授权、候选和交付回执的持久状态；运行时不新增数据库。
+
+- 主线每轮读取当前有效决策、约束和规范资源引用；侧 Work 读取选定输入并继承当前约束。
+  Ask 只读取选区和所选资源。未采纳提案及原始侧聊日志不进入有效 Work 上下文。
+- Start 复用 AgentHost、原有队列与 Host 权限。Discuss 将执行状态、证据及后续增量放入
+  关联讨论；只有显式 pause 才停止 Work。Adopt 在安全边界停止旧版本，并为下一轮装配
+  新的有效决策。Ask 不回写有效状态；项目可见 Explore 只生成有来源的提案，私有探索
+  不自动回流。Work 成果交给持久 workstream，不依赖讨论父会话是否仍存在。
+- 授权 action 使用用户明确选定的精确标签（如 `implement`、`check`、`document`），
+  resource 使用精确路径或 URI，不扩展通配符或从摘要推导权限。初始有界任务使用首个
+  action 及选定资源；后续任务必须落在同一授权的 action/resource、有效期及总运行预算内。
+  Host 工具权限和根目录边界仍生效；每轮权限上限只能收窄，排队后也不扩大。
+
+最终回复包含唯一 `project-workflow-checkpoint` JSON 围栏：`summary`、可选 `next`
+（`action`、`resources`、`prompt`）、`stop`、`artifacts`、`evidence`、
+`consumedDeliveryIds`。成果与证据使用共享 schema；运行时固定来源和归属为实际 run，
+并标注证据为 agent-reported。测试、界面、真实账号和部署证据保持各自版本、环境和限制。
+
+运行结束不等于验收完成。侧成果在排队和执行期间保持 delivered，只有实际接收它的
+owner run 的终态 checkpoint 明确确认所提供的 delivery ID，才标记 consumed；未确认
+则停下评审。旧决策成果保留在来源 run 中并标为 stale，不替换当前候选。
+
+Pause 只停止受影响 workstream。队列项确认在执行前取消时持久化原任务，Resume 可重新
+排队；未知副作用不可重放。恢复依赖实际 AgentHost 终态或已持久化的可信 run 终态回执，
+模型输出的 checkpoint 字符串本身不是完成凭证。稳定的 run/result/stage 标识保证
+中断结算幂等。Host 事件和持久 turn 结算驱动后续任务，不进行定时模型轮询或原样失败重试。
+
+组合根提供绑定项目和 provider 的普通会话创建、Host snapshot/mutate、transcript flush
+及 AgentHost；将 `contextForSession` 接入 session launch，在持久化修改后触发
+`onHostChanged`，在 durable endTurn 和 bridge 结算后触发 `onTurnSettled`，启动时先
+reconcile，关闭时 dispose。原 native Chat provider 与 Agent/Plan 路径不变。
+`project-workflow-runtime-lifecycle.test.mjs` 的合成生命周期证据与最终跨进程、界面验收分开。

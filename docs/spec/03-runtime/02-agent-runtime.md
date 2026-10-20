@@ -1876,3 +1876,63 @@ retries and images retain physical account/model attribution. Nested immediate
 parent and owning Task remain distinct. The migration does not add coding-agent
 AgentSession, Codemode or virtual routing. See the coding-agent design review for
 future adoption conditions.
+
+## Project workflow continuity runtime
+
+`createProjectWorkflowRuntime` in Electron `runtime/project-workflow-runtime.ts`
+implements the shared `ProjectWorkflowRuntimePort`. Rust remains the durable
+owner of workstreams, revisions, authorization, candidates and result receipts.
+The runtime does not maintain another persisted scheduler or project database.
+
+- Each turn compiles effective, scoped decisions and canonical resource/artifact
+  references. Main conversations see newly effective resources at the next turn;
+  side Work inherits current constraints plus its selected inputs. Ask receives
+  only its selection/resources. Proposed decisions and raw side logs are excluded.
+- Start uses the existing AgentHost admission and Host permission path. Discuss
+  appends actual execution/evidence state into a linked discussion, without stopping
+  Work unless `pause` is explicit. Later checkpoints append material deltas to that
+  discussion. Adoption fences the old decision revision and requests a safe stop;
+  the next turn sees the effective revision rather than an unadopted proposal.
+- Ask has no effective-state write-back. Project-visible Explore produces a
+  source-backed proposed decision; side-only exploration stays local. Work returns
+  a durable workstream delivery, independent of a discussion parent's lifetime.
+
+Authorization actions are exact user-defined labels (for example `implement`,
+`check`, `document`); resources are exact user-selected path/URI identifiers. There
+is no wildcard expansion or implicit authority inferred from a summary. The initial
+bounded assignment uses the first authorized action and selected resources.
+Successor checkpoints name their next action/resources, which must be a subset of
+the current user authorization and respect its expiry and total run budget.
+Existing Host/tool/root permissions still decide tool execution. A per-turn
+permission ceiling only narrows the stored session grant and survives queuing.
+
+The final assistant output includes one `project-workflow-checkpoint` JSON fence:
+`summary`, optional `next` (`action`, `resources`, `prompt`), `stop`, `artifacts`,
+`evidence`, and `consumedDeliveryIds`. Artifact/evidence records use the shared
+schemas. Runtime overwrites their source/scope with the producing run and labels
+checkpoint evidence as agent-reported. Test, rendered, live-account and deployment
+evidence retain distinct kinds, revisions, environments and limits.
+
+Run completion is not workstream acceptance. Completion triggers result publication,
+explicit owner consumption, acceptance assessment and the next authorized bounded
+step. A side result stays delivered while queued or running. Only a terminal owner
+checkpoint acknowledging a delivery actually offered to that run marks it consumed;
+missing acknowledgement stops for review. Old-revision output remains in its source
+run and receives a stale disposition without replacing the current candidate.
+
+Pause stops only the affected workstream's turns. An exactly cancelled, unexecuted
+queue entry records its original assignment and can resume safely; an execution
+with unknown effects cannot. Restart reconciliation uses the actual AgentHost
+terminal state or an already persisted terminal run receipt. A model checkpoint
+string alone is never completion proof. Interrupted/unknown external actions are
+not replayed. Stable run/result/stage identities make torn settlement recovery
+idempotent. Host changes and durable turn settlement drive continuation; there is
+no timer/model polling or unchanged-failure retry loop.
+
+Composition supplies Host snapshot/mutation, normal session creation with group and
+provider binding, transcript flush, AgentHost and shutdown ownership. It wires
+`contextForSession` into session launch, `onHostChanged` after durable mutations,
+and `onTurnSettled` after durable endTurn and bridge settlement, then reconciles
+active workstreams on startup. The native Chat provider and Agent/Plan paths remain
+unchanged. Integrated composition and rendered acceptance are separate from the
+synthetic lifecycle tests in `project-workflow-runtime-lifecycle.test.mjs`.
