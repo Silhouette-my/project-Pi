@@ -1,6 +1,8 @@
 import { en, type EnglishCatalog } from "../en/index.js";
+import { workflowCatalog } from "./workflow.js";
 
 export const ko = {
+  ...workflowCatalog,
   worktree: {
     menu: { group: "Git" },
     newIsolatedSession: "새 격리 세션",

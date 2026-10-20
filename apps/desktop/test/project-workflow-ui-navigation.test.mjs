@@ -54,7 +54,11 @@ test("Project Console history restores distinct project destinations around chat
   assert.equal(h.get().page, "project");
   assert.equal(h.get().projectConsoleId, "project-b");
   assert.equal(h.get().activeSessionId, "session-running");
-  assert.deepEqual(h.selections, [], "restoring a project destination does not select a chat session");
+  assert.deepEqual(
+    h.selections,
+    [],
+    "restoring a project destination does not select a chat session",
+  );
 
   h.actions.navBack();
   assert.equal(h.get().projectConsoleId, "project-a");
@@ -74,10 +78,13 @@ test("same Project Console destination is deduplicated but another project is re
   h.actions.setPage("project", { projectId: "project-b" });
 
   assert.equal(h.get().navStack.length, 3);
-  assert.deepEqual(h.get().navStack.slice(1).map(({ projectId }) => projectId), [
-    "project-a",
-    "project-b",
-  ]);
+  assert.deepEqual(
+    h
+      .get()
+      .navStack.slice(1)
+      .map(({ projectId }) => projectId),
+    ["project-a", "project-b"],
+  );
 });
 
 test("opening the console leaves the active running session and transcript selection untouched", () => {
@@ -90,10 +97,13 @@ test("opening the console leaves the active running session and transcript selec
 
   h.actions.setPage("project", { projectId: "project-a" });
 
-  assert.deepEqual({
-    activeSessionId: h.get().activeSessionId,
-    isRunning: h.get().isRunning,
-    runningSessions: h.get().runningSessions,
-  }, before);
+  assert.deepEqual(
+    {
+      activeSessionId: h.get().activeSessionId,
+      isRunning: h.get().isRunning,
+      runningSessions: h.get().runningSessions,
+    },
+    before,
+  );
   assert.deepEqual(h.selections, []);
 });

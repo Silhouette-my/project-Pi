@@ -1,0 +1,99 @@
+.workflow-context-artifacts {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.workflow-context-artifacts h3,
+.workflow-context-artifacts h4 {
+  margin: 0;
+}
+.workflow-record {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  min-width: 0;
+}
+.workflow-record-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.workflow-record-heading > strong {
+  margin-right: auto;
+  overflow-wrap: anywhere;
+}
+.workflow-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.workflow-record p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.workflow-record-muted {
+  color: var(--text-tertiary);
+}
+.workflow-record-prose {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.workflow-record-metadata {
+  display: grid;
+  grid-template-columns: minmax(100px, auto) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.workflow-record-metadata dt {
+  color: var(--text-tertiary);
+}
+.workflow-record-metadata dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.workflow-record form {
+  display: grid;
+  gap: 12px;
+}
+.workflow-record-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.workflow-reference {
+  min-width: 0;
+  max-width: 100%;
+}
+.workflow-reference .btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.workflow-reference [role="alert"] {
+  color: var(--text-danger);
+  overflow-wrap: anywhere;
+}
+.workflow-evidence {
+  display: grid;
+  gap: 8px;
+  border-left: 2px solid var(--ds-border-default);
+  padding-left: 12px;
+}
+.workflow-record-history {
+  display: grid;
+  gap: 12px;
+}
+.workflow-record-history > summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+.workflow-effects {
+  display: grid;
+  gap: 12px;
+  padding-left: 20px;
+  margin: 0;
+}

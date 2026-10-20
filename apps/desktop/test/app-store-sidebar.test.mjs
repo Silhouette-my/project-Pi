@@ -111,11 +111,12 @@ test("durable empty sessions render and title heuristics do not filter them", ()
   assert.doesNotMatch(sidebarSource, /keptEmptyScopes/);
 });
 
-test("project title toggles its conversation group without forcing it open", () => {
+test("logical project titles open Console while legacy titles retain group toggling", () => {
   const projectTitleBlock = sidebarSource.match(
     /className="sidebar-session-group-title project-toggle"[\s\S]*?<IconFolder/,
   )?.[0] ?? "";
-  assert.match(projectTitleBlock, /aria-expanded=\{!collapsedProject\}/);
+  assert.match(projectTitleBlock, /aria-expanded=\{workflowGroup \? undefined : !collapsedProject\}/);
+  assert.match(projectTitleBlock, /setPage\("project", \{ projectId: workflowGroup\.id \}\)/);
   assert.match(projectTitleBlock, /data-action="toggle-project-collapse"/);
   assert.match(projectTitleBlock, /sidebar-disclosure-icon/);
   assert.match(projectTitleBlock, /setCollapsed\(entry\.path, !collapsedProject\)/);

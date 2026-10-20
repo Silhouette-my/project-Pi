@@ -50,6 +50,25 @@ test("every shipped catalog matches English keys and interpolation variables", (
   }
 });
 
+test("Project Workflow UI copy is translated in every shipped locale", () => {
+  const keys = [
+    "workflow.console",
+    "workflow.purposes.ask",
+    "workflowNav.newFolder",
+    "workflowContext.title",
+    "workflowArtifacts.title",
+  ];
+  for (const [id, catalog] of Object.entries(catalogs)) {
+    const flat = flattenCatalog(catalog);
+    for (const key of keys) {
+      assert.ok(flat[key]?.trim(), `${id} ${key}`);
+      if (id !== "en") {
+        assert.notEqual(flat[key], english[key], `${id} ${key} must be translated`);
+      }
+    }
+  }
+});
+
 test("Live Voice preparation and call recovery copy is localized in every shipped catalog", () => {
   const keys = [
     "prepareCall", "details", "workOptions", "allowWork", "noWorkSession",

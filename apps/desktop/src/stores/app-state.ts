@@ -225,7 +225,7 @@ export type AppState = {
     remoteProject?: RemoteProjectTarget;
     /** Create an isolated session in its own git worktree (ADR 0329). */
     isolated?: boolean;
-  }) => Promise<void>;
+  }) => Promise<string | void>;
   forkSession: (id: string) => Promise<void>;
   forkAssistantMessage: (messageId: string) => Promise<void>;
   configureActiveSession: (config: {
