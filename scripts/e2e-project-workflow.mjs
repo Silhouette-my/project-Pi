@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
-import { mkdtemp, mkdir, writeFile, readFile, realpath } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, realpath, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { repositoryRoot, resolveElectronBinary, assertDesktopBuild } from "./e2e/boot.mjs";
@@ -26,6 +26,7 @@ const mainResource = join(canonicalWorkspace, "main"), sideResource = join(canon
 const sidePath = join(sideResource, "measurement.json"), candidatePath = join(mainResource, "candidate.txt");
 const hostBinary = join(root, "target/debug/pi-desktop-host-core");
 const requests = [], checkpoints = [], coverage = [];
+const held = new Map(), runRequests = new Map();
 let sequence = 0, log = "", fixtureFailure, heldMain, projectId, main, page, child;
 const json = JSON.stringify;
 const stamp = () => new Date().toISOString();
@@ -53,6 +54,14 @@ function reply(res, model, content, tool) {
   else frame({ role: "assistant", content });
   frame({}, tool ? "tool_calls" : "stop");
   res.end("data: [DONE]\n\n");
+}
+function hold(res, model, key, partial = "") {
+  if (partial) res.write(`data: ${json({ id: `workflow-${++sequence}`, object: "chat.completion.chunk", created: 1, model, choices: [{ index: 0, delta: { role: "assistant", content: partial }, finish_reason: null }] })}\n\n`);
+  else res.write(": bounded work remains active\n\n");
+  held.set(key, () => reply(res, model, checkpoint(`Completed ${key}`)));
+}
+async function absent(path) {
+  try { await access(path); return false; } catch (error) { if (error.code === "ENOENT") return true; throw error; }
 }
 const checkpoint = (summary, fields = {}) => {
   const value = { summary, stop: false, artifacts: [], evidence: [], consumedDeliveryIds: [], ...fields };
@@ -82,17 +91,35 @@ const model = createServer(async (req, res) => {
     const runId = prompt.match(/Run identity: ([^\n]+)/)?.[1];
     res.writeHead(200, { "content-type": "text/event-stream" });
     if (!runId) {
-      reply(res, body.model, prompt.includes("EXPLORE_MARKER") ? checkpoint("EXPLORE_PROPOSAL: Prefer measured value 42.") : "ASK_ONLY_MARKER: A local explanation; no project changes.");
+      reply(res, body.model, prompt.includes("ADOPT_EXPLORE") ? checkpoint("NEW_DECISION_MARKER: Use the newly adopted bounded decision.") : prompt.includes("DISCUSSION_MARKER") ? "DISCUSSION_MARKER: Work remains independent while discussing." : prompt.includes("EXPLORE_MARKER") ? checkpoint("EXPLORE_PROPOSAL: Prefer measured value 42.") : "ASK_ONLY_MARKER: A local explanation; no project changes.");
       return;
     }
+    runRequests.set(runId, (runRequests.get(runId) ?? 0) + 1);
     const invokeTool = (id, name, args) => {
       if (!body.tools?.some(tool => tool.function?.name === name)) {
         reply(res, body.model, null, { id: `discover-${id}`, name: "ToolSearch", args: { query: name } });
       } else reply(res, body.model, null, { id, name, args });
     };
-    if (prompt.includes("SIDE_MEASURE")) {
+    if (prompt.includes("DENY_OUTSIDE") || prompt.includes("DENY_BASH")) {
+      assert.equal(runRequests.get(runId), 1, "a scope denial terminates the bounded turn without a model retry");
+      const bash = prompt.includes("DENY_BASH");
+      reply(res, body.model, null, { id: bash ? "denied-bash" : "denied-outside", name: bash ? "Bash" : "Write", args: bash ? { command: `printf 'unsafe' > ${json(join(canonicalWorkspace, "unsafe-bash.txt"))}` } : { path: join(canonicalWorkspace, "outside-grant.txt"), content: "not-authorized" } });
+    } else if (prompt.includes("ADOPT_MAIN")) {
+      if (prompt.includes('"statement": "NEW_DECISION_MARKER:')) {
+        reply(res, body.model, checkpoint("Adopted context reached authorized continuation at a safe boundary"));
+      } else {
+        const staleArtifact = { ...artifact(runId, "must-not-be-current", "candidate", join(canonicalWorkspace, "adopt", "stale.txt"), "stale-r1"), workstreamId: "work-adopt" };
+        hold(res, body.model, "adopt-old", checkpoint("Old decision partial candidate must be fenced", { artifacts: [staleArtifact] }));
+      }
+    } else if (prompt.includes("HOLD_SURVIVOR")) {
+      hold(res, body.model, "survivor");
+    } else if (prompt.includes("HOLD_PAUSE")) {
+      hold(res, body.model, "pause");
+    } else if (prompt.includes("HOLD_CANCEL")) {
+      hold(res, body.model, "cancel");
+    } else if (prompt.includes("SIDE_MEASURE")) {
       if (!toolResults.some(result => result.tool_call_id === "side-write")) {
-        invokeTool("side-write", "Bash", { command: `printf '%s' '{"measurement":42,"environment":"synthetic-local"}' > ${json(sidePath)}` });
+        invokeTool("side-write", "Write", { path: sidePath, content: '{"measurement":42,"environment":"synthetic-local"}' });
       } else {
         assert.equal(JSON.parse(await readFile(sidePath, "utf8")).measurement, 42);
         reply(res, body.model, checkpoint("Side measurement produced", { artifacts: [artifact(runId, "side-artifact", "report", sidePath, "side-r1")] }));
@@ -102,7 +129,7 @@ const model = createServer(async (req, res) => {
         invokeTool("read-side", "Read", { path: sidePath });
       } else if (!toolResults.some(result => result.tool_call_id === "write-candidate")) {
         assert.match(json(toolResults.find(result => result.tool_call_id === "read-side")), /measurement.*42/, "actual Read result reaches the model");
-        invokeTool("write-candidate", "Bash", { command: `printf '%s' 'Integrated measurement: 42' > ${json(candidatePath)}` });
+        invokeTool("write-candidate", "Write", { path: candidatePath, content: "Integrated measurement: 42" });
       } else {
         assert.equal(await readFile(candidatePath, "utf8"), "Integrated measurement: 42");
         const deliveryText = prompt.split("Results to consume:\n")[1]?.split("\nRun identity:")[0];
@@ -212,7 +239,7 @@ try {
   assert.equal(lastSnapshot.artifacts.find(item => item.id === "candidate-1").revision, "candidate-r1");
   assert.equal(lastSnapshot.evidence[0].candidateRevision, "candidate-r1");
   assert.equal(lastSnapshot.workstreams[0].acceptance[0].status, "pending");
-  coverage.push("Real Main/AgentHost/Rust execution; disjoint parallel side Work; actual Bash/Read tools; delivery consumption; automatic implement/check/document; current candidate and evidence revisions; pending user acceptance");
+  coverage.push("Real Main/AgentHost/Rust execution; disjoint parallel side Work; actual Write/Read tools; delivery consumption; automatic implement/check/document; current candidate and evidence revisions; pending user acceptance");
   const runCount = lastSnapshot.runs.length, decisionRevision = lastSnapshot.workstreams[0].decisionRevision;
   for (const purpose of ["ask", "explore"]) {
     const result = await action("side.create", { purpose, visibility: purpose === "ask" ? "side_only" : "project", sourceSessionId: setup.sessionId, readContext: { selection: purpose === "ask" ? "ASK_ONLY_MARKER" : "EXPLORE_MARKER", resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: purpose === "ask" ? "ASK_ONLY_MARKER: Explain only." : "EXPLORE_MARKER: Propose an alternative only." });
@@ -233,19 +260,86 @@ try {
     }
   }
   coverage.push("Ask/Explore real Plan sessions; Ask context isolation; Explore durable proposal and explicit sourced adoption without implicit execution");
+  const createWork = async (id, goal) => {
+    const created = await invoke("sessionCreate", { title: id, mode: "agent", providerId: setup.providerId, modelId: setup.modelId, projectPath: canonicalWorkspace, permissionMode: "auto" });
+    const sessionId = created.session.id, resource = join(canonicalWorkspace, id);
+    await mkdir(resource);
+    await mutate("workstream.create", { workstream: workstream(id, sessionId, goal) });
+    await grant(`auth-${id}`, id, [resource]);
+    return { sessionId, resource, start: () => action("start", { sessionId, authorizationId: `auth-${id}` }, id) };
+  };
+  const runsFor = (state, id) => state.runs.filter(run => run.workstreamId === id);
+  const active = run => ["queued", "executing"].includes(run.state);
+  for (const [id, marker, forbiddenFile] of [["deny-outside", "DENY_OUTSIDE", "outside-grant.txt"], ["deny-bash", "DENY_BASH", "unsafe-bash.txt"]]) {
+    const denied = await createWork(id, `${marker}: Attempt only the deliberately forbidden operation; Host must terminate it.`);
+    const started = await denied.start();
+    const state = await until(async () => { const state = await snapshot(); return runsFor(state, id).some(run => !active(run) && run.completionKey) ? state : null; }, `${marker} boundary terminal receipt`);
+    const run = runsFor(state, id)[0];
+    assert.ok(["failed", "interrupted", "cancelled"].includes(run.state), `scope denial must be a failed/stopped turn, not successful completion: ${json(run)}`);
+    assert.equal(runRequests.get(started.runId), 1, "denial makes one model request and no retry");
+    assert.equal(await absent(join(canonicalWorkspace, forbiddenFile)), true, "denied mutation has no filesystem effect");
+    const detail = await invoke("sessionGet", { id: denied.sessionId });
+    assert.match(json(detail.session.messages), /WORKFLOW_RESOURCE_DENIED/, "actual Host boundary error is visible in the transcript");
+  }
+  coverage.push("Actual Host denies out-of-grant Write and unsafe Bash in auto-permission sessions; no file effect, one model request and terminal boundary stop");
+
+  const adopting = await createWork("work-adopt", "ADOPT_MAIN: Continue under existing bounded authorization when an explicitly adopted decision changes.");
+  const old = await adopting.start();
+  await until(() => held.has("adopt-old"), "old-decision Work is actively streaming");
+  const discussion = await action("discuss", { pause: false }, "work-adopt");
+  assert.notEqual(discussion.sessionId, adopting.sessionId);
+  await invoke("agentPrompt", { sessionId: discussion.sessionId, content: "DISCUSSION_MARKER: Discuss the ongoing work without pausing or changing its decisions." });
+  await until(async () => (await invoke("sessionGet", { id: discussion.sessionId })).session.messages.some(message => message.role === "assistant" && message.content?.includes("DISCUSSION_MARKER: Work remains")), "real Discuss response while Work runs");
+  assert.ok(runsFor(await snapshot(), "work-adopt").some(run => run.id === old.runId && active(run)), "Discuss with pause=false leaves real Work active");
+  const exploration = await action("side.create", { purpose: "explore", visibility: "project", sourceSessionId: adopting.sessionId, readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "ADOPT_EXPLORE: Propose the NEW_DECISION_MARKER conclusion only." }, "work-adopt");
+  const proposalId = `explore:${exploration.sessionId}:conclusion`;
+  const proposed = await until(async () => { const state = await snapshot(); return state.decisions.some(decision => decision.id === proposalId && decision.state === "proposed") ? state : null; }, "midflight Explore durable proposal");
+  assert.equal(proposed.workstreams.find(work => work.id === "work-adopt").decisionRevision, 0);
+  assert.equal(runsFor(proposed, "work-adopt").length, 1, "unadopted Explore does not steer or restart Work");
+  await action("adopt", { decisionId: proposalId, source: { kind: "user", ref: "explicit-midflight-e2e-adoption" } }, "work-adopt");
+  const continued = await until(async () => { const state = await snapshot(); const runs = runsFor(state, "work-adopt"); return runs.some(run => run.id !== old.runId && run.decisionRevision === 1 && run.state === "completed" && run.completionKey) ? state : null; }, "automatic authorized continuation observes adopted context without another Start");
+  assert.equal(runsFor(continued, "work-adopt").length, 2, "adoption dispatches exactly one bounded successor");
+  assert.ok(!continued.artifacts.some(artifact => artifact.id === "must-not-be-current"), "old-decision partial candidate never enters effective artifact state");
+  assert.equal(continued.workstreams.find(work => work.id === "work-adopt").decisionRevision, 1);
+  const discussionState = await invoke("sessionGet", { id: discussion.sessionId });
+  assert.ok(discussionState.session.messages.some(message => message.content?.startsWith("Work checkpoint since this discussion began:")), "Discuss receives execution delta automatically without copied handoff");
+  coverage.push("Real Discuss while Work continues; Explore proposal cannot steer; midflight Adopt fences old partial output and automatically continues under unchanged valid authorization/new decision context; discussion receives checkpoint delta");
+
+  const survivor = await createWork("work-survivor", "HOLD_SURVIVOR: Keep unrelated work active during scoped controls.");
+  const survivorRun = await survivor.start();
+  await until(() => held.has("survivor"), "unrelated survivor real request");
+  for (const control of ["pause", "cancel"]) {
+    const target = await createWork(`work-${control}`, `HOLD_${control.toUpperCase()}: Hold only this independently scoped work.`);
+    await target.start(); await until(() => held.has(control), `${control} target real request`);
+    await action(control, {}, `work-${control}`);
+    const controlled = await until(async () => { const state = await snapshot(); return state.workstreams.find(work => work.id === `work-${control}`).status === (control === "pause" ? "paused" : "cancelled") && runsFor(state, `work-${control}`).every(run => !active(run) && run.completionKey) ? state : null; }, `${control} affects only selected workstream`);
+    assert.ok(controlled.runs.some(run => run.id === survivorRun.runId && active(run)), "unrelated work survives scoped pause/cancel");
+  }
+  held.get("survivor")();
+  await until(async () => runsFor(await snapshot(), "work-survivor").every(run => run.state === "completed" && run.completionKey), "unrelated survivor completes normally");
+  coverage.push("Actual scoped pause and cancel stop only their real turns; unrelated Work survives and completes");
+
+  // Feedback is retained after the user explicitly closes the old execution grant.
+  // This tests candidate identity without accidentally authorizing correction work.
+  await mutate("authorization.revoke", { projectId, workstreamId: "work-main", authorizationId: "auth-main" });
   await mutate("feedback.add", { feedback: { id: "feedback-1", projectId, workstreamId: "work-main", candidateId: "candidate-1", candidateRevision: "candidate-r1", environment: "loopback-synthetic-model", acceptanceId: "acceptance-1", comment: "Request a separately authorized improvement", source: { kind: "user", ref: "fixture-user" }, createdAt: stamp() } });
   lastSnapshot = await snapshot(); assert.equal(lastSnapshot.feedback[0].candidateRevision, "candidate-r1");
+  const totalRunsBeforeRestart = lastSnapshot.runs.length;
   const countBeforeRestart = requests.length;
   await writeFile(join(output, "before-restart.json"), json(lastSnapshot, null, 2));
   await stopApp(); await startApp();
   lastSnapshot = await snapshot();
-  assert.equal(lastSnapshot.runs.length, runCount); assert.equal(lastSnapshot.artifacts.find(item => item.id === "candidate-1").revision, "candidate-r1");
+  assert.equal(lastSnapshot.runs.length, totalRunsBeforeRestart); assert.equal(lastSnapshot.artifacts.find(item => item.id === "candidate-1").revision, "candidate-r1");
   assert.equal(lastSnapshot.feedback[0].candidateRevision, "candidate-r1");
-  await sleep(1200); assert.equal(requests.length, countBeforeRestart, "completed run recovery sends no model request");
+  for (const sessionId of new Set(lastSnapshot.runs.map(run => run.sessionId))) {
+    const status = await invoke("agentGetStatus", sessionId);
+    assert.equal(status.status?.isRunning, false, "post-recovery real AgentHost is idle");
+  }
+  assert.equal(requests.length, countBeforeRestart, "completed run recovery sends no model request");
   coverage.push("Actual app/profile restart preserves candidate/evidence/feedback and does not replay completed work");
   const shot = await page.call("Page.captureScreenshot", { format: "png" });
   await writeFile(join(output, "production-renderer.png"), Buffer.from(shot.data, "base64"));
-  await writeFile(join(output, "result.json"), json({ ok: true, output, scratch, projectId, coverage, gaps: ["B Project Console DOM/visual interactions are a separate final integration check", "Pause/cancel and ambiguous crash recovery are not exercised by this harness", "No live account or deployment"], modelRequests: requests.length }, null, 2));
+  await writeFile(join(output, "result.json"), json({ ok: true, output, scratch, projectId, coverage, gaps: ["B Project Console DOM/visual interactions are a separate final integration check", "Ambiguous crash recovery is covered by lower-level tests, not this completed-run restart", "No live account or deployment"], modelRequests: requests.length }, null, 2));
   console.log(`PASS production workflow ${output}`);
 } catch (error) {
   const diagnostics = [];
