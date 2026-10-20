@@ -1,4 +1,5 @@
 import { projectPlanHistory } from "./plan-history";
+import { createProjectWorkflowApi } from "./project-workflow-api";
 import { guardRemoteInvocation } from "./remote-ipc-safety";
 import { isRemoteSession, safeSessionSummary } from "./remote-session-safety";
 import type {
@@ -643,6 +644,10 @@ function normalizePlansChangedEvent(value: unknown): PlanningStateEvent {
 }
 
 export const api = {
+  projectWorkflow: createProjectWorkflowApi(invoke, (channel, listener) => {
+    if (!window.piDesktop) throw new Error("piDesktop preload bridge unavailable");
+    return window.piDesktop.on(channel, listener);
+  }),
   chatgptChatStatus: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatStatus),
   chatgptChatLogin: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatLogin),
   chatgptChatLogout: () => invoke(IPC.invoke.chatgptChatLogout),
