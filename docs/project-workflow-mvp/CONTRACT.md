@@ -20,6 +20,7 @@ session and message IDs retain their existing meaning.
 | IPC | `IPC.invoke.projectWorkflow{Snapshot,Mutate,Action,Search}` | Named preload allowlist; user mutation endpoint excludes runtime-only commands |
 | Updates | `IPC.event.projectWorkflowChanged` / `ProjectWorkflowChanged` | Revision, command identity and affected project/workstream; reload snapshot after event |
 | Rust RPC | `project.workflow.snapshot`, `.mutate`, `.search` | A implements durable state; Main invokes runtime port for actions |
+| Project-scoped open | `api.projectWorkflow.openReference({projectId, kind: "artifact" \| "resource", id})` | Opens the recorded URI in the OS, not the active session; local paths must resolve inside that group's registered roots; HTTP(S) uses existing URL gate. Returns recorded revision. |
 
 ### Revisions, authority and errors
 

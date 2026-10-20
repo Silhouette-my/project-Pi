@@ -198,6 +198,8 @@ export type ProjectWorkflowSearchHit = {
   projectId?: string; workstreamId?: string; sessionId?: string; messageId?: string; artifactId?: string;
   breadcrumb: string[];
 };
+export type ProjectWorkflowOpenReference = { projectId: string; kind: "artifact" | "resource"; id: string };
+export type ProjectWorkflowOpenedReference = { opened: true; uri: string; revision: string };
 /** Runtime uses this port; renderer receives only user mutations and explicit actions. */
 export interface ProjectWorkflowHostPort {
   snapshot(query?: ProjectWorkflowQuery): Promise<ProjectWorkflowSnapshot>;
@@ -213,6 +215,7 @@ export interface ProjectWorkflowApi {
   mutate(command: ProjectWorkflowUserCommand): Promise<ProjectWorkflowMutationResult>;
   action(action: ProjectWorkflowAction): Promise<ProjectWorkflowActionResult>;
   search(request: ProjectWorkflowSearchRequest): Promise<{ hits: ProjectWorkflowSearchHit[] }>;
+  openReference(request: ProjectWorkflowOpenReference): Promise<ProjectWorkflowOpenedReference>;
   onChanged(listener: (event: ProjectWorkflowChanged) => void): () => void;
 }
 
