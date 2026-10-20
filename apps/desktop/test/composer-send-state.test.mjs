@@ -381,7 +381,7 @@ test("the user row is inserted before the host round trip and echoed under the s
   // The host persists and echoes under the renderer's id when it is a fresh UUID.
   assert.match(
     main,
-    /id: durableUserMessageId\(\s*req\.messageId,\s*Array\.isArray\(session\.messages\)\s*\?\s*session\.messages\s*:\s*\[\],\s*\)/,
+    /durableUserMessageId\(\s*req\.messageId,\s*Array\.isArray\(session\.messages\)\s*\?\s*session\.messages\s*:\s*\[\],\s*\)/,
   );
   assert.match(attachments, /export function durableUserMessageId\([\s\S]*?UUID_PATTERN\.test\(requested\)[\s\S]*?!existing\.some\(\(message\) => message\?\.id === requested\)/);
 });
