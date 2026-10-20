@@ -73,6 +73,10 @@ command.
 - Unknown external effects remain `unknown` for reconciliation and are not
   replayed. Pause, cancel, blocked and awaiting-user states apply to affected
   work; unrelated work remains independent.
+- Startup first observes and persists all existing runs, then admits authorized
+  continuations. Terminal callbacks arriving during recovery are retained and
+  drained before public actions become ready. Recovery failure keeps admission
+  disabled; retry preserves the accepted checkpoint's exact next step and scope.
 
 ## Opening a recorded reference
 

@@ -64,6 +64,8 @@ export function createWorkflowSessionFactory(deps: Pick<ProjectWorkflowDesktopDe
 /** One lifecycle owner: startup reconciliation precedes any workflow dispatch. */
 export function createDesktopProjectWorkflow(deps: ProjectWorkflowDesktopDependencies) {
   let ready = false;
+  let disposed = false;
+  const pendingSettlements = new Set<string>();
   const sessions = createWorkflowSessionFactory(deps);
   const execution = createProjectWorkflowExecution({ ...deps, createSession: sessions.createSession,
     assertExecutableSession: sessions.assertExecutable });
@@ -84,10 +86,25 @@ export function createDesktopProjectWorkflow(deps: ProjectWorkflowDesktopDepende
     runtime,
     async initialize() {
       await coordinator.recoverAll();
-      ready = true;
+      while (!disposed && pendingSettlements.size) {
+        for (const sessionId of [...pendingSettlements]) {
+          if (disposed) break;
+          pendingSettlements.delete(sessionId);
+          try { await coordinator.onTurnSettled(sessionId); }
+          catch (error) {
+            if (!disposed) pendingSettlements.add(sessionId);
+            throw error;
+          }
+        }
+      }
+      if (!disposed) ready = true;
     },
-    onTurnSettled: (sessionId: string) => ready ? coordinator.onTurnSettled(sessionId) : Promise.resolve(),
+    onTurnSettled: (sessionId: string) => {
+      if (disposed) return Promise.resolve();
+      if (!ready) { pendingSettlements.add(sessionId); return Promise.resolve(); }
+      return coordinator.onTurnSettled(sessionId);
+    },
     contextForSession: (sessionId: string) => ready ? coordinator.contextForSession(sessionId) : Promise.resolve(undefined),
-    async dispose() { ready = false; await coordinator.dispose?.(); },
+    async dispose() { disposed = true; ready = false; pendingSettlements.clear(); await coordinator.dispose?.(); },
   };
 }
