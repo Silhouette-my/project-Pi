@@ -16,6 +16,7 @@ mod plans;
 mod plugin_sessions;
 mod plugin_usage;
 mod plugins;
+mod project_workflow;
 mod providers;
 mod review;
 mod rpc;

@@ -1,5 +1,6 @@
 mod config_sync_rpc;
 mod plugin_reviews_rpc;
+mod project_workflow_rpc;
 mod remote_tools;
 mod scheduled_rpc;
 mod scheduled_tools;
@@ -1945,6 +1946,10 @@ async fn handle_request(
                 .list_project_groups()
                 .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?;
             Ok(json!({ "groups": groups }))
+        }
+        "project.workflow.snapshot" | "project.workflow.mutate" | "project.workflow.search" => {
+            let st = state.lock().await;
+            project_workflow_rpc::handle(&st.db, method, &params)
         }
         "project.group.createRemote" => {
             let name = params
