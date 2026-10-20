@@ -172,7 +172,7 @@ export type ProjectWorkflowRuntimeCommand = Type.Static<typeof ProjectWorkflowRu
 export const ProjectWorkflowCommandSchema = Type.Union([ProjectWorkflowUserCommandSchema, ProjectWorkflowRuntimeCommandSchema]);
 export type ProjectWorkflowCommand = Type.Static<typeof ProjectWorkflowCommandSchema>;
 export type ProjectWorkflowMutationResult = { snapshot: ProjectWorkflowSnapshot; replayed: boolean };
-export type ProjectWorkflowErrorCode = "INVALID_ARGUMENT" | "NOT_FOUND" | "CONFLICT" | "UNAUTHORIZED" | "WORKFLOW_EFFECT_UNKNOWN";
+export type ProjectWorkflowErrorCode = "INVALID_ARGUMENT" | "NOT_FOUND" | "CONFLICT" | "UNAUTHORIZED" | "WORKFLOW_EFFECT_UNKNOWN" | "WORKFLOW_RESOURCE_DENIED";
 export type ProjectWorkflowConflict = { expectedRevision: number; actualRevision: number };
 export type ProjectWorkflowChanged = { revision: number; commandId: string; kind: ProjectWorkflowCommand["kind"]; projectId?: string; workstreamId?: string };
 
