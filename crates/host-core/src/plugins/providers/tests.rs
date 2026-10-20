@@ -102,7 +102,7 @@ fn a_new_database_carries_the_owner_column_at_the_current_schema_version() {
     // session-list index, v23 the session title source, and v24 the worktree
     // registry. A fresh database is stamped with the newest version, so the
     // column set is the current one.
-    assert_eq!(SCHEMA_VERSION, 24);
+    assert_eq!(SCHEMA_VERSION, 25);
     let version: i64 = db
         .conn()
         .query_row("PRAGMA user_version", [], |row| row.get(0))

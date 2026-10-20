@@ -8,3 +8,4 @@
 | [04-documentation-site.md](04-documentation-site.md) | Documentation site |
 | [05-remote-agent-control.md](05-remote-agent-control.md) | Remote Agent Host and Gateway target architecture |
 | [06-pi-runtime-dependency-boundary.md](06-pi-runtime-dependency-boundary.md) | pi runtime package boundaries, pi-durable assessment, and pi-coding-agent removal path |
+| [project-workflow-state.md](project-workflow-state.md) | Durable project workflow state and host boundaries |

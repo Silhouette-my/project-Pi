@@ -10165,6 +10165,7 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 | D — Workspace | E2E-012, E2E-013, E2E-022B, E2E-024I, E2E-047, E2E-049, E2E-057, E2E-058, E2E-060, E2E-068, E2E-075, E2E-078, E2E-153, E2E-158, E2E-182, E2E-187, E2E-252 |
 | C / D / Quality — Project session history resets after collapse | E2E-263 |
 | D — Workspace (project ordering) | E2E-253 |
+| Project Workflow MVP — AC01–AC12 | E2E-PROJECT-workflow-durable-loop |
 | E — Tools & permissions | E2E-008a, E2E-014, E2E-015, E2E-016, E2E-017, E2E-018, E2E-019, E2E-024I, E2E-024K, E2E-040, E2E-049, E2E-074, E2E-093, E2E-097, E2E-099, E2E-100, E2E-101, E2E-102, E2E-102d, E2E-102e, E2E-102g, E2E-103, E2E-105, E2E-106, E2E-107, E2E-111, E2E-112, E2E-113, E2E-114, E2E-115, E2E-116, E2E-119, E2E-121, E2E-122, E2E-142, E2E-145, E2E-147, E2E-155, E2E-158, E2E-166, E2E-181, E2E-PLUGIN-imported-pi-package-skills |
 | F — Persistence | E2E-020, E2E-021, E2E-021a, E2E-038, E2E-SETTINGS-inline-capability-imports, E2E-040, E2E-042, E2E-047, E2E-048, E2E-051, E2E-054, E2E-056, E2E-061, E2E-062, E2E-064, E2E-066, E2E-068, E2E-071, E2E-072, E2E-073, E2E-082, E2E-084, E2E-096, E2E-098, E2E-102, E2E-102b, E2E-102c, E2E-102d, E2E-102g, E2E-102i, E2E-103, E2E-AGENTS-001, E2E-061a, E2E-073a, E2E-104, E2E-106, E2E-107, E2E-108, E2E-109, E2E-110, E2E-112, E2E-118, E2E-119, E2E-120, E2E-121, E2E-123, E2E-142, E2E-146, E2E-146a, E2E-148, E2E-151, E2E-158, E2E-160, E2E-168, E2E-171, E2E-177, E2E-178, E2E-183, E2E-186, E2E-005J, E2E-PROVIDER-custom-endpoint-no-api-key, E2E-PLUGIN-session-orchestrator-real-workers, E2E-PLUGIN-provider-catalog-add-service, E2E-SESSION-outbox-unclassifiable-failure-does-not-stall-the-queue |
 | F — Persistence (project ordering) | E2E-251 |
@@ -10251,6 +10252,7 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 | Trusted extensions (R7 v1 npm recovery) | E2E-PLUGIN-import-extension-recovers-missing-npm |
 | Post-MVP regression coverage (plugin tool dispatch) | E2E-PLUGIN-slow-tool-is-not-cut-off-by-host-dispatch |
 | M6+ (Project delete) | E2E-PROJECT-delete-removes-project-and-owned-sessions |
+| Project Workflow MVP | E2E-PROJECT-workflow-durable-loop |
 | M6+ (Two-click delete) | E2E-SESSION-two-click-delete-arms-first |
 | C — Conversation & stream (model fallback) | E2E-SUBAGENT-ordered-model-fallback-preserves-work |
 | Quality (model fallback isolation) | E2E-SUBAGENT-ordered-model-fallback-preserves-work |
@@ -10877,6 +10879,66 @@ This test plan spec is accepted when:
   Projects, and the footer remain reachable in light/dark themes at minimum
   supported window size. Existing hover cards, context menus, drag/drop, and
   project pinning retain their normal behavior.
+
+### E2E-PROJECT-workflow-durable-loop
+
+- **Preconditions**: A task-candidate build, an isolated profile and SQLite
+  database with an existing ProjectGroup, existing Chat sessions, and a local
+  project root. Use synthetic runtime/provider boundaries; no real account,
+  paid model call, installed app or user profile.
+- **Steps**: Organize ordinary Chats into folders, move one and remove a folder;
+  restart and continue an existing Chat. Open a Project Console with no selected
+  session and inspect a real workstream, owner, blocker, next action and candidate.
+  Adopt a source-backed decision and explicit user authorization, then start work.
+  Create Ask and Explore side conversations with independent context/write-back;
+  verify an unadopted proposal cannot steer Work. Discuss execution evidence in
+  Chat, adopt a revised decision, and continue the same workstream. Publish a side
+  result, close its parent session, then consume and integrate it in the workstream.
+  Race an old run result against a newer adopted decision and attach a user
+  counterexample to the exact candidate/acceptance item. Search for a message and
+  artifact, follow the breadcrumb, and confirm background activity leaves manual
+  navigation order unchanged. Pause and restart during work; reconcile actual run
+  state, leave an unknown external effect unreplayed, and keep unrelated work
+  available. Open the exact recorded candidate and a recorded resource without an
+  active session, record revision/environment-scoped feedback, and verify a local
+  test is not presented as live deployment. Reject a local reference outside
+  registered project roots and an HTTP(S) reference refused by the existing URL
+  gate.
+  Finally use existing Agent/Plan, Chat transcript, project instructions/memory,
+  permissions, session fork and history paths.
+- **Expected**: Folder edits are non-destructive and survive restart; project
+  identity and transcript semantics remain unchanged. Console and search read
+  durable host state, not fake progress. User commands and runtime observations
+  remain capability-separated and revision-aware. Only explicit user authority
+  starts work; adoption advances its decision fence. Run completion, delivery,
+  consumption and acceptance stay distinct. Stale results remain evidence rather
+  than replacing effective state. Opened references pass the existing path/URL
+  host gates and report the recorded revision. Unknown effects are not replayed.
+- **Product acceptance mapping**:
+
+  | AC | Scenario evidence required |
+  |---|---|
+  | AC01 | Folder move/removal, existing Chat continuation and restart |
+  | AC02 | Session-independent Project Console with real work/owner/blocker/candidate |
+  | AC03 | New session uses effective project context and resource references |
+  | AC04 | Discuss → Work → evidence → Chat → adopt → continue same workstream |
+  | AC05 | Authorized in-scope continuation and one boundary decision for out-of-scope work |
+  | AC06 | Ask isolation and adoption fence for Explore |
+  | AC07 | Side result delivered, then consumed by durable workstream after parent closure |
+  | AC08 | Decision revision fences stale run; counterexample targets exact candidate/condition |
+  | AC09 | Search result jumps with breadcrumb; background activity preserves navigation order/history |
+  | AC10 | Pause/restart reconciliation, no replay of unknown effect, unrelated work remains runnable |
+  | AC11 | Exact candidate/resource open and feedback; unit or local test is not live/deployment evidence |
+  | AC12 | Existing Agent/Plan, Chat, project memory, permissions, fork and history remain usable |
+
+- **Specs linked**: [Project Workflow State](../02-architecture/project-workflow-state.md),
+  [Product contract](../../project-workflow-mvp/PRODUCT.md),
+  [ADR](../../adr/project-workflow-durable-state.md).
+- **Acceptance**: Project Workflow MVP AC01–AC12.
+- **Status**: Defined, not yet accepted. The shared-schema, Host and IPC tests
+  are component-level evidence only; they do not establish rendered journeys,
+  runtime lifecycle, restart recovery or integrated acceptance. Record results
+  against the exact task candidate after those paths are exercised.
 
 ### E2E-PROJECT-delete-removes-project-and-owned-sessions
 

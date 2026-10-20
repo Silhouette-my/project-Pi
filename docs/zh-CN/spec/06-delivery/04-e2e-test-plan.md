@@ -5816,6 +5816,7 @@ eleven-tool-round desktop paths are verified by
 | G — 插件（独立会话通信） | E2E-SESSION-independent-top-level-communication |
 | 品质（独立会话通信） | E2E-SESSION-independent-top-level-communication、E2E-SESSION-hover-card-model-and-links |
 | C — 对话与流式（hover 卡片模型和链接） | E2E-SESSION-hover-card-model-and-links |
+| 项目工作流 MVP — AC01–AC12 | E2E-PROJECT-workflow-durable-loop |
 | D — 工作区（删除项目） | E2E-PROJECT-delete-removes-project-and-owned-sessions |
 | F — 持久化（删除项目） | E2E-PROJECT-delete-removes-project-and-owned-sessions |
 | 品质（删除项目） | E2E-PROJECT-delete-removes-project-and-owned-sessions |
@@ -5861,6 +5862,7 @@ eleven-tool-round desktop paths are verified by
 | 受信任扩展（R7 v1 npm 恢复） | E2E-PLUGIN-import-extension-recovers-missing-npm |
 | Post-MVP 回归覆盖（插件工具调度） | E2E-PLUGIN-slow-tool-is-not-cut-off-by-host-dispatch |
 | M6+（删除项目） | E2E-PROJECT-delete-removes-project-and-owned-sessions |
+| 项目工作流 MVP | E2E-PROJECT-workflow-durable-loop |
 | M6+（两步删除） | E2E-SESSION-two-click-delete-arms-first |
 | C — 对话和直播（模型回退） | E2E-SUBAGENT-ordered-model-fallback-preserves-work |
 | 品质（模型回退隔离） | E2E-SUBAGENT-ordered-model-fallback-preserves-work |
@@ -6404,6 +6406,32 @@ eleven-tool-round desktop paths are verified by
   恢复它。成绩单和项目绑定保持不变。
 - 传统的 `manual` 首选项加载时不会出现拖动重新排序
   可供性。
+
+### E2E-PROJECT-workflow-durable-loop
+
+- **前提条件**：任务候选构建、隔离的 profile 与 SQLite 数据库，其中已有 ProjectGroup、Chat 会话和本地项目根目录。使用合成 runtime/provider 边界；不使用真实账户、付费模型调用、已安装应用或用户 profile。
+- **步骤**：将普通 Chat 归入文件夹，移动一个会话并移除一个文件夹；重启后继续已有 Chat。未选中任何会话时打开 Project Console，检查真实 workstream、负责人、阻塞项、下一步和候选产物。采纳带来源的决策并授予明确用户授权，然后开始工作。创建具有独立上下文/写回策略的 Ask 和 Explore 分支，确认未采纳的提案不会影响 Work。在 Chat 讨论执行证据、采纳新决策，并在同一 workstream 中继续。发布侧会话结果，关闭其父会话，再在 workstream 中消费并集成。让旧 run 结果与较新的已采纳决策竞争，并把用户反例附加到精确候选和验收项。搜索消息与 artifact，通过 breadcrumb 跳转，并确认后台活动不改变手动导航顺序。工作期间暂停并重启；协调实际 run 状态，保留未知外部副作用但不重放，并保持无关工作可用。没有活动会话时打开精确记录的候选和资源，写入绑定 revision/environment 的反馈，并确认本地测试不会被标成线上部署。拒绝项目根目录之外的本地引用，以及被现有 URL gate 拒绝的 HTTP(S) 引用。最后验证现有 Agent/Plan、Chat 转录、项目指令/记忆、权限、session fork 和历史入口仍可使用。
+- **预期**：文件夹操作无损且重启后仍有效；项目身份与转录语义不变。Console 和搜索读取持久化 host 状态，不显示伪造进度。用户命令与 runtime 观察按能力分离并使用 revision 控制。只有明确用户授权才能启动工作；采纳会推进决策 fence。Run 完成、交付、消费和验收互不混同。过期结果只保留为证据，不覆盖有效状态。打开引用须通过既有 host 路径/URL gate，并返回记录的 revision。未知副作用不会重放。
+- **产品验收映射**：
+
+  | AC | 所需场景证据 |
+  |---|---|
+  | AC01 | 文件夹移动/移除、继续已有 Chat 并重启 |
+  | AC02 | 不依赖活动会话的 Project Console 显示真实工作、负责人、阻塞项与候选产物 |
+  | AC03 | 新会话使用有效项目上下文及资源引用 |
+  | AC04 | Discuss → Work → 新证据 → Chat → 采纳 → 在同一 workstream 继续 |
+  | AC05 | 授权范围内继续工作；越权边界只请求一次具体决定 |
+  | AC06 | Ask 上下文隔离，Explore 结果须采纳后才能生效 |
+  | AC07 | 父会话关闭后，侧结果仍可交付并由持久 workstream 消费 |
+  | AC08 | 决策 revision 隔离过期 run；反例指向精确候选/条件 |
+  | AC09 | 搜索结果通过 breadcrumb 跳转；后台活动不重排导航且历史可达 |
+  | AC10 | 暂停/重启协调、不重放未知副作用、无关工作仍可运行 |
+  | AC11 | 打开精确候选/资源并记录反馈；unit/local test 不等于 live/deployment evidence |
+  | AC12 | 现有 Agent/Plan、Chat、项目记忆、权限、fork 与历史仍可用 |
+
+- **关联规格**：[项目工作流状态](/zh-CN/spec/02-architecture/project-workflow-state)、`docs/project-workflow-mvp/PRODUCT.md`、[ADR](/adr/project-workflow-durable-state)。
+- **验收范围**：项目工作流 MVP AC01–AC12。
+- **状态**：已定义，尚未验收。shared schema、Host 和 IPC 测试只是组件级证据，不能证明渲染旅程、runtime 生命周期、重启恢复或集成验收。完成这些路径后，按精确任务候选记录结果。
 
 ### E2E-PROJECT-delete-removes-project-and-owned-sessions
 

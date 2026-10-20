@@ -7,7 +7,7 @@ pub(crate) use serde_json::Value;
 pub(crate) use std::path::{Path, PathBuf};
 
 /// Current SQLite schema version.
-pub const SCHEMA_VERSION: i64 = 24;
+pub const SCHEMA_VERSION: i64 = 25;
 
 /// Absolute approval deadline for a newly submitted Plan or Goal proposal.
 pub const PLAN_APPROVAL_TIMEOUT_MS: i64 = 30 * 60 * 1000;
@@ -19,6 +19,7 @@ mod migrations;
 mod model;
 mod plugin_providers_migration;
 mod project_groups;
+mod project_workflow_migration;
 mod repositories;
 mod schema;
 mod session_collaboration_migration;
@@ -37,6 +38,7 @@ pub use project_groups::{
     ProjectGroupContextRecord, ProjectGroupRecord, ProjectGroupRoot, RemoteWorkspace,
     REMOTE_PROJECT_PREFIX,
 };
+pub(crate) use project_workflow_migration::{migrate_v24_to_v25, PROJECT_WORKFLOW_DDL};
 pub(crate) use repositories::{
     canonical_project_path, normalize_project_path, project_display_name,
     strip_obsolete_plan_approval_permission_mode, upsert_project_row, MAX_PROJECT_MEMORY_BYTES,
