@@ -25,7 +25,7 @@ test("recorded candidate opens inside its own project without changing the activ
     const dependencies = { host: { snapshot: async () => state },
       getHost: () => ({ async call(method) {
         assert.equal(method, "project.groups.list");
-        return { groups: [{ id: "project-1", primaryPath: project, roots: [{ path: project }] }] };
+        return { groups: [{ id: "project-1", primaryPath: await realpath(project), roots: [{ path: await realpath(project) }] }] };
       } }),
       openPath: async (path) => { opened.push(path); return ""; },
       openExternal: async (url) => opened.push(url),
