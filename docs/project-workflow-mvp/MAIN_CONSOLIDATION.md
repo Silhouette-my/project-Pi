@@ -73,7 +73,7 @@ repository. It covers the earlier integrated execution candidate and is
 distinct from the discussion/navigation journey.
 
 No remote push or installed-application replacement is part of this
-consolidation. Real-account Chat evaluation belongs to its existing active
+consolidation. Real-account Chat evaluation belongs to its original
 conversation; the integration checks use synthetic providers.
 
 ## Local recovery and cleanup
@@ -85,5 +85,29 @@ history; cleanup preserves an additional copy beside the source manifests.
 
 Retiring a local branch does not authorize deleting its worktree's login data,
 application caches, screenshots, or other retained evidence. Historical
-worktrees can remain detached at their recorded commits. An actively used
-Chat worktree must remain attached until its ongoing task has stopped writing.
+worktrees remain detached at their recorded commits.
+
+### Final Chat handoff
+
+The user authorized pausing the original Chat task. Its owner confirmed that
+source edits, child-agent writes, restarts, and new test requests have stopped.
+There were no application/runtime source changes after the last captured
+transport refresh. Direct comparison found no unexpected source differences
+from main.
+
+The subsequent blind-review deliverable is retained unchanged at
+`examples/chat-ab-round1.html`. Its supporting results, generation scripts,
+and private answer key remain in the original worktree's ignored
+`.pi-desktop-test/prompt-ab-round1/` directory. The answer key is not committed
+or disclosed.
+
+The owner reported four complete real Chat responses from the original
+worktree, using `gpt-6-thinking` with UI `high` mapped to outbound `extended`.
+These do not validate main's later workflow-context integration. The HTML's
+script syntax and export-selection synchronization were checked by its owner;
+browser visual inspection and export/reopen validation remain unperformed.
+User preference evaluation is still pending in the original conversation.
+
+The original App remains running from the Chat worktree. Branch retirement
+preserves that directory, its build outputs, database, and login paths.
+No application restart or profile migration is needed for this cleanup.
