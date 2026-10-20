@@ -140,6 +140,8 @@ export const IPC = {
     agentGetStatus: "pi-desktop/agent/getStatus",
     agentInstructionsGet: "pi-desktop/agent/instructions/get",
     agentInstructionsSave: "pi-desktop/agent/instructions/save",
+    /** ChatGPT chat-mode instruction presets on disk (spec 03-runtime/11). */
+    promptPresetList: "pi-desktop/promptPreset/list",
     sessionList: "pi-desktop/session/list",
     sessionCreate: "pi-desktop/session/create",
     sessionFork: "pi-desktop/session/fork",

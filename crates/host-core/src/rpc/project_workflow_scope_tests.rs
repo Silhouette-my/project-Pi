@@ -31,6 +31,7 @@ async fn project_agent_tools_execute_denies_before_auto_permissions_and_effects(
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         session.id
@@ -144,6 +145,7 @@ impl Fixture {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         mutate(

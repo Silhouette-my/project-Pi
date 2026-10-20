@@ -11,7 +11,7 @@ import {
   assertFeedbackIssueUrl,
   buildBugReportUrl,
 } from "@pi-desktop/shared";
-import { globalInstructionPath } from "@pi-desktop/agent-runtime";
+import { globalInstructionPath, listChatInstructionPresets } from "@pi-desktop/agent-runtime";
 import type { HostProcess } from "../host-process";
 import type { AppUpdaterController } from "../updater";
 import type { IpcRegistrar } from "./types";
@@ -221,6 +221,20 @@ export function registerAppIpc({
       await mkdir(dirname(file.path), { recursive: true });
       await writeFile(file.path, content, "utf8");
       return { file: { ...file, content, exists: true } };
+    },
+  );
+
+  // ChatGPT chat-mode instruction presets (spec 03-runtime/11): ids only,
+  // workspace first and deduplicated. The reserved "none" id is never listed;
+  // the renderer offers it itself, and content never crosses this channel.
+  handle(
+    IPC.invoke.promptPresetList,
+    async (input: { projectPath?: unknown } = {}) => {
+      const projectPath =
+        input.projectPath === undefined
+          ? null
+          : await managedProjectPath(input.projectPath);
+      return { presets: await listChatInstructionPresets(projectPath ?? undefined) };
     },
   );
 

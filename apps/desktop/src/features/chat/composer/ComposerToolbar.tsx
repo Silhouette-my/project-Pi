@@ -23,9 +23,12 @@ import {
 } from "../../../components/icons";
 import { LiveVoiceControls } from "../../voice/live/LiveVoiceControls";
 import { ComposerModelPicker } from "./ComposerModelPicker";
+import { ComposerChatInstructionPicker } from "./ComposerChatInstructionPicker";
 import type { useComposerModelMenu } from "./hooks/useComposerModelMenu";
+import type { useChatInstructionMenu } from "./hooks/useChatInstructionMenu";
 
 type ModelMenuController = ReturnType<typeof useComposerModelMenu>;
+type ChatInstructionMenuController = ReturnType<typeof useChatInstructionMenu>;
 type ContextUsage = Parameters<typeof ContextUsageInspector>[0];
 
 export type ComposerToolbarProps = {
@@ -50,6 +53,9 @@ export type ComposerToolbarProps = {
   configureActiveSession: AppState["configureActiveSession"];
   showToast: AppState["showToast"];
   modelMenu: ModelMenuController;
+  /** Present only for ChatGPT conversation models on local sessions. */
+  chatInstructionMenu?: ChatInstructionMenuController;
+  chatInstructionPreset?: string | null;
   modelLabel: string;
   thinkingLabel: string;
   contextUsage: ContextUsage | null;
@@ -92,6 +98,8 @@ export function ComposerToolbar({
   configureActiveSession,
   showToast,
   modelMenu,
+  chatInstructionMenu,
+  chatInstructionPreset,
   modelLabel,
   thinkingLabel,
   contextUsage,
@@ -143,6 +151,7 @@ export function ComposerToolbar({
           onCloseOtherMenus={() => {
             modelMenu.setOpen(false);
             setPermissionOpen(false);
+            chatInstructionMenu?.setOpen(false);
           }}
           onSelect={async (next) => {
             try {
@@ -166,6 +175,7 @@ export function ComposerToolbar({
           onCloseOtherMenus={() => {
             modelMenu.setOpen(false);
             setModeOpen(false);
+            chatInstructionMenu?.setOpen(false);
           }}
           onSelect={async (candidate) => {
                 try {
@@ -188,6 +198,19 @@ export function ComposerToolbar({
       <div className="composer-right">
         {localToolsAllowed ? <ComposerControlSlots side="right" /> : null}
         {contextUsage ? <ContextUsageInspector {...contextUsage} /> : null}
+        {chatInstructionMenu?.enabled ? (
+          <ComposerChatInstructionPicker
+            t={t}
+            controller={chatInstructionMenu}
+            currentPreset={chatInstructionPreset}
+            controlsBlocked={controlsBlocked}
+            onCloseOtherMenus={() => {
+              modelMenu.setOpen(false);
+              setModeOpen(false);
+              setPermissionOpen(false);
+            }}
+          />
+        ) : null}
         <ComposerModelPicker
           t={t}
           controller={modelMenu}
@@ -197,7 +220,10 @@ export function ComposerToolbar({
           selectedProviderId={providerId}
           selectedModelId={modelId}
           controlsBlocked={controlsBlocked}
-          onCloseOtherMenus={() => setPermissionOpen(false)}
+          onCloseOtherMenus={() => {
+            setPermissionOpen(false);
+            chatInstructionMenu?.setOpen(false);
+          }}
         />
         {composerTransforms.map((transform) => {
           const key = `${transform.pluginId}/${transform.id}`;

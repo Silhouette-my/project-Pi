@@ -228,6 +228,8 @@ import { genericModelConfig, visionFromModelConfig } from "./model-capabilities.
 import type { ProjectInstructions } from "./project-instructions.js";
 import { projectInstructionsPrompt } from "./project-instructions-prompt.js";
 import type { CustomSystemPrompt } from "./custom-system-prompt.js";
+import { chatSystemPromptContent } from "./chat-instructions.js";
+import { withChatWorkflowContext } from "./chat-workflow-context.js";
 import { projectMemoryPrompt } from "./project-memory-prompt.js";
 import {
   pluginSkillsPrompt,
@@ -992,6 +994,15 @@ export type AgentRuntimeOptions = {
   systemPrompt?: string;
   /** pi-compatible SYSTEM.md / APPEND_SYSTEM.md resolved for the session (issue #542). */
   customSystemPrompt?: CustomSystemPrompt;
+  /**
+   * ChatGPT chat-mode system prompt content (spec 03-runtime/11).
+   * `undefined` = built-in chat persona; `""` = no system prompt at all;
+   * other = the selected preset's content. Only consulted for
+   * `apiStyle: "chatgpt_conversation"` providers.
+   */
+  chatInstructions?: string;
+  /** Project workflow reference data, separate from the Chat persona. */
+  chatWorkflowContext?: string;
   /** Session-bound workspace root used for path-scoped instruction requests. */
   projectPath?: string;
   /** Remote tool root. Model requests and runtime state remain on this machine. */
@@ -1068,6 +1079,10 @@ export type RuntimeMatchConfig = {
   pluginSkills?: PluginSkillDef[];
   trustedExtensions?: TrustedExtensionSpec[];
   customSystemPrompt?: CustomSystemPrompt;
+  /** ChatGPT chat-mode prompt content; see `DesktopAgentRuntimeOptions`. */
+  chatInstructions?: string;
+  /** Project workflow reference data, separate from the Chat persona. */
+  chatWorkflowContext?: string;
   projectInstructions?: ProjectInstructions;
   projectMemory?: string;
   projectPath?: string;
@@ -1806,6 +1821,8 @@ export class DesktopAgentRuntime {
   private streamSink: StreamCoalescer;
   private baseSystemPrompt: string;
   private customSystemPrompt?: CustomSystemPrompt;
+  private chatInstructions?: string;
+  private chatWorkflowContext?: string;
   private planningState: PlanningState;
   private pendingPlanId?: string;
   private currentAssistant?: UiMessage;
@@ -2070,6 +2087,8 @@ export class DesktopAgentRuntime {
     // Remote workspaces are never isolated (ADR 0329).
     this.workspaceRoot = opts.remoteWorkspace ? undefined : opts.workspaceRoot?.trim() || undefined;
     this.customSystemPrompt = opts.customSystemPrompt;
+    this.chatInstructions = opts.chatInstructions;
+    this.chatWorkflowContext = opts.chatWorkflowContext;
     this.baseProjectInstructions = opts.projectInstructions;
     this.projectInstructions = opts.projectInstructions;
     this.projectMemory = opts.projectMemory?.trim() || undefined;
@@ -2139,6 +2158,9 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     const tools = this.declaredTools();
     this.agent = new Agent({
       streamFn: (m, context, options) => {
+        if (this.provider.apiStyle === "chatgpt_conversation") {
+          context = withChatWorkflowContext(context, this.chatWorkflowContext);
+        }
         this.setAgentActivity({ phase: "waiting-model", since: Date.now() });
         this.providerResponseStatus = undefined;
         this.providerRetryHeaders = undefined;
@@ -2457,6 +2479,16 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
   }
 
   private composeSystemPrompt(): string {
+    // ChatGPT chat mode has no local tools, so the desktop agent prompt
+    // (persona, tool rules, skills, project context) is replaced entirely by
+    // the selected chat instruction, the built-in chat persona, or nothing
+    // (spec 03-runtime/11). Non-chat providers compose unchanged.
+    if (this.provider.apiStyle === "chatgpt_conversation") {
+      const chat = chatSystemPromptContent(this.chatInstructions);
+      this.composedSections = chat ? { runtime: chat } : {};
+      this.composedSystemPrompt = chat;
+      return chat;
+    }
     const projectPrompt = projectInstructionsPrompt(this.projectInstructions);
     const memoryPrompt = projectMemoryPrompt(this.projectMemory);
     const optionalToolsPrompt = this.optionalToolsPrompt();
@@ -2758,6 +2790,12 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
       // prompt recomposes from the fresh content.
       safeJson(this.customSystemPrompt ?? null) ===
         safeJson(config.customSystemPrompt ?? null) &&
+      // Switching the chat instruction preset (including "None") retires the
+      // runtime the same way, so the next prompt uses the new chat system
+      // prompt (spec 03-runtime/11).
+      safeJson(this.chatInstructions ?? null) ===
+        safeJson(config.chatInstructions ?? null) &&
+      this.chatWorkflowContext === config.chatWorkflowContext &&
       (this.projectMemory ?? "") === (config.projectMemory?.trim() ?? "") &&
       (this.projectPath ?? "") === (config.remoteWorkspace?.path ?? config.projectPath?.trim() ?? "") &&
       safeJson(this.remoteWorkspace ?? null) === safeJson(config.remoteWorkspace ?? null) &&

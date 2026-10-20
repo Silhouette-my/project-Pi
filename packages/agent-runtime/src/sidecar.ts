@@ -138,6 +138,16 @@ type RuntimeParams = {
   /** An isolated session's worktree root, supplied by Electron main (ADR 0329). */
   workspaceRoot?: string;
   customSystemPrompt?: CustomSystemPrompt;
+  /**
+   * ChatGPT chat-mode system prompt content (spec 03-runtime/11). Encoding:
+   * `undefined` = built-in chat persona (also the fallback for a stale preset
+   * id); `""` = the "None" selection, send no system prompt at all; any other
+   * string = that preset's file content. Only consulted for
+   * `apiStyle: "chatgpt_conversation"` providers.
+   */
+  chatInstructions?: string;
+  /** Host-selected project workflow reference data; not repository instructions. */
+  chatWorkflowContext?: string;
   projectInstructions?: ProjectInstructions;
   projectMemory?: string;
   compactionSettings?: ContextCompactionSettings;
@@ -259,6 +269,8 @@ async function runtimeFor(
     jevApiKey: params.jevApiKey,
     projectInstructions: params.projectInstructions,
     customSystemPrompt: params.customSystemPrompt,
+    chatInstructions: params.chatInstructions,
+    chatWorkflowContext: params.chatWorkflowContext,
     projectMemory: params.projectMemory,
     discussionOnly: params.discussionOnly,
     projectPath: params.projectPath,
@@ -338,6 +350,8 @@ async function runtimeFor(
     remoteWorkspace: params.remoteWorkspace,
     workspaceRoot: params.workspaceRoot,
     customSystemPrompt: params.customSystemPrompt,
+    chatInstructions: params.chatInstructions,
+    chatWorkflowContext: params.chatWorkflowContext,
     projectInstructions: params.projectInstructions,
     projectMemory: params.projectMemory,
     discussionOnly: params.discussionOnly,

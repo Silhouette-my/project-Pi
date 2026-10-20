@@ -48,8 +48,14 @@
   position: relative;
 }
 
+/* ChatGPT chat-instruction preset menu: same anchoring as the mode chips. */
+.composer-chat-instructions {
+  position: relative;
+}
+
 .composer-permission-menu,
-.composer-mode-menu {
+.composer-mode-menu,
+.composer-chat-instructions-menu {
   position: fixed;
   top: 0;
   left: 0;
@@ -68,6 +74,11 @@
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
+}
+
+/* Preset ids are file stems; the 120px mode-menu width ellipsized them. */
+.composer-chat-instructions-menu {
+  width: min(220px, calc(100vw - 24px));
 }
 
 .composer-model-menu {
@@ -97,6 +108,7 @@
 
 .composer-permission-menu.is-open,
 .composer-mode-menu.is-open,
+.composer-chat-instructions-menu.is-open,
 .composer-model-menu.is-open {
   opacity: 1;
   pointer-events: auto;

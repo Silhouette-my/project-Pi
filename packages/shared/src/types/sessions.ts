@@ -19,6 +19,13 @@ import type { SessionWorktreeSummary } from "./worktree.js";
  */
 export type SessionSource = "desktop" | "pi-native" | "remote";
 
+/**
+ * Reserved chat instruction preset id (spec 03-runtime/11): selecting it sends
+ * no system prompt at all. It is never offered as a preset file id, so a
+ * `none.md` file in a chat-instructions directory is ignored.
+ */
+export const CHAT_INSTRUCTION_NONE_ID = "none";
+
 export type SessionCapabilities = {
   canPrompt: boolean;
   canStop: boolean;
@@ -57,6 +64,13 @@ export type SessionSummary = {
   thinkingLevel: SessionThinkingLevel;
   /** Per-session permission mode; `inherit` follows the global default (D115). */
   permissionMode: PermissionMode;
+  /**
+   * ChatGPT chat-mode instruction preset id for this session
+   * (spec 03-runtime/11). Absent means the built-in chat persona; the
+   * reserved id `CHAT_INSTRUCTION_NONE_ID` sends no system prompt at all.
+   * Older hosts omit it, which behaves like the built-in default.
+   */
+  promptPreset?: string;
   /** Effective capability for this session's exact provider/model pair. */
   supportsReasoning?: boolean;
   /** Effective image-input capability for this session's exact model. */

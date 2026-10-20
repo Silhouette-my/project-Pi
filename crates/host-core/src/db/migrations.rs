@@ -984,3 +984,33 @@ pub(crate) fn migrate_v21_to_v22(conn: &Connection, path: &Path) -> Result<()> {
     })?;
     Ok(())
 }
+
+/// v27 adds the per-session ChatGPT chat instruction preset id (spec
+/// 03-runtime/11). A plain nullable column: NULL keeps the built-in chat
+/// persona, so no backfill and no CHECK (ids are file stems discovered at
+/// launch). The column probe keeps a second run harmless.
+pub(crate) fn migrate_v26_to_v27_tx(tx: &rusqlite::Transaction<'_>) -> Result<()> {
+    let has_prompt_preset: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('sessions') WHERE name = 'prompt_preset')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_prompt_preset {
+        tx.execute_batch("ALTER TABLE sessions ADD COLUMN prompt_preset TEXT;")?;
+    }
+    tx.pragma_update(None, "user_version", 27i64)?;
+    Ok(())
+}
+
+pub(crate) fn migrate_v26_to_v27(conn: &Connection, path: &Path) -> Result<()> {
+    let backup = create_migration_backup(conn, path, 26)?;
+    let tx = conn.unchecked_transaction()?;
+    migrate_v26_to_v27_tx(&tx)?;
+    tx.commit().with_context(|| {
+        format!(
+            "commit schema v26 to v27 migration; backup {} remains",
+            backup.display()
+        )
+    })?;
+    Ok(())
+}

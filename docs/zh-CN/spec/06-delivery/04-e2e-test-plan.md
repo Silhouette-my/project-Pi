@@ -34,6 +34,30 @@
   未挂载视图的调度问题并验证离屏生命周期修复。修复后的真实生成、connector及
   额度归属仍由用户验收；实现者不代发账号侧测试消息。
 
+### E2E-PROVIDER-chatgpt-chat-instruction-presets
+
+- **前提：** 已保存并登录的 `chatgpt_conversation` 服务；
+  `<workspace>/.pi/chat-instructions/` 与 `~/.pi/agent/chat-instructions/`
+  下均有预设文件，且存在同名 id。自动化仅使用合成 fs/runtime 边界，
+  CI 不使用真实账号。
+- **步骤：** 打开 ChatGPT 模型聊天会话，打开「聊天指令」按钮；依次选择
+  默认、无、覆盖全局的工作区预设，每次选择后发送一轮。重启应用确认选择
+  保留。删除预设文件后再发送。打开非聊天会话确认按钮不出现。
+- **预期：** 按钮仅对本地会话的 `chatgpt_conversation` 模型显示。默认发送
+  内置聊天人格（无工具规则）；完全不发送任何系统提示词；预设按文件内容
+  原文发送，工作区优先于全局。选择随会话记录跨重启保留；预设被删除后
+  静默回退内置人格。菜单只列出 id，不出现文件内容，也不把保留 id `none`
+  作为文件提供。
+- **规格：** `03-runtime/11-provider-model-system.md`。
+- **验收：** B / C / Quality，聊天模式提示词控制。
+- **覆盖：** agent-runtime `chat-instructions.test.ts`、
+  `chat-instructions-runtime.test.ts`、`chatgpt-conversation.test.ts`；
+  desktop `chat-instruction-presets.test.mjs`、
+  `composer-chat-instructions.test.mjs`；host-core `prompt_preset`
+  迁移与 configure 测试。
+- **状态：** 已实现并有原生合成覆盖；各选项下的真实账号生成与
+  `E2E-PROVIDER-chatgpt-chat-login-and-stream` 一并进行用户验收。
+
 ### E2E-LEGACY-DICTATION-idle-model-release
 
 - **前提：** 通过 `VoiceService` 接口测试保留的本地 Dictation 服务，使用确定性的
@@ -5770,6 +5794,7 @@ eleven-tool-round desktop paths are verified by
 |---|---|
 | B / C / Security / Quality — ChatGPT 订阅聊天 | E2E-PROVIDER-chatgpt-chat-login-and-stream |
 | B / Security / Quality — Optional provider client certificate requests | E2E-PROVIDER-optional-client-certificate |
+| B / C / Quality — ChatGPT 聊天指令预设 | E2E-PROVIDER-chatgpt-chat-instruction-presets |
 | C / E / F / Quality / Security — Session Todo checklist | E2E-CHAT-session-todo-checklist |
 | C / E / Security / Quality — Live Voice 四阶段交互 | E2E-LIVE-VOICE-four-stage-ui |
 | C / F — Hourly task updates | E2E-SCHEDULED-manual-to-hourly |

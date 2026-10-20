@@ -128,6 +128,11 @@ pub struct SessionSummary {
     pub thinking_level: String,
     #[serde(default = "default_permission_mode")]
     pub permission_mode: String,
+    /// ChatGPT chat-mode instruction preset id (spec 03-runtime/11). `None`
+    /// means the built-in chat persona; the literal `"none"` means no system
+    /// prompt at all. Omitted on the wire when unset, like `worktree`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_preset: Option<String>,
     pub updated_at: String,
     pub created_at: String,
     /// True when this session is the transcript owned by a scheduled-task run.
@@ -1299,7 +1304,7 @@ fn session_created_at(db: &Database, session_id: &str) -> Result<String> {
 
 const SUMMARY_SELECT: &str =
     "SELECT s.id, s.title, s.last_seq, p.path, s.model_id, s.provider_id, s.mode,
-            s.thinking_level, s.permission_mode, s.updated_at, s.created_at,
+            s.thinking_level, s.permission_mode, s.prompt_preset, s.updated_at, s.created_at,
             EXISTS (SELECT 1 FROM task_runs r WHERE r.session_id = s.id) AS scheduled_run
      FROM sessions s LEFT JOIN projects p ON p.id = s.project_id
      WHERE s.deleted_at IS NULL";
@@ -1315,8 +1320,9 @@ pub(crate) fn summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Sess
         mode: row.get(6)?,
         thinking_level: row.get(7)?,
         permission_mode: row.get(8)?,
-        updated_at: ms_to_ts(row.get(9)?),
-        created_at: ms_to_ts(row.get(10)?),
+        prompt_preset: row.get(9)?,
+        updated_at: ms_to_ts(row.get(10)?),
+        created_at: ms_to_ts(row.get(11)?),
         // Read by name: search and listing build their own column lists, so the
         // alias keeps this mapper independent of any one query's column order.
         scheduled_run: row.get("scheduled_run")?,
@@ -1471,6 +1477,8 @@ pub fn create_session_with_options(
         mode,
         thinking_level,
         permission_mode,
+        // A new session starts on the built-in chat persona (no preset).
+        prompt_preset: None,
         updated_at: ms_to_ts(now),
         created_at: ms_to_ts(now),
         // The run row that owns this transcript is written after creation.
@@ -1803,10 +1811,10 @@ pub fn fork_session_through(
             .prepare_cached(
                 "INSERT INTO sessions (
                     id, title, project_id, provider_id, model_id, mode, thinking_level,
-                    permission_mode, source, pinned, last_seq, created_at, updated_at
+                    permission_mode, prompt_preset, source, pinned, last_seq, created_at, updated_at
                  )
                  SELECT ?1, ?2, project_id, provider_id, model_id, mode, thinking_level,
-                        permission_mode, NULL, 0, ?3, ?4, ?4
+                        permission_mode, prompt_preset, NULL, 0, ?3, ?4, ?4
                  FROM sessions WHERE id = ?5",
             )?
             .execute(params![id, title, records.len() as i64, now, source_id])?;
@@ -1835,6 +1843,8 @@ pub fn fork_session_through(
         mode: source.summary.mode,
         thinking_level: source.summary.thinking_level,
         permission_mode: source.summary.permission_mode,
+        // A fork keeps the source session's chat instruction preset.
+        prompt_preset: source.summary.prompt_preset,
         updated_at: created_at.clone(),
         created_at,
         // A fork is the user's own conversation, not the automation's transcript.
@@ -1867,7 +1877,30 @@ pub fn configure_session(
     provider_id: Option<&str>,
     model_id: Option<&str>,
 ) -> Result<Option<SessionSummary>> {
-    configure_session_with_thinking(db, id, mode, provider_id, model_id, None, None)
+    configure_session_with_thinking(db, id, mode, provider_id, model_id, None, None, None)
+}
+
+/// A chat instruction preset id is a Markdown file stem discovered at launch,
+/// so the host cannot enumerate valid ids. It still rejects shapes that could
+/// escape the preset directories or bloat the row.
+pub fn is_valid_prompt_preset(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 200
+        && !id.contains('/')
+        && !id.contains('\\')
+        && id != "."
+        && id != ".."
+        && !id.chars().any(|c| c.is_control())
+}
+
+fn validate_prompt_preset(id: &str) -> Result<()> {
+    if is_valid_prompt_preset(id) {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "promptPreset must be a preset file stem, not {id:?}"
+        ))
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1879,6 +1912,9 @@ pub fn configure_session_with_thinking(
     model_id: Option<&str>,
     thinking_level: Option<&str>,
     permission_mode: Option<&str>,
+    // Outer `None` leaves the stored preset untouched; `Some(None)` clears it
+    // back to the built-in chat persona; `Some(Some(id))` selects a preset.
+    prompt_preset: Option<Option<&str>>,
 ) -> Result<Option<SessionSummary>> {
     if !(is_valid_mode(mode) || mode == "chat") {
         return Err(anyhow!("mode must be plan or agent"));
@@ -1889,6 +1925,9 @@ pub fn configure_session_with_thinking(
     }
     if let Some(mode) = permission_mode {
         validate_permission_mode(mode)?;
+    }
+    if let Some(Some(id)) = prompt_preset {
+        validate_prompt_preset(id)?;
     }
     crate::plans::gate_session_configure(
         db,
@@ -1906,7 +1945,9 @@ pub fn configure_session_with_thinking(
              SET mode = ?2, provider_id = COALESCE(?3, provider_id),
                  model_id = COALESCE(?4, model_id),
                  thinking_level = COALESCE(?5, thinking_level),
-                 permission_mode = COALESCE(?6, permission_mode), updated_at = ?7
+                 permission_mode = COALESCE(?6, permission_mode),
+                 prompt_preset = CASE WHEN ?8 = 1 THEN ?9 ELSE prompt_preset END,
+                 updated_at = ?7
              WHERE id = ?1",
         )?
         .execute(params![
@@ -1916,7 +1957,9 @@ pub fn configure_session_with_thinking(
             model_id,
             thinking_level,
             permission_mode,
-            now_ms()
+            now_ms(),
+            prompt_preset.is_some() as i64,
+            prompt_preset.flatten(),
         ])?;
     if changed == 0 {
         return Ok(None);
@@ -4279,7 +4322,6 @@ pub fn get_token_usage_history(
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn default_title_matches_the_german_french_and_spanish_placeholders() {
         // The renderer lowercases `chat.untitledTask` before persisting (#1755);
@@ -4730,6 +4772,7 @@ mod tests {
             Some("model-1"),
             Some("high"),
             None,
+            None,
         )
         .unwrap()
         .unwrap();
@@ -4753,6 +4796,7 @@ mod tests {
             None,
             Some("turbo"),
             None,
+            None,
         )
         .is_err());
         let omitted = configure_session_with_thinking(
@@ -4763,10 +4807,96 @@ mod tests {
             None,
             Some("omit"),
             None,
+            None,
         )
         .unwrap()
         .unwrap();
         assert_eq!(omitted.thinking_level, "omit");
+    }
+
+    #[test]
+    fn configure_prompt_preset_is_tristate_and_persisted() {
+        let db = test_db();
+        let session = create_session(&db, None, None, None, None, None).unwrap();
+        // A new session has no preset: the wire omits the field entirely.
+        assert_eq!(session.prompt_preset, None);
+        assert!(serde_json::to_value(&session)
+            .unwrap()
+            .get("promptPreset")
+            .is_none());
+
+        // Selecting a preset id persists it and returns it on the wire.
+        let selected = configure_session_with_thinking(
+            &db,
+            &session.id,
+            "chat",
+            None,
+            None,
+            None,
+            None,
+            Some(Some("review-style")),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(selected.prompt_preset.as_deref(), Some("review-style"));
+        assert_eq!(
+            serde_json::to_value(&selected).unwrap()["promptPreset"],
+            "review-style"
+        );
+
+        // Omitting the field preserves the selection, like thinkingLevel.
+        let preserved = configure_session(&db, &session.id, "chat", None, None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(preserved.prompt_preset.as_deref(), Some("review-style"));
+
+        // An explicit clear returns to the built-in default (NULL).
+        let cleared = configure_session_with_thinking(
+            &db,
+            &session.id,
+            "chat",
+            None,
+            None,
+            None,
+            None,
+            Some(None),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(cleared.prompt_preset, None);
+
+        // The reserved "none" id round-trips like any other id.
+        let none = configure_session_with_thinking(
+            &db,
+            &session.id,
+            "chat",
+            None,
+            None,
+            None,
+            None,
+            Some(Some("none")),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(none.prompt_preset.as_deref(), Some("none"));
+
+        // Shapes that could escape the preset directories are rejected.
+        for bad in ["", "a/b", "a\\b", "..", "."] {
+            assert!(
+                configure_session_with_thinking(
+                    &db,
+                    &session.id,
+                    "chat",
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(Some(bad)),
+                )
+                .is_err(),
+                "rejected: {bad:?}"
+            );
+        }
     }
 
     #[test]
@@ -5059,6 +5189,7 @@ mod tests {
             mode: "agent".into(),
             thinking_level: "off".into(),
             permission_mode: "inherit".into(),
+            prompt_preset: None,
             // Ownership is derived from `task_runs`, so an import is never one.
             scheduled_run: false,
             worktree: None,
@@ -5112,6 +5243,7 @@ mod tests {
             mode: "agent".into(),
             thinking_level: "off".into(),
             permission_mode: "inherit".into(),
+            prompt_preset: None,
             // Ownership is derived from `task_runs`, so an import is never one.
             scheduled_run: false,
             worktree: None,
@@ -6054,6 +6186,7 @@ mod tests {
             mode: "agent".into(),
             thinking_level: "medium".into(),
             permission_mode: "inherit".into(),
+            prompt_preset: None,
             // Ownership is derived from `task_runs`, so an import is never one.
             scheduled_run: false,
             worktree: None,
@@ -6421,6 +6554,7 @@ mod tests {
             Some("model-1"),
             Some("high"),
             Some("auto"),
+            None,
         )
         .unwrap();
 
@@ -6496,6 +6630,7 @@ mod tests {
             Some("model-2"),
             Some("off"),
             Some("ask"),
+            None,
         )
         .unwrap();
         let source_final = get_session(&db, &source.id).unwrap().unwrap();

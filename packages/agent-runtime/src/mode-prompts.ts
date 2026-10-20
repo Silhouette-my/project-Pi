@@ -3,6 +3,15 @@ import type { Mode } from "@pi-desktop/shared";
 export const DEFAULT_RUNTIME_SYSTEM_PROMPT =
   "You are PI-Desktop, a coding agent. Answer in the user's language. Be concise, direct, and actionable.";
 
+/**
+ * ChatGPT chat mode has no local tools, so the desktop agent prompt (persona,
+ * tool rules, scratch/delegation mechanics, project context) is replaced by
+ * this short chat persona unless the user selected a chat instruction preset
+ * (spec 03-runtime/11). No "coding agent" wording and no tool rules.
+ */
+export const DEFAULT_CHAT_SYSTEM_PROMPT =
+  "You are PI-Desktop in chat mode. Answer in the user's language, clearly and directly. Keep replies concise, with enough detail for the question.";
+
 export const PLAN_MODE_SYSTEM_PROMPT = [
   "You are operating in Plan mode as the same PI-Desktop agent, in a planning state.",
   "Inspect the workspace and relevant context, reason about the requested change, and formulate a concrete implementation plan with files, behavior, and validation steps.",
