@@ -10,6 +10,7 @@ export function createProjectWorkflowApi(
     mutate: (command) => invoke(IPC.invoke.projectWorkflowMutate, command),
     action: (action) => invoke(IPC.invoke.projectWorkflowAction, action),
     search: (request) => invoke(IPC.invoke.projectWorkflowSearch, request),
+    openReference: (request) => invoke(IPC.invoke.projectWorkflowOpenReference, request),
     onChanged: (listener) => subscribe(IPC.event.projectWorkflowChanged, (event) => listener(event as ProjectWorkflowChanged)),
   };
 }
