@@ -680,19 +680,16 @@ describe("DesktopAgentRuntime configuration matching", () => {
     const host = {
       call: vi.fn().mockResolvedValue({ ok: true, content: "ordinary execution" }),
     };
-    const onEvent = vi.fn();
-    const runtime = createRuntime({ host, onEvent, projectInstructions: { entries: [] } });
+    const runtime = createRuntime({ host, projectInstructions: { entries: [] } });
     const agent = (runtime as any).agent;
     const bash = runtimeTool(runtime, "Bash");
     agent.prompt = vi.fn(async () => bash.execute("bash-call", { command: "touch outside-scope" }));
 
     await expect(runtime.prompt("workflow task", "workflow-user", "workflow-turn", "workflow-run-1"))
-      .rejects.toThrow(/cannot execute Bash/i);
+      .rejects.toMatchObject({ code: "WORKFLOW_RESOURCE_DENIED", message: expect.stringMatching(/cannot execute Bash/i) });
 
     expect(host.call.mock.calls.filter(([method]) => method === "tools.execute")).toHaveLength(0);
-    expect(onEvent.mock.calls.some(([envelope]) =>
-      (envelope as any).event?.error?.code === "WORKFLOW_RESOURCE_DENIED",
-    )).toBe(true);
+    expect((runtime as any).activeWorkflowRunId).toBeUndefined();
 
     await runtime.prompt("ordinary task", "ordinary-user", "ordinary-turn");
     const ordinaryCall = host.call.mock.calls.find(([method]) => method === "tools.execute");
@@ -735,7 +732,8 @@ describe("DesktopAgentRuntime configuration matching", () => {
         return undefined;
       }),
     };
-    const runtime = createRuntime({ host, projectInstructions: { entries: [] } });
+    const onEvent = vi.fn();
+    const runtime = createRuntime({ host, onEvent, projectInstructions: { entries: [] } });
     const internals = runtime as unknown as {
       agent: Agent;
       models: {
@@ -773,6 +771,16 @@ describe("DesktopAgentRuntime configuration matching", () => {
     expect(hostExecutions).toHaveLength(expectedHostCalls);
     if (expectedHostCalls === 1) expect(hostExecutions[0][1]).toMatchObject({ toolName: "Edit" });
     expect(hostExecutions.some(([, params]) => (params as any)?.toolName === "Write")).toBe(false);
+    const terminalEvents = onEvent.mock.calls.map(([envelope]) => (envelope as any).event)
+      .filter((event) => event.type === "error" || event.type === "agent_end");
+    expect(terminalEvents.at(-1)).toMatchObject({
+      type: "error",
+      error: { code: "WORKFLOW_RESOURCE_DENIED" },
+    });
+    expect(terminalEvents.filter((event) => event.type === "error")).toHaveLength(1);
+    expect(terminalEvents.some((event) => event.type === "agent_end")).toBe(false);
+    const eventTypes = onEvent.mock.calls.map(([envelope]) => (envelope as any).event.type);
+    expect(eventTypes.indexOf("error")).toBeGreaterThan(eventTypes.lastIndexOf("tool_end"));
     await runtime.dispose();
   });
 
@@ -789,7 +797,8 @@ describe("DesktopAgentRuntime configuration matching", () => {
         return undefined;
       }),
     };
-    const runtime = createRuntime({ host, projectInstructions: { entries: [] } });
+    const onEvent = vi.fn();
+    const runtime = createRuntime({ host, onEvent, projectInstructions: { entries: [] } });
     const internals = runtime as unknown as {
       agent: Agent;
       models: {
@@ -828,6 +837,16 @@ describe("DesktopAgentRuntime configuration matching", () => {
     expect(executions).toHaveLength(1);
     expect(executions[0][1]).toMatchObject({ toolName: "Read" });
     expect(executions.some(([, params]) => ["Bash", "Write"].includes((params as any)?.toolName))).toBe(false);
+    const terminalEvents = onEvent.mock.calls.map(([envelope]) => (envelope as any).event)
+      .filter((event) => event.type === "error" || event.type === "agent_end");
+    expect(terminalEvents.at(-1)).toMatchObject({
+      type: "error",
+      error: { code: "WORKFLOW_RESOURCE_DENIED", message: expect.stringContaining("Bash") },
+    });
+    expect(terminalEvents.filter((event) => event.type === "error")).toHaveLength(1);
+    expect(terminalEvents.some((event) => event.type === "agent_end")).toBe(false);
+    const eventTypes = onEvent.mock.calls.map(([envelope]) => (envelope as any).event.type);
+    expect(eventTypes.indexOf("error")).toBeGreaterThan(eventTypes.lastIndexOf("tool_end"));
     await runtime.dispose();
   });
 
@@ -854,10 +873,8 @@ describe("DesktopAgentRuntime configuration matching", () => {
     expect(host.call).toHaveBeenCalledWith("tools.execute", expect.objectContaining({
       toolName: "Edit",
     }));
-    expect(onEvent.mock.calls.some(([envelope]) =>
-      (envelope as any).event?.error?.code === "WORKFLOW_RESOURCE_DENIED" &&
-      (envelope as any).event?.error?.message.includes("src/other.ts"),
-    )).toBe(true);
+    expect((runtime as any).turnHadError).toBe(true);
+    expect((runtime as any).workflowFailureMessage).toContain("src/other.ts");
     await runtime.dispose();
   });
 

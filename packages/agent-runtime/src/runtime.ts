@@ -5279,10 +5279,6 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     if (!this.workflowFailureMessage) {
       this.workflowFailureMessage = message;
       this.terminateParentTurn();
-      this.emit({
-        type: "error",
-        error: { code: "WORKFLOW_RESOURCE_DENIED", message, retriable: false },
-      });
     }
     if (toolCallId) {
       this.failedHostToolCalls.add(toolCallId);
@@ -8613,6 +8609,25 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
         });
         break;
       case "agent_end":
+        if (this.activeWorkflowRunId && this.workflowFailureMessage) {
+          // Do not let Main's terminal classifier observe a successful agent_end
+          // for a bounded turn whose last tool result was a fatal boundary denial.
+          // Emit one terminal error only after the agent loop has stopped, so the
+          // Host closes the durable turn as failed rather than racing later completion.
+          this.acceptingSteering = false;
+          this.retainPendingSteering();
+          this.autonomousExecution = false;
+          this.clearAgentActivity();
+          this.emit({
+            type: "error",
+            error: {
+              code: "WORKFLOW_RESOURCE_DENIED",
+              message: this.workflowFailureMessage,
+              retriable: false,
+            },
+          });
+          break;
+        }
         // Input admitted after pi's last queue poll still belongs to this turn.
         // Continue after the current run settles; never wake the follow-up FIFO.
         if (this.pendingSteering.size && this.acceptingSteering && !this.runCancelled && !this.turnHadError) break;
@@ -9041,17 +9056,23 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
       }
       await this.resumeAfterDelegations();
     } catch (err) {
-      const classifiedError = classifyAgentError(err);
-      const diagnosticError =
-        classifiedError.code === "TURN_ABORTED"
-          ? classifiedError
-          : this.providerErrorWithDiagnostics(
-              classifiedError,
-              "request",
-              this.requestStartedAt !== undefined
-                ? Math.max(0, Date.now() - this.requestStartedAt)
-                : undefined,
-            );
+      const workflowFailure = this.activeWorkflowRunId && this.workflowFailureMessage
+        ? {
+            code: "WORKFLOW_RESOURCE_DENIED",
+            message: this.workflowFailureMessage,
+            retriable: false,
+          }
+        : undefined;
+      const classifiedError = workflowFailure ?? classifyAgentError(err);
+      const diagnosticError = workflowFailure || classifiedError.code === "TURN_ABORTED"
+        ? classifiedError
+        : this.providerErrorWithDiagnostics(
+            classifiedError,
+            "request",
+            this.requestStartedAt !== undefined
+              ? Math.max(0, Date.now() - this.requestStartedAt)
+              : undefined,
+          );
       this.terminateParentTurn();
       this.finalizeCurrentAssistant(
         classifiedError.code === "TURN_ABORTED" ? "aborted" : "error",
