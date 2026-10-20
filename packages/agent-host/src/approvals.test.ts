@@ -96,6 +96,26 @@ describe("ApprovalBroker", () => {
     expect(port.tool).toEqual([]);
   });
 
+  it("keeps workflow Shell approval one-use and shows the command once with remaining arguments", async () => {
+    const port = new FakeApprovalPort();
+    const broker = new ApprovalBroker(port, new FixedClock());
+    const command = "python3 - <<'PY'\nprint('begin')\n" + "x".repeat(2048) + "\nprint('authorized tail')\nPY";
+    const request = broker.fromToolPermission({
+      ...toolRequest,
+      approvalScope: "workflow-shell",
+      argsPreview: { command, cwd: "/work/project", timeout: 30 },
+      reason: "This Shell call needs approval for the assigned workflow resource scope.",
+    }, { turnId: "t1", revision: 3, lifetimeMs: 1_000, allowSession: true });
+
+    expect(request.allowedDecisions).toEqual(["allow-once", "deny"]);
+    expect(request.summary).toBe(`Bash: This Shell call needs approval for the assigned workflow resource scope.\nCommand:\n${command}\nArguments: {"cwd":"/work/project","timeout":30}`);
+    expect(request.summary?.split(command)).toHaveLength(2);
+    await expect(broker.resolve(
+      { approvalId: "req_1", decision: "allow-session", context: { requestId: "r" } }, principal, 4,
+    )).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(port.tool).toEqual([]);
+  });
+
   it("turns an awaiting_approval planning state into a contract approval that needs a mode", async () => {
     const port = new FakeApprovalPort();
     const broker = new ApprovalBroker(port, new FixedClock());
@@ -154,5 +174,19 @@ describe("ApprovalBroker", () => {
     expect(synced[0]!.expiresAt).toBe("2026-09-10T00:02:00.000Z");
     await broker.syncPendingTools("s1", { turnId: "t1", revision: 1, lifetimeMs: 1, allowSession: false });
     expect(broker.list("s1")).toHaveLength(1);
+  });
+
+  it("retains workflow Shell scope and exact command when synchronizing a pending host request", async () => {
+    const port = new FakeApprovalPort();
+    const command = "./scripts/check.sh " + "--argument=long-value ".repeat(160) + "--final-resource=authorized.txt";
+    port.pending = [{ ...toolRequest, approvalScope: "workflow-shell", argsPreview: { command },
+      reason: "Shell access is outside the current permission mode.",
+      createdAt: "2026-09-10T00:00:00.000Z", expiresAt: "2026-09-10T00:02:00.000Z" }];
+    const broker = new ApprovalBroker(port, new FixedClock(Date.parse("2026-09-10T00:01:00.000Z")));
+
+    const [synced] = await broker.syncPendingTools("s1", { turnId: "t1", revision: 1, lifetimeMs: 1, allowSession: true });
+    expect(synced?.allowedDecisions).toEqual(["allow-once", "deny"]);
+    expect(synced?.summary).toContain(command);
+    expect(synced?.summary).toContain("Shell access is outside the current permission mode.");
   });
 });
