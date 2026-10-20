@@ -54,7 +54,9 @@ test("browser catalog uses consumer endpoint and keeps session authorization in 
   assert.equal(requests[1].options.credentials, "include");
   assert.ok(!JSON.stringify(result).includes("page-only-secret"));
   assert.equal(result.models[0].id, "fixture-pro-request-slug");
-  assert.equal(page.__piChatModelDefaults.get("fixture-pro-request-slug"), "fixture-effort");
+  const defaults = page.__piChatModelDefaults.get("fixture-pro-request-slug");
+  assert.equal(defaults.defaultEffort, "fixture-effort");
+  assert.deepEqual(Array.from(defaults.efforts), []);
 });
 
 test("Cloudflare HTML200 and account errors do not become a model catalog", async () => {
