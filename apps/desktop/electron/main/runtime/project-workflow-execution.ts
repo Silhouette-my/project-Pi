@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { AgentHost } from "@pi-desktop/agent-host";
 import type { HostRpc } from "@pi-desktop/host-runtime";
 import type { UiMessage, WorkflowRun } from "@pi-desktop/shared";
@@ -19,7 +20,7 @@ const messageId = (runId: string) => `workflow-run:${runId}`;
 
 /** Uses the existing admission, permission, queue, transcript and cancellation path. */
 export function createProjectWorkflowExecution(deps: WorkflowExecutionDependencies): WorkflowExecutionPort {
-  const readTurns = new Map<string, string>();
+  const readTurns = new Map<string, { turnId: string; messageId: string }>();
   async function observe(run: WorkflowRun): Promise<WorkflowObservation> {
     if (!await deps.flushTranscript()) throw new Error("Workflow transcript did not flush");
     const host = deps.getHost();
@@ -27,9 +28,11 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     const messages = result.session?.messages ?? [];
     const agentHost = deps.getAgentHost();
     const active = await agentHost.workSnapshot(run.sessionId);
-    const queueEntry = agentHost.queue.list(run.sessionId).find((entry) => entry.userMessageId === messageId(run.id));
+    const readTurn = readTurns.get(run.sessionId);
+    const userMessageId = readTurn?.messageId ?? messageId(run.id);
+    const queueEntry = agentHost.queue.list(run.sessionId).find((entry) => entry.userMessageId === userMessageId);
     if (queueEntry) return { state: "queued", content: "", effects: run.effects };
-    const expectedTurnId = workflowTurnId(run) ?? readTurns.get(run.sessionId);
+    const expectedTurnId = workflowTurnId(run) ?? readTurn?.turnId;
     if (expectedTurnId && active.activeTurnId === expectedTurnId && active.state !== "idle") {
       return { state: "executing", content: "", effects: run.effects };
     }
@@ -41,7 +44,7 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
         if ((error as { code?: string }).code !== "NOT_FOUND") throw error;
       }
     }
-    const start = messages.findIndex((message) => message.id === messageId(run.id));
+    const start = messages.findIndex((message) => message.id === userMessageId);
     const next = start < 0 ? -1 : messages.findIndex((message, index) => index > start && message.role === "user");
     const rows = start < 0 ? [] : messages.slice(start + 1, next < 0 ? undefined : next);
     const effects: WorkflowRun["effects"] = [...run.effects.filter((effect) => !effect.action.startsWith("tool:")), ...rows.filter((message) => message.toolName).map((message) => ({
@@ -74,15 +77,17 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     start: async ({ run, content, authorization }) => {
       await deps.assertExecutableSession(run.sessionId);
       const result = await deps.getAgentHost().startTurn(DESKTOP_PRINCIPAL, { sessionId: run.sessionId,
+        workflowRunId: run.id,
         permissionCeiling: authorization.permissionCeiling, admission: "queue", idempotencyKey: run.id,
         input: { text: content, userMessageId: messageId(run.id) }, context: { requestId: run.id } });
       return { turnId: result.turn.id, queued: result.turn.status === "queued" };
     },
     read: async ({ sessionId, content, key, observeOutcome }) => {
+      const userMessageId = randomUUID();
       const result = await deps.getAgentHost().startTurn(DESKTOP_PRINCIPAL, { sessionId, permissionCeiling: "ask", admission: "queue",
-        idempotencyKey: `workflow-read:${key}`, input: { text: content, userMessageId: messageId(`side:${sessionId}`) },
+        idempotencyKey: `workflow-read:${key}`, input: { text: content, userMessageId },
         context: { requestId: key } });
-      if (observeOutcome) readTurns.set(sessionId, result.turn.id);
+      if (observeOutcome) readTurns.set(sessionId, { turnId: result.turn.id, messageId: userMessageId });
     },
     observe,
     stop: async (run, cancel) => {

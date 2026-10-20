@@ -1036,6 +1036,42 @@ describe("AgentHost queue extras", () => {
     await expect(host.reorderTurn(owner, second.turn.id, "down")).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
+  it("keeps workflow assignment identity across admission, queue restore and promotion", async () => {
+    const store = new MemoryQueueStore();
+    const { host, runtime } = build({ queueStore: store });
+    await host.startTurn(owner, { sessionId: "s1", workflowRunId: "workflow:main",
+      input: { text: "bounded work" }, context: { requestId: "main" } });
+    expect(runtime.prompts[0]?.workflowRunId).toBe("workflow:main");
+    const ordinary = await host.startTurn(owner, { sessionId: "s1", admission: "queue",
+      input: { text: "ordinary follow-up" }, context: { requestId: "ordinary" } });
+    await host.prioritizeTurn(owner, ordinary.turn.id);
+    expect(runtime.steers).toEqual([]);
+    const bounded = await host.startTurn(owner, { sessionId: "s1", admission: "queue", workflowRunId: "workflow:next",
+      input: { text: "next bounded work" }, context: { requestId: "next" } });
+    await host.prioritizeTurn(owner, bounded.turn.id);
+    expect(runtime.steers).toEqual([]);
+    expect((await store.listAll()).find((row) => row.id === bounded.turn.id)?.workflowRunId).toBe("workflow:next");
+    // A restored queue cannot promote the assignment into the preceding
+    // ordinary turn; it keeps its own Host binding and terminal receipt.
+    const restored = build({ queueStore: store });
+    await restored.host.start();
+    await restored.host.attach(owner, { sessionId: "s1" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(restored.runtime.prompts[0]?.content).toBe("ordinary follow-up");
+    expect(restored.runtime.steers).toEqual([]);
+    restored.host.endTurn("s1", "rt_1", "completed");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(restored.runtime.prompts[1]?.workflowRunId).toBe("workflow:next");
+  });
+
+  it("does not reuse an idempotency key for a different workflow grant", async () => {
+    const { host } = build();
+    const request = { sessionId: "s1", idempotencyKey: "same", workflowRunId: "workflow:one",
+      input: { text: "same input" }, context: { requestId: "one" } };
+    await host.startTurn(owner, request);
+    await expect(host.startTurn(owner, { ...request, workflowRunId: "workflow:two" })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+  });
+
   it("queues behind a pending contract approval and drains when planning leaves it", async () => {
     const { host, runtime } = build();
     host.ingest(envelope("s1", "rt_1", { type: "agent_start" }));

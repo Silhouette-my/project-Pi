@@ -119,6 +119,7 @@ export type HostQueueEntry = {
   voiceOrigin?: VoiceOrigin;
   attachments?: unknown;
   permissionMode: string;
+  workflowRunId?: string;
   position: number;
   priority?: number;
   createdAt: string;
@@ -137,6 +138,7 @@ export function fromHostQueueEntry(entry: HostQueueEntry): QueuedTurnRecord {
     ...(entry.voiceOrigin ? { voiceOrigin: entry.voiceOrigin } : {}),
     ...(Array.isArray(entry.attachments) ? { attachments: entry.attachments as QueuedTurnRecord["attachments"] } : {}),
     effectivePermissionMode: permissionMode,
+    ...(entry.workflowRunId ? { workflowRunId: entry.workflowRunId } : {}),
     ...(entry.idempotencyKey ? { idempotencyKey: entry.idempotencyKey } : {}),
     inputHash: entry.inputHash,
     ...(entry.priority !== undefined ? { priority: entry.priority } : {}),
@@ -166,6 +168,7 @@ export function createHostQueueStore(getHost: () => HostRpc | null): QueueStore 
         ...(record.voiceOrigin ? { voiceOrigin: record.voiceOrigin } : {}),
         ...(record.attachments ? { attachments: record.attachments } : {}),
         permissionMode: record.effectivePermissionMode,
+        ...(record.workflowRunId ? { workflowRunId: record.workflowRunId } : {}),
       });
     },
     async remove(id) {
