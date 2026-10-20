@@ -17,6 +17,15 @@ export type WorkflowExecutionDependencies = {
   flushTranscript: () => Promise<boolean>;
 };
 const messageId = (runId: string) => `workflow-run:${runId}`;
+function toolEffectState(message: UiMessage): WorkflowRun["effects"][number]["state"] {
+  const details = (message.toolResult as { details?: { code?: unknown; approvalScope?: unknown; exitCode?: unknown } } | null)?.details;
+  if (message.toolStatus === "denied" || details?.code === "WORKFLOW_RESOURCE_DENIED"
+    || (details?.approvalScope === "workflow-shell" && (details.code === "TOOL_DENIED" || details.code === "TOOL_ABORTED"))) return "failed";
+  // A normal nonzero exit is a completed execution receipt, not proof of a
+  // passed check and not an uncertain dispatch. Signals/aborts have no exit code.
+  if (message.toolName === "Bash") return typeof details?.exitCode === "number" && Number.isInteger(details.exitCode) ? "confirmed" : "unknown";
+  return message.toolStatus === "success" ? "confirmed" : "unknown";
+}
 
 /** Uses the existing admission, permission, queue, transcript and cancellation path. */
 export function createProjectWorkflowExecution(deps: WorkflowExecutionDependencies): WorkflowExecutionPort {
@@ -56,9 +65,7 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     const rows = start < 0 ? [] : messages.slice(start + 1, next < 0 ? undefined : next);
     const effects: WorkflowRun["effects"] = [...run.effects.filter((effect) => !effect.action.startsWith("tool:")), ...rows.filter((message) => message.toolName).map((message) => ({
       id: message.toolCallId ?? message.id, action: `tool:${message.toolName}`, resource: `message:${message.id}`,
-      state: message.toolStatus === "success" ? "confirmed" as const
-        : message.toolStatus === "denied" || (message.toolResult as { details?: { code?: unknown } } | null)?.details?.code === "WORKFLOW_RESOURCE_DENIED"
-          ? "failed" as const : "unknown" as const,
+      state: toolEffectState(message),
       detail: `Transcript ${run.sessionId}/${message.id}; tool status ${message.toolStatus ?? "unknown"}`,
     }))];
     const final = rows.filter((message) => message.role === "assistant" && message.status === "complete" && !message.parentToolCallId).at(-1);

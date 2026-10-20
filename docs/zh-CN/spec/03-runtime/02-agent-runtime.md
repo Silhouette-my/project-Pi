@@ -1293,11 +1293,18 @@ Host 验证 run 后将资源范围绑定到实际持久 turn，并在工具副�
 Write/Edit 仅使用初始 dispatch/scope 的资源；规范上下文和可见成果、交付引用只增加读取
 输入，不授予写入范围。未绑定 workflow 的普通 Agent 保持原契约。
 
-有界执行仅允许 Host 限定的 `Read`、`Write`、`Edit` 与 `asktool` 澄清。Bash、递归搜索、
-委派、plugin/MCP、图片、浏览器、定时及其他无法约束副作用的工具会在执行前拒绝。
-仓库尚无隔离任意 shell 副作用的进程/文件系统 sandbox。`WORKFLOW_RESOURCE_DENIED`
-以具体工具、资源和所需授权提示终止实际 turn，不自动重试、伪造成功 checkpoint 或续跑。
-通过 Bash 构建、测试仍是有界 Work 未支持的能力，不能据此宣称完整 check/fix 验收。
+有界执行允许 Host 限定的 `Read`、`Write`、`Edit` 与 `asktool` 澄清。前台 Bash 使用独立
+的逐次授权：Host 对每次完整精确参数等待用户 `allow-once`，auto 和 session grant 均不能
+绕过。`workflow-shell` 审批明确提示 Shell 副作用可能超出选定写入资源；批准不是可复用
+token，Host 在实际启动前复核 turn 和作用域。等待审批保持实际 turn 活跃，不记为 unknown
+或触发重试。
+
+已批准命令的非零退出码仍是可诊断、修复并再次检查的真实失败；后续每次 Bash 都需新审批。
+数值退出码确认的是命令执行完毕，不代表检查通过或验收满足。审批拒绝、取消或
+`WORKFLOW_RESOURCE_DENIED` 会停止实际 Agent loop，在工具结算后发出唯一终止 error，
+不再发出成功 `agent_end`。Host 的执行前 `workflow-shell` 拒绝标记记录已知 failed 副作用；
+超时、信号退出或生命周期失败若没有整数退出回执，则停止 loop 并保留不确定状态。拒绝、取消均不自动重试。Shell `runInBackground` 模式、递归搜索、
+委派、plugin/MCP、图片、浏览器、定时及其他无法约束的工具仍拒绝；此路径不新增 OS sandbox。
 
 资源范围在 run 排队、执行、暂停或存在未知副作用期间保守占用，不能从 `check` 等标签
 推导只读。重叠侧 Work 在创建会话前返回明确冲突；显式不相交的侧授权仍可并行。本地路径

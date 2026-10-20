@@ -535,3 +535,66 @@ test("A resource denial keeps its precise authorization guidance and never dispa
   await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
   assert.equal(f.prompts.length, 2, "only a fresh explicit user start may recover the known refusal");
 });
+
+for (const { code, approvalScope, expected } of [
+  { code: "TOOL_DENIED", approvalScope: "workflow-shell", expected: "failed" },
+  { code: "TOOL_ABORTED", approvalScope: "workflow-shell", expected: "failed" },
+  { code: "TOOL_ABORTED", approvalScope: undefined, expected: "unknown" },
+  { code: "TOOL_TIMEOUT", approvalScope: undefined, expected: "unknown" },
+  { code: "TOOL_FAILED", approvalScope: undefined, expected: "unknown" },
+]) test(`Shell ${code} ${approvalScope ?? "after admission"} retains ${expected} effect without retry`, async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  const turnId = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
+  const reason = `${code}: exact Shell approval was refused or the command was interrupted`;
+  f.transcripts.get("session-1").push({ id: "shell-call", role: "tool", content: reason, status: "complete", createdAt: timestamp,
+    toolName: "Bash", toolCallId: "shell-call", toolStatus: "error",
+    toolResult: { isError: true, terminate: true, details: { code, ...(approvalScope ? { approvalScope } : {}), error: reason } } });
+  f.agentHost.ingest({ sessionId: "session-1", turnId, ts: Date.parse(timestamp),
+    event: { type: "error", error: { code, message: reason, retriable: false } } });
+  await f.runtime.onTurnSettled("session-1");
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].state, "failed");
+  assert.equal(state.runs[0].effects.find((effect) => effect.id === "shell-call").state, expected);
+  assert.equal(state.workstreams[0].status, "awaiting_user");
+  assert.match(state.workstreams[0].blocker.reason, new RegExp(code));
+  assert.equal(f.prompts.length, 1);
+  if (expected === "unknown") {
+    await assert.rejects(() => f.action("start", { authorizationId: "auth-1", sessionId: "session-1" }), { code: "CONFLICT" });
+  } else {
+    f.host.edit((snapshot) => { snapshot.workstreams[0].nextAction = "Continue only after this explicit user correction"; });
+    await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+    assert.equal(f.prompts.length, 2);
+  }
+});
+
+test("A signalled Shell without an integer exit receipt keeps effects unknown even if projected as success", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  await f.finish("session-1", checkpoint("Shell interrupted", undefined), "failed", [
+    { id: "signal-check", role: "tool", content: "terminated by signal", status: "complete", createdAt: timestamp,
+      toolName: "Bash", toolStatus: "success", toolResult: { details: { exitCode: null, stdout: "partial output" } } },
+  ]);
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].effects.find((effect) => effect.id === "signal-check").state, "unknown");
+  assert.equal(f.prompts.length, 1);
+  await assert.rejects(() => f.action("start", { authorizationId: "auth-1", sessionId: "session-1" }), { code: "CONFLICT" });
+});
+
+test("A completed Shell check failure remains evidence while an authorized fix/check cycle continues", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  await f.finish("session-1", checkpoint("Check failed, fix applied, recheck passed", next("Document the observed repair", "document")), "completed", [
+    { id: "failed-check", role: "tool", content: "test assertion failed", status: "complete", createdAt: timestamp,
+      toolName: "Bash", toolStatus: "error", toolResult: { isError: true, details: { exitCode: 1, stderr: "test assertion failed" } } },
+    { id: "fixed-code", role: "tool", content: "written", status: "complete", createdAt: timestamp, toolName: "Write", toolStatus: "success" },
+    { id: "passed-check", role: "tool", content: "test passed", status: "complete", createdAt: timestamp,
+      toolName: "Bash", toolStatus: "success", toolResult: { details: { exitCode: 0, stdout: "test passed" } } },
+  ]);
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].state, "completed");
+  assert.equal(state.runs[0].effects.find((effect) => effect.id === "failed-check").state, "confirmed");
+  assert.equal(f.transcripts.get("session-1").find((row) => row.id === "failed-check").toolStatus, "error");
+  assert.equal(f.prompts.length, 2);
+  assert.equal(state.workstreams[0].acceptance[0]?.status, "pending");
+});

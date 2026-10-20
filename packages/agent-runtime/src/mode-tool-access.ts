@@ -14,13 +14,17 @@ export function modeToolDenial(name: string, mode: Mode): string {
 
 /**
  * A workflow has no OS sandbox around local processes or extension providers.
- * Keep its runtime surface to tools whose concrete file targets Host can
- * contain against the active assignment. The Host remains authoritative for
- * Read's expanded visibility and Write/Edit's assignment resource boundary.
+ * File effects stay contained by Host. Foreground Bash is a separate authority:
+ * Host requires a new exact-call user approval, never an inherited scope grant.
  */
 const WORKFLOW_CONTAINABLE_TOOLS = new Set(["Read", "Write", "Edit", "asktool"]);
 
-export function workflowToolDenial(name: string): string | undefined {
+export function workflowToolDenial(name: string, params?: unknown): string | undefined {
+  if (name === "Bash") {
+    return (params as { runInBackground?: unknown } | null)?.runInBackground === true
+      ? "Workflow Bash must run in the foreground with a separate one-time user approval. Background execution is not authorized."
+      : undefined;
+  }
   if (WORKFLOW_CONTAINABLE_TOOLS.has(name)) return undefined;
   return `Workflow runs cannot execute ${name}: its effects are not contained by the assigned resource scope. Use Read, Write, or Edit on assigned resources; for an uncontained effect, choose a contained execution capability instead of broadening resource authorization.`;
 }
@@ -32,17 +36,17 @@ export function workflowToolDenial(name: string): string | undefined {
  */
 export function withModeExecutionGuard(
   tool: AgentTool,
-  denial: () => string | undefined,
-  onDenial?: (reason: string, toolCallId?: string) => void,
+  denial: (params?: unknown) => string | undefined,
+  onDenial?: (reason: string, toolCallId?: string, params?: unknown) => void,
 ): AgentTool {
   const currentDenial = denial();
   return {
     ...tool,
     description: currentDenial ? `${tool.description}\n\n${currentDenial}` : tool.description,
     execute: async (...args) => {
-      const reason = denial();
+      const reason = denial(args[1]);
       if (reason) {
-        onDenial?.(reason, typeof args[0] === "string" ? args[0] : undefined);
+        onDenial?.(reason, typeof args[0] === "string" ? args[0] : undefined, args[1]);
         throw new Error(reason);
       }
       return tool.execute(...args);

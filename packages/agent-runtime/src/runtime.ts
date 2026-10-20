@@ -1852,6 +1852,7 @@ export class DesktopAgentRuntime {
   private activeWorkflowRunId?: string;
   /** First fatal workflow-boundary denial; retained to block the rest of a tool batch. */
   private workflowFailureMessage?: string;
+  private workflowFailureCode = "WORKFLOW_RESOURCE_DENIED";
   /**
    * Permission scope of the delegate currently executing one tool call,
    * keyed by tool call id (ADR 0089). The host reads it on `tools.execute` and
@@ -2636,9 +2637,9 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
           reason: stoppedMessage ?? "Workflow execution stopped after an earlier fatal turn error.",
         };
       }
-      const denial = workflowToolDenial(context.toolCall.name);
+      const denial = workflowToolDenial(context.toolCall.name, context.toolCall.arguments);
       if (denial) {
-        this.failWorkflowResource(denial);
+        this.failWorkflowBoundary(denial);
         return { block: true, terminate: true, reason: denial };
       }
     }
@@ -3544,6 +3545,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
           isError?: boolean;
           errorCode?: string;
           denied?: boolean;
+          approvalScope?: "workflow-shell";
         } | undefined;
         let executionError: unknown;
         let executionFailed = false;
@@ -3554,6 +3556,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
               isError?: boolean;
               errorCode?: string;
               denied?: boolean;
+              approvalScope?: "workflow-shell";
             }>("tools.execute", {
               sessionId: this.sessionId,
               turnId: this.turnId,
@@ -3607,18 +3610,35 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
           cleanup(true);
         }
         if (abortPromise) await abortPromise;
+        if (this.activeWorkflowRunId && isBash && (abortError || executionFailed || !result)) {
+          const error = abortError ?? executionError;
+          this.failWorkflowBoundary(
+            `Shell execution has no completed receipt: ${error instanceof Error ? error.message : error !== undefined ? String(error) : "Host returned no result"}. Reconcile its effects before continuing.`,
+            toolCallId,
+            abortError ? "TOOL_ABORTED" : "TOOL_FAILED",
+          );
+        }
         if (abortError) throw abortError;
         if (executionFailed) throw executionError;
         if (!result) throw new Error("tool execution returned no result");
-        if (this.activeWorkflowRunId && result.errorCode === "WORKFLOW_RESOURCE_DENIED") {
+        const workflowShellRefused = this.activeWorkflowRunId && isBash
+          && (result.errorCode === "TOOL_DENIED" || result.errorCode === "TOOL_ABORTED");
+        // Timeouts, signals and lifecycle failures may have partial effects.
+        // Only an integer exit receipt permits the ordinary check/fix loop.
+        const workflowShellUncertain = this.activeWorkflowRunId && isBash
+          && !(isRecord(result.content) && typeof result.content.exitCode === "number" && Number.isInteger(result.content.exitCode));
+        if (this.activeWorkflowRunId && (result.errorCode === "WORKFLOW_RESOURCE_DENIED" || workflowShellRefused || workflowShellUncertain)) {
           const hostMessage = typeof result.content === "string"
             ? result.content
             : JSON.stringify(result.content);
-          this.failWorkflowResource(
+          this.failWorkflowBoundary(
             hostMessage && hostMessage !== "null"
               ? hostMessage
-              : `The Host denied ${toolName} because its target is outside the active workflow assignment. Request the specific additional resource authorization before continuing.`,
+              : workflowShellUncertain
+                ? "Shell execution has no completed exit receipt; reconcile its effects before continuing."
+                : `The Host stopped ${toolName}; review the refused resource or exact one-time Shell approval before continuing.`,
             toolCallId,
+            result.errorCode ?? (workflowShellUncertain ? "TOOL_FAILED" : "WORKFLOW_RESOURCE_DENIED"),
           );
         }
         const recordParams = isRecord(params) ? params : undefined;
@@ -3808,6 +3828,12 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
           text = JSON.stringify(rawContent, null, 2);
         }
         if (!result.ok) this.failedHostToolCalls.add(toolCallId);
+        if (workflowShellRefused && result.approvalScope === "workflow-shell") {
+          // This Host-owned marker exists only on a pre-execution approval
+          // refusal/cancellation, not on an interrupted running command.
+          details = { ...(isRecord(details) ? details : { output: details }),
+            code: result.errorCode, approvalScope: "workflow-shell" };
+        }
         return {
           content: [{ type: "text", text }, ...imageBlocks],
           details,
@@ -4026,21 +4052,21 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
             executionMode:
               tool.name === SUBAGENT_TOOL_NAME ? "parallel" : "sequential",
           }),
-          () => {
+          (params) => {
             const workflowDenial = this.activeWorkflowRunId
-              ? workflowToolDenial(tool.name)
+              ? workflowToolDenial(tool.name, params)
               : undefined;
             if (workflowDenial) return workflowDenial;
             return this.isToolAllowedInMode(tool.name)
               ? undefined
               : modeToolDenial(tool.name, this.mode);
           },
-          (reason, toolCallId) => {
+          (reason, toolCallId, params) => {
             if (
               this.activeWorkflowRunId &&
-              workflowToolDenial(tool.name) === reason
+              workflowToolDenial(tool.name, params) === reason
             ) {
-              this.failWorkflowResource(reason, toolCallId);
+              this.failWorkflowBoundary(reason, toolCallId);
             }
           },
         ),
@@ -5275,9 +5301,10 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     this.clearAgentActivity();
   }
 
-  private failWorkflowResource(message: string, toolCallId?: string): void {
+  private failWorkflowBoundary(message: string, toolCallId?: string, code = "WORKFLOW_RESOURCE_DENIED"): void {
     if (!this.workflowFailureMessage) {
       this.workflowFailureMessage = message;
+      this.workflowFailureCode = code;
       this.terminateParentTurn();
     }
     if (toolCallId) {
@@ -8621,7 +8648,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
           this.emit({
             type: "error",
             error: {
-              code: "WORKFLOW_RESOURCE_DENIED",
+              code: this.workflowFailureCode,
               message: this.workflowFailureMessage,
               retriable: false,
             },
@@ -9058,7 +9085,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     } catch (err) {
       const workflowFailure = this.activeWorkflowRunId && this.workflowFailureMessage
         ? {
-            code: "WORKFLOW_RESOURCE_DENIED",
+            code: this.workflowFailureCode,
             message: this.workflowFailureMessage,
             retriable: false,
           }
