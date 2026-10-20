@@ -43,6 +43,14 @@ lose the distinction between execution and product evidence.
    in addition to existing permissions. Read-only canonical and delivered inputs
    do not widen output scope. Uncontained tools are denied rather than treating
    model-declared resources as a process sandbox; ordinary turns are unchanged.
+8. As approved by the user on 2026-10-20, foreground workflow Bash uses the
+   existing Host permission card with a separate one-use decision for every
+   invocation. Auto mode and prior session grants cannot approve it. The card
+   shows the complete command and warns that Shell effects may exceed the
+   selected writable paths. Only `allow-once` executes; `allow-session` is
+   rejected without creating a grant. The Host revalidates the bound turn,
+   current decision and authorization at process admission. This explicit
+   command authority does not expand typed file-tool output scope.
 
 ## Consequences
 

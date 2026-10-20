@@ -10905,6 +10905,13 @@ This test plan spec is accepted when:
   test is not presented as live deployment. Reject a local reference outside
   registered project roots and an HTTP(S) reference refused by the existing URL
   gate.
+  In an Auto workflow session with a prior Bash session grant, request two
+  foreground Shell commands. Inspect their exact arguments and scope warning;
+  verify each independently waits for Allow once, with no Allow for session.
+  Approve one, deny the other, and cancel another pending request: only the
+  approved command executes, once. Revoke workflow authority while a request
+  waits and verify a late approval cannot launch it. Exercise actual
+  implementation/check/fix/document continuation without widening file grants.
   Finally use existing Agent/Plan, Chat transcript, project instructions/memory,
   permissions, session fork and history paths.
 - **Expected**: Folder edits are non-destructive and survive restart; project

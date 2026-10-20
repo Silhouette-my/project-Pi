@@ -15,7 +15,13 @@ import { Host } from "./e2e/host.mjs";
 
 const root = resolve(repositoryRoot());
 assertDesktopBuild(root);
-const jsBuiltCommit = execFileSync("git", ["rev-parse", "--short=12", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+const sourceCommitAtRun = execFileSync("git", ["rev-parse", "--short=12", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+const builtCommitArg = process.argv.indexOf("--built-commit");
+const builtCommit = builtCommitArg >= 0 ? process.argv[builtCommitArg + 1] : undefined;
+if (builtCommitArg >= 0 && !builtCommit) throw new Error("--built-commit requires the commit identifier used for the built Electron JavaScript");
+const hostBuiltCommitArg = process.argv.indexOf("--host-built-commit");
+const hostBuiltCommit = hostBuiltCommitArg >= 0 ? process.argv[hostBuiltCommitArg + 1] : null;
+if (hostBuiltCommitArg >= 0 && !hostBuiltCommit) throw new Error("--host-built-commit requires the source commit used to build the Rust Host binary");
 const outputArg = process.argv.indexOf("--output");
 const output = outputArg < 0 ? await mkdtemp(join(tmpdir(), "pi-workflow-ui-production-")) : resolve(process.argv[outputArg + 1]);
 await mkdir(output, { recursive: true });
@@ -240,17 +246,30 @@ try {
     assert.ok(metrics.documentWidth <= 801 && metrics.consoleWidth <= 801, `${name} overflows supported width: ${json(metrics)}`);
     assert.ok(metrics.headerActions && metrics.headerActions.top >= 0 && metrics.headerActions.bottom <= 600, `${name} clips header actions: ${json(metrics)}`);
   }
+  await page.evaluate(`document.documentElement.dataset.theme='light'; document.querySelector('.workflow-detail')?.scrollIntoView({block:'start'})`);
+  await until(() => page.evaluate(`(() => { const block=document.querySelector('.workflow-blocker')?.getBoundingClientRect(), candidate=document.querySelector('.workflow-candidate-summary')?.getBoundingClientRect(); return !!block && !!candidate && block.top >= 0 && block.bottom <= innerHeight && candidate.top >= 0 && candidate.bottom <= innerHeight })()`), "Overview blocker and candidate visible in viewport");
+  const overviewDetail = await page.evaluate(`(() => { const rect=selector=>{const r=document.querySelector(selector)?.getBoundingClientRect(); return r?{top:r.top,bottom:r.bottom,left:r.left,right:r.right}:null}; return {text:document.querySelector('.workflow-detail')?.innerText,owner:rect('.workflow-detail .workflow-muted'),blocker:rect('.workflow-blocker'),candidate:rect('.workflow-candidate-summary'),width:innerWidth,height:innerHeight} })()`);
+  assert.match(overviewDetail.text, /Release lead/);
+  assert.ok(overviewDetail.blocker?.top >= 0 && overviewDetail.blocker.bottom <= 600, `Overview blocker is not visible: ${json(overviewDetail)}`);
+  assert.ok(overviewDetail.candidate?.top >= 0 && overviewDetail.candidate.bottom <= 600, `Overview candidate is not visible: ${json(overviewDetail)}`);
+  await capture("renderer-overview-detail.png");
+
   await clickText("共享上下文");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "shared context screenshot");
-  await page.evaluate("document.querySelector('.workflow-console')?.scrollTo(0,0)"); await sleep(250);
+  await page.evaluate("document.documentElement.dataset.theme='light'; document.querySelector('.workflow-console')?.scrollTo(0,0)"); await sleep(250);
   layout["renderer-context-light.png"] = await page.evaluate(`({width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,consoleWidth:document.querySelector('[data-workflow="console"]')?.getBoundingClientRect().width})`);
   await capture("renderer-context-light.png");
   assert.equal(layout["renderer-context-light.png"].width, 800);
   assert.ok(layout["renderer-context-light.png"].documentWidth <= 801 && layout["renderer-context-light.png"].consoleWidth <= 801);
-  coverage.push("Captured actual native Electron renderer at 800x600 in light/dark Overview and light Shared Context; measured page width and verified header actions remain visible");
+  await page.evaluate("document.documentElement.dataset.theme='dark'"); await sleep(250);
+  layout["renderer-context-dark.png"] = await page.evaluate(`({width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,consoleWidth:document.querySelector('[data-workflow="console"]')?.getBoundingClientRect().width})`);
+  await capture("renderer-context-dark.png");
+  assert.equal(layout["renderer-context-dark.png"].width, 800);
+  assert.ok(layout["renderer-context-dark.png"].documentWidth <= 801 && layout["renderer-context-dark.png"].consoleWidth <= 801);
+  coverage.push("Captured actual native Electron renderer at 800x600 in light/dark Overview and Shared Context, plus an Overview-detail frame showing owner, blocker, and candidate; checked page bounds and visible header actions");
 
   await writeFile(join(output, "snapshot.json"), json(finalSnapshot, null, 2));
-  await writeFile(join(output, "result.json"), json({ ok: true, output, scratch, projectId, setupSessionId: setup.sessionId, metadata: { jsBuiltCommit, hostProtocolVersion, workflowSchemaVersion: finalSnapshot.schemaVersion }, nativeContentSize: nativeSize, coverage, overviewText, layout, searchResult: searchBefore, openedPaths: [candidateOpenedPath, resourceOpenedPath], gaps: ["Workflow execution, real account, and deployment are out of scope"] }, null, 2));
+  await writeFile(join(output, "result.json"), json({ ok: true, output, scratch, projectId, setupSessionId: setup.sessionId, metadata: { sourceCommitAtRun, ...(builtCommit ? { jsBuiltCommit: builtCommit } : {}), hostBinaryCommit: hostBuiltCommit, hostProtocolVersion, workflowAggregateSchemaVersion: finalSnapshot.schemaVersion }, nativeContentSize: nativeSize, coverage, overviewText, overviewDetail, layout, searchResult: searchBefore, openedPaths: [candidateOpenedPath, resourceOpenedPath], gaps: ["Workflow execution, real account, and deployment are out of scope"] }, null, 2));
   console.log(`PASS production workflow renderer ${output}`);
 } catch (error) {
   const diagnostics = [];
