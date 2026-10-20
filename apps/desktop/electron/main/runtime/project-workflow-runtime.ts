@@ -6,17 +6,17 @@ import type {
 } from "@pi-desktop/shared";
 import { assembleWorkflowContext, WORKFLOW_CHECKPOINT_INSTRUCTIONS } from "./project-workflow-context";
 import { parseWorkflowCheckpoint, type WorkflowCheckpoint, type WorkflowStep } from "./project-workflow-checkpoint";
-import { workflowAssignment } from "./project-workflow-receipt";
+import { resumableWorkflowPause, workflowAssignment } from "./project-workflow-receipt";
 import { conflictingWorkflowRun } from "./project-workflow-resources";
 
-export type WorkflowObservation = { state: WorkflowRun["state"]; content: string; effects: WorkflowRun["effects"] };
+export type WorkflowObservation = { state: WorkflowRun["state"]; content: string; effects: WorkflowRun["effects"]; refusedShellToolCallIds?: string[] };
 export interface WorkflowExecutionPort {
   createSession(input: { projectId: string; sourceSessionId?: string; purpose: WorkflowConversation["purpose"] }): Promise<string>;
   appendContext(sessionId: string, content: string, messageId: string): Promise<void>;
   start(input: { run: WorkflowRun; content: string; authorization: WorkflowAuthorization }): Promise<{ turnId: string; queued: boolean }>;
   read(input: { sessionId: string; content: string; key: string; observeOutcome?: boolean }): Promise<void>;
   observe(run: WorkflowRun): Promise<WorkflowObservation>;
-  stop(run: WorkflowRun, cancel: boolean): Promise<{ cancelledBeforeStart: boolean }>;
+  stop(run: WorkflowRun, cancel: boolean, pausePendingShell?: boolean): Promise<{ cancelledBeforeStart: boolean }>;
   dispose?(): void;
 }
 export type ProjectWorkflowRuntimeDependencies = {
@@ -87,13 +87,13 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       returnPolicy: "delivery", archived: false, order: state.conversations.length, ...overrides,
     } });
   }
-  async function dispatch(w: WorkflowWorkstream, sessionId: string, auth: WorkflowAuthorization, step: WorkflowStep, key: string, deliveries: WorkflowDelivery[] = []) {
+  async function dispatch(w: WorkflowWorkstream, sessionId: string, auth: WorkflowAuthorization, step: WorkflowStep, key: string, deliveries: WorkflowDelivery[] = [], resumedFrom?: WorkflowRun) {
     if (currentRuns(w).some((r) => r.sessionId === sessionId)) return;
     const run: WorkflowRun = { id: `workflow:${key}`, ...scope(w), sessionId, executor: "agent-host",
       workstreamRevision: w.revision, decisionRevision: w.decisionRevision, authorizationId: auth.id,
       state: "queued", outcome: "", effects: step.resources.map((resource, index) => ({
         id: index === 0 ? "dispatch" : `scope:${index}`, action: step.action, resource, state: "planned",
-        detail: index === 0 ? JSON.stringify({ step, deliveryIds: deliveries.map((d) => d.id) }) : "Authorized bounded assignment scope",
+        detail: index === 0 ? JSON.stringify({ step, deliveryIds: deliveries.map((d) => d.id), ...(resumedFrom ? { resumedFromRunId: resumedFrom.id } : {}) }) : "Authorized bounded assignment scope",
       })),
       startedAt: now(), updatedAt: now() };
     if (state.runs.some((r) => r.id === run.id)) return;
@@ -112,7 +112,8 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       }
       const result = await deps.execution.start({ run, authorization: auth,
         content: assembleWorkflowContext(state, w, { conversation: conversation(sessionId), authorization: auth })
-          + pending + `\nRun identity: ${run.id}\nAssigned action: ${step.action}\nAssigned resources: ${JSON.stringify(step.resources)}`
+          + pending + (resumedFrom ? `\nResume the interrupted assignment from run ${resumedFrom.id}. The pending assignment or Shell call did not execute; any earlier confirmed effects remain completed and must not be replayed. Use the existing transcript to continue from that boundary. A new Shell call requires a new user approval.\nPrior receipts: ${JSON.stringify(resumedFrom.effects)}` : "")
+          + `\nRun identity: ${run.id}\nAssigned action: ${step.action}\nAssigned resources: ${JSON.stringify(step.resources)}`
           + "\n\nAssignment:\n" + step.prompt + "\n\n" + WORKFLOW_CHECKPOINT_INSTRUCTIONS });
       admitted = true;
       await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: result.queued ? "queued" : "executing", outcome: "",
@@ -132,9 +133,16 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       throw error;
     }
   }
-  async function stopRuns(w: WorkflowWorkstream, cancel: boolean) {
+  async function stopRuns(w: WorkflowWorkstream, cancel: boolean, pausePendingShell = false) {
     for (const run of currentRuns(w)) {
-      const result = await deps.execution.stop(run, cancel);
+      if (pausePendingShell) {
+        // Persist intent before touching the permission wait. Recovery still
+        // requires the actual Host pre-execution refusal and terminal receipt.
+        await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: run.state, outcome: run.outcome,
+          effects: run.effects.map((effect) => effect.id === "dispatch" ? { ...effect,
+            detail: JSON.stringify({ ...workflowAssignment(run), pausePendingShell: true }) } : effect) });
+      }
+      const result = await deps.execution.stop(run, cancel, pausePendingShell);
       if (result.cancelledBeforeStart && !cancel) {
         await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: "cancelled", outcome: "Paused before runtime admission; no external work executed",
           effects: run.effects, completionKey: `${run.id}:paused-before-start` });
@@ -160,7 +168,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       next = parseWorkflowCheckpoint(latest.outcome).next;
     }
     if (latest && ["unknown", "interrupted", "failed", "cancelled"].includes(latest.state)
-      && !latest.completionKey?.endsWith(":paused-before-start")
+      && !resumableWorkflowPause(latest)
       && (!freshUserStart || latest.state === "unknown" || latest.effects.some((effect) => effect.state === "unknown"))) {
       await transition(w, "awaiting_user", "Resolve the last execution outcome before resuming", latest.outcome); return;
     }
@@ -184,14 +192,18 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     const conflict = await conflictingWorkflowRun(state, step.resources);
     if (conflict) { await transition(w, "blocked", step.prompt, `Resource scope is owned by active run ${conflict.id}; continue after that run checkpoints`); return; }
     await transition(w, "executing", step.prompt);
-    await dispatch(work(w.id), sessionId, auth, step, key, deliveries);
+    await dispatch(work(w.id), sessionId, auth, step, key, deliveries, latest?.completionKey?.endsWith(":paused-before-shell") ? latest : undefined);
   }
   async function settle(run: WorkflowRun) {
     if (run.completionKey && run.state !== "unknown") return;
     const observation = await deps.execution.observe(run);
     if (live({ ...run, state: observation.state })) return;
     const w = work(run.workstreamId);
-    const completionKey = `${run.id}:terminal`;
+    const pausedCalls = observation.refusedShellToolCallIds;
+    const pausedBeforeShell = w.status === "paused" && workflowAssignment(run).pausePendingShell && pausedCalls?.length && ["failed", "cancelled", "interrupted"].includes(observation.state)
+      && !observation.effects.some((effect) => effect.state === "unknown")
+      && pausedCalls.every((toolCallId) => observation.effects.some((effect) => effect.id === toolCallId && effect.action === "tool:Bash" && effect.state === "failed"));
+    const completionKey = `${run.id}:${pausedBeforeShell ? "paused-before-shell" : "terminal"}`;
     if (run.state === "queued" && observation.state === "completed") {
       await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: "executing", outcome: "Runtime admission confirmed before terminal receipt",
         effects: observation.effects }, `${run.id}:admitted`);
@@ -275,7 +287,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
         await continueWork(work(w.id), input.authorizationId, undefined, input.commandId, true);
       } else if (input.kind === "discuss") {
         if (input.sessionId && input.sessionId === w.mainSessionId) fail("CONFLICT", "Discussion needs a separate session; the main session remains owned by Work");
-        if (input.pause) { await transition(w, "paused", w.nextAction); await stopRuns(w, false); }
+        if (input.pause) { await transition(w, "paused", w.nextAction); await stopRuns(w, false, true); }
         sessionId = input.sessionId ?? await deps.execution.createSession({ projectId: w.projectId, sourceSessionId: w.mainSessionId, purpose: "explore" });
         await link(w, sessionId, { relation: "branch", purpose: "explore", returnPolicy: "proposal", parentSessionId: w.mainSessionId });
         await deps.execution.appendContext(sessionId, assembleWorkflowContext(state, work(w.id), { discussion: true }), `workflow-discuss:${input.commandId}`);
@@ -296,17 +308,33 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
         if (!currentRuns(w).length) await continueWork(work(w.id), undefined, undefined, input.commandId);
       } else if (input.kind === "pause" || input.kind === "cancel") {
         await transition(w, input.kind === "pause" ? "paused" : "cancelled", w.nextAction);
-        await stopRuns(w, input.kind === "cancel");
+        await stopRuns(w, input.kind === "cancel", input.kind === "pause");
       } else if (input.kind === "resume") {
         await reconcile(w.id);
         w = work(w.id);
         if (state.runs.some((r) => r.workstreamId === w.id && (r.state === "unknown" || r.effects.some((e) => e.state === "unknown")))) {
           fail("WORKFLOW_EFFECT_UNKNOWN", "Resolve unknown external effects before resuming");
         }
+        if (currentRuns(w).length) fail("CONFLICT", "The paused execution has not reached its terminal receipt yet");
+        const paused = state.runs.filter((run) => run.workstreamId === w.id && resumableWorkflowPause(run)
+          && !state.runs.some((other) => other.workstreamId === w.id && workflowAssignment(other).resumedFromRunId === run.id));
+        for (const run of paused) await assertResourcesAvailable(workflowAssignment(run).step.resources);
         await transition(w, "ready", w.nextAction);
+        for (const run of paused) {
+          const step = workflowAssignment(run).step;
+          let auth: WorkflowAuthorization;
+          try { auth = authorization(work(w.id), run.authorizationId, step); }
+          catch (error) { await transition(work(w.id), "awaiting_user", "Authorize the exact paused action and resources", String(error)); break; }
+          const priorDeliveryIds = workflowAssignment(run).deliveryIds;
+          const deliveries = state.deliveries.filter((delivery) => priorDeliveryIds.includes(delivery.id)
+            && delivery.workstreamId === w.id && delivery.state === "delivered" && delivery.disposition === "pending"
+            && delivery.decisionRevision === work(w.id).decisionRevision);
+          await transition(work(w.id), "executing", w.nextAction);
+          await dispatch(work(w.id), run.sessionId, auth, step, `${input.commandId}:resume:${run.id}`, deliveries, run);
+        }
+        if (paused.length) return { snapshot: state };
         const last = state.runs.filter((r) => r.workstreamId === w.id && conversation(r.sessionId)?.relation === "main").at(-1);
-        const assignment = last?.completionKey?.endsWith(":paused-before-start") ? workflowAssignment(last).step : undefined;
-        const next: WorkflowStep | undefined = assignment ?? (last?.state === "completed" ? parseWorkflowCheckpoint(last.outcome).next : undefined);
+        const next: WorkflowStep | undefined = last?.state === "completed" ? parseWorkflowCheckpoint(last.outcome).next : undefined;
         if (last?.state === "completed" && !next) await transition(work(w.id), "awaiting_user", "Choose a new bounded action after the last checkpoint");
         else await continueWork(work(w.id), undefined, next, input.commandId);
       } else await reconcile(w.id);

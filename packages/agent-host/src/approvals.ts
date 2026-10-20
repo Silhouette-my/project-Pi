@@ -39,6 +39,12 @@ type PendingApproval = {
   request: RacpApprovalRequest;
   expiresAtMs: number;
   version?: number;
+  toolPermission?: ToolPermissionRequest;
+};
+
+type WorkflowShellResolution = {
+  result: RacpApprovalResult;
+  deniedToolCallId?: string;
 };
 
 const MAX_REMEMBERED_RESULTS = 1000;
@@ -96,8 +102,61 @@ export class ApprovalBroker {
         ? [...RACP_TOOL_APPROVAL_DECISIONS]
         : RACP_TOOL_APPROVAL_DECISIONS.filter((decision) => decision !== "allow-session"),
     };
-    this.pending.set(approval.id, { request: approval, expiresAtMs });
+    this.pending.set(approval.id, { request: approval, expiresAtMs, toolPermission: request });
     return approval;
+  }
+
+  /**
+   * Deny only Host-pending workflow Bash approvals associated with one turn.
+   * Unknown requests are admitted only while the caller can still prove that
+   * turn is the session's active turn.
+   */
+  async denyWorkflowShellForTurn(input: {
+    sessionId: string;
+    turnId: string;
+    revision: () => number;
+    lifetimeMs: number;
+    isCurrentTurn: () => boolean;
+    onResolved: (result: RacpApprovalResult) => void;
+  }): Promise<WorkflowShellResolution[]> {
+    const hostPending = await this.port.listPendingTools(input.sessionId);
+    if (!input.isCurrentTurn()) return [];
+    const resolutions: WorkflowShellResolution[] = [];
+    for (const tool of hostPending) {
+      if (tool.sessionId !== input.sessionId || tool.approvalScope !== "workflow-shell" || tool.toolName !== "Bash") continue;
+      let entry = this.pending.get(tool.requestId);
+      if (entry) {
+        if (entry.request.sessionId !== input.sessionId || entry.request.turnId !== input.turnId
+          || entry.toolPermission?.approvalScope !== "workflow-shell" || entry.toolPermission.toolName !== "Bash") continue;
+      } else {
+        if (!input.isCurrentTurn()) return resolutions;
+        this.fromToolPermission(tool, tool.expiresAt
+          ? { turnId: input.turnId, revision: input.revision(), lifetimeMs: input.lifetimeMs, allowSession: false, expiresAt: tool.expiresAt }
+          : { turnId: input.turnId, revision: input.revision(), lifetimeMs: input.lifetimeMs, allowSession: false });
+        entry = this.pending.get(tool.requestId);
+      }
+      if (!entry || entry.request.sessionId !== input.sessionId || entry.request.turnId !== input.turnId) continue;
+      if (!input.isCurrentTurn()) return resolutions;
+
+      let raced = false;
+      try {
+        await this.port.resolveTool(tool.requestId, "deny");
+      } catch (error) {
+        const failure = error as { code?: unknown; errorCode?: unknown; data?: { errorCode?: unknown } } | null;
+        if (failure?.code !== "NOT_FOUND" && failure?.errorCode !== "NOT_FOUND" && failure?.data?.errorCode !== "NOT_FOUND") throw error;
+        raced = true;
+      }
+      if (raced) {
+        const result = this.settle(tool.requestId, { status: "canceled", revision: input.revision() });
+        resolutions.push({ result });
+        input.onResolved(result);
+      } else {
+        const result = this.settle(tool.requestId, { status: "resolved", decision: "deny", revision: input.revision() });
+        resolutions.push({ result, deniedToolCallId: tool.toolCallId });
+        input.onResolved(result);
+      }
+    }
+    return resolutions;
   }
 
   /** A Plan or Goal proposal awaiting approval: a session-level transition. */
