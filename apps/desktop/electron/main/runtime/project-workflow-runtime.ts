@@ -30,6 +30,7 @@ type WithoutCommandMetadata<T> = T extends unknown ? Omit<T, "expectedRevision" 
 
 /** Single local coordinator; all durable transitions and conflict checks stay in Host. */
 export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDependencies): ProjectWorkflowRuntimePort & {
+  recoverAll(): Promise<void>;
   onTurnSettled(sessionId: string): Promise<void>;
   contextForSession(sessionId: string): Promise<string | undefined>;
 } {
@@ -37,6 +38,8 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
   const id = deps.id ?? randomUUID;
   let tail: Promise<unknown> = Promise.resolve();
   let disposed = false;
+  let recovering = false;
+  const deferredContinuations = new Map<string, { workstreamId: string; authId?: string; next?: WorkflowStep; freshUserStart: boolean }>();
   function serial<T>(fn: () => Promise<T>): Promise<T> {
     const result = tail.then(() => { if (disposed) fail("ABORTED", "Workflow runtime is disposed"); return fn(); });
     tail = result.catch(() => undefined); // The caller still receives the original rejection.
@@ -138,6 +141,10 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     }
   }
   async function continueWork(w: WorkflowWorkstream, authId?: string, next?: WorkflowStep, key = id(), freshUserStart = false) {
+    if (recovering) {
+      deferredContinuations.set(key, { workstreamId: w.id, authId, next, freshUserStart });
+      return;
+    }
     if (["paused", "cancelled", "completed", "draft", "awaiting_user"].includes(w.status)) return;
     if (currentRuns(w).some((r) => conversation(r.sessionId)?.relation === "main")) return;
     if (w.dependencyIds.some((dep) => state.workstreams.find((d) => d.id === dep)?.status !== "completed")) {
@@ -307,6 +314,30 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
   }
   return {
     action,
+    recoverAll: () => serial(async () => {
+      // Recovery observations can settle checkpoints, but no successor may be
+      // admitted until every existing run's external outcome has been checked.
+      recovering = true;
+      await reload();
+      await reconcile();
+      // A previous process may have committed completion before admitting its
+      // successor. Rebuild that exact assignment from the durable checkpoint.
+      for (const w of state.workstreams) {
+        const latest = state.runs.filter((r) => r.workstreamId === w.id && conversation(r.sessionId)?.relation === "main").at(-1);
+        if (!latest?.completionKey || latest.state !== "completed" || latest.decisionRevision !== w.decisionRevision
+          || !["ready", "executing", "blocked"].includes(w.status)) continue;
+        const report = parseWorkflowCheckpoint(latest.outcome);
+        const key = `${latest.id}:next`;
+        if (!report.stop && report.next && !deferredContinuations.has(key)) {
+          deferredContinuations.set(key, { workstreamId: w.id, authId: latest.authorizationId, next: report.next, freshUserStart: false });
+        }
+      }
+      recovering = false;
+      for (const [key, continuation] of deferredContinuations) {
+        await continueWork(work(continuation.workstreamId), continuation.authId, continuation.next, key, continuation.freshUserStart);
+        deferredContinuations.delete(key);
+      }
+    }),
     onTurnSettled: (sessionId) => serial(async () => {
       await reload();
       for (const run of [...state.runs].filter((r) => r.sessionId === sessionId && (live(r) || r.state === "unknown" || !r.completionKey))) await settle(run);

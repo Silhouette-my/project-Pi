@@ -61,6 +61,10 @@ session and message IDs retain their existing meaning.
   providers remain discussion-only: Main rejects them for Work rather than silently
   changing provider. Ask/Explore creation preserves the source provider and inherits
   its permission source, with Plan mode and an Ask ceiling for read/discussion.
+- The private runtime factory also returns `recoverAll(): Promise<void>`. Main
+  awaits it before enabling actions: all existing runs are observed and persisted
+  before any authorized successor is admitted. Failed recovery leaves admission
+  disabled; accepted checkpoint continuations retain their exact scope on retry.
 
 C0 declares the actual API/ports and adds validation tests, without fake Host or
 runtime implementations. A owns subsequent host wiring. C must report the exported

@@ -65,12 +65,8 @@ export function createWorkflowSessionFactory(deps: Pick<ProjectWorkflowDesktopDe
 export function createDesktopProjectWorkflow(deps: ProjectWorkflowDesktopDependencies) {
   let ready = false;
   const sessions = createWorkflowSessionFactory(deps);
-  const execution = createProjectWorkflowExecution({ ...deps, createSession: sessions.createSession });
-  const start = execution.start;
-  execution.start = async (input) => {
-    await sessions.assertExecutable(input.run.sessionId);
-    return start(input);
-  };
+  const execution = createProjectWorkflowExecution({ ...deps, createSession: sessions.createSession,
+    assertExecutableSession: sessions.assertExecutable });
   const coordinator = createProjectWorkflowRuntime({ host: deps.host, execution });
   const runtime: ProjectWorkflowRuntimePort = {
     async action(input) {
@@ -87,12 +83,7 @@ export function createDesktopProjectWorkflow(deps: ProjectWorkflowDesktopDepende
   return {
     runtime,
     async initialize() {
-      const snapshot = await deps.host.snapshot();
-      for (const work of snapshot.workstreams) {
-        const current = await deps.host.snapshot();
-        await coordinator.action({ kind: "reconcile", commandId: `startup:${work.id}:${current.revision}`,
-          expectedRevision: current.revision, projectId: work.projectId, workstreamId: work.id });
-      }
+      await coordinator.recoverAll();
       ready = true;
     },
     onTurnSettled: (sessionId: string) => ready ? coordinator.onTurnSettled(sessionId) : Promise.resolve(),
