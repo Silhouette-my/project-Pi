@@ -168,7 +168,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     await dispatch(work(w.id), sessionId, auth, step, key, deliveries);
   }
   async function settle(run: WorkflowRun) {
-    if (run.completionKey) return;
+    if (run.completionKey && run.state !== "unknown") return;
     const observation = await deps.execution.observe(run);
     if (live({ ...run, state: observation.state })) return;
     const w = work(run.workstreamId);
@@ -178,9 +178,9 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
         effects: observation.effects }, `${run.id}:admitted`);
     }
     await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: observation.state,
-      outcome: observation.content, effects: observation.effects }, `${run.id}:observed`);
+      outcome: observation.content, effects: observation.effects }, `${run.id}:observed:${observation.state}`);
     const finish = () => mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: observation.state,
-      outcome: observation.content, effects: observation.effects, completionKey }, completionKey);
+      outcome: observation.content, effects: observation.effects, completionKey }, `${completionKey}:${observation.state}`);
     if (observation.state !== "completed" || observation.effects.some((effect) => effect.state === "unknown")) {
       if (!["paused", "cancelled"].includes(w.status)) await transition(w, "awaiting_user", "Reconcile the actual execution outcome", observation.content);
       await finish();
@@ -238,7 +238,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     await finish();
   }
   async function reconcile(workstreamId?: string) {
-    for (const run of [...state.runs].filter((r) => (live(r) || !r.completionKey) && (!workstreamId || r.workstreamId === workstreamId))) await settle(run);
+    for (const run of [...state.runs].filter((r) => (live(r) || r.state === "unknown" || !r.completionKey) && (!workstreamId || r.workstreamId === workstreamId))) await settle(run);
   }
   async function action(input: ProjectWorkflowAction): Promise<ProjectWorkflowActionResult> {
     return serial(async () => {
@@ -295,7 +295,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     action,
     onTurnSettled: (sessionId) => serial(async () => {
       await reload();
-      for (const run of [...state.runs].filter((r) => r.sessionId === sessionId && (live(r) || !r.completionKey))) await settle(run);
+      for (const run of [...state.runs].filter((r) => r.sessionId === sessionId && (live(r) || r.state === "unknown" || !r.completionKey))) await settle(run);
       const c = conversation(sessionId);
       const proposalId = `explore:${sessionId}:conclusion`;
       if (c?.purpose === "explore" && c.visibility === "project" && c.returnPolicy === "proposal" && !state.decisions.some((d) => d.id === proposalId)) {

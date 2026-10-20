@@ -33,6 +33,7 @@ test("Real Host validates continuation receipts, exact scope, actual consumption
     }, approvals: { listPending: async () => [], resolveTool: async () => {}, resolveContract: async () => {} },
   });
   const execution = createProjectWorkflowExecution({ getAgentHost: () => agentHost, getHost: () => host, flushTranscript: async () => true,
+    assertExecutableSession: async () => {}, // This test owns the synthetic tool-capable model boundary.
     async createSession() { return (await host.call("session.create", { title: "Workflow", mode: "agent", projectPath: project })).session.id; },
   });
   const runtime = createProjectWorkflowRuntime({ host: port, execution });

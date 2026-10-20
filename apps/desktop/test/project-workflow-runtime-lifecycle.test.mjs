@@ -124,6 +124,7 @@ async function setup(modify = () => {}) {
     throw new Error(`Unexpected RPC ${method}`);
   } };
   const execution = createProjectWorkflowExecution({ getAgentHost: () => agentHost, getHost: () => rpc, flushTranscript: async () => true,
+    assertExecutableSession: async () => {}, // Synthetic model edge is explicitly tool-capable.
     async createSession() {
       const id = `session-${++sessions}`; transcripts.set(id, []); summaries.set(id, { ...summaries.get("session-1"), id }); return id;
     },
@@ -360,4 +361,29 @@ test("An established main line sees newly effective constraints and skills at th
   assert.match(await f.runtime.contextForSession("session-1"), /new-skill/);
   await f.finish("session-1", checkpoint("First step", next("Use the current skill")));
   assert.match(f.prompts.at(-1).content, /new-skill/);
+});
+
+test("A late trusted terminal receipt can reconcile unknown execution without replaying the action", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  f.host.edit((state) => {
+    const run = state.runs[0]; run.state = "unknown"; run.completionKey = `${run.id}:terminal`;
+    run.effects.push({ ...run.effects[0], id: "terminal-outcome", state: "unknown", detail: "Missing receipt" });
+  });
+  await f.finish("session-1", checkpoint("Trusted late completion", undefined));
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].state, "completed");
+  assert.equal(state.runs[0].effects.find((e) => e.id === "terminal-outcome").state, "confirmed");
+  assert.equal(f.prompts.length, 1);
+});
+
+test("Consumer-only Chat cannot silently become a tool-capable Work session", async () => {
+  let called = false;
+  const execution = createProjectWorkflowExecution({
+    getAgentHost: () => { called = true; throw new Error("must not reach Agent Host"); },
+    getHost: () => { throw new Error("not used"); }, createSession: async () => "chat-session", flushTranscript: async () => true,
+    assertExecutableSession: async () => { throw Object.assign(new Error("Choose an executable Agent session; consumer Chat is discussion-only"), { code: "INVALID_ARGUMENT" }); },
+  });
+  await assert.rejects(() => execution.start({ run: { sessionId: "chat-session" }, authorization: {}, content: "Implement" }), /Choose an executable Agent session/);
+  assert.equal(called, false);
 });
