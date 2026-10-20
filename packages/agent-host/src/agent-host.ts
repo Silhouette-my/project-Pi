@@ -84,6 +84,7 @@ export type QueueEntryView = {
   content: string;
   sessionMessageId?: string;
   userMessageId?: string;
+  workflowRunId?: string;
   voiceOrigin?: VoiceOrigin;
   attachments?: AgentPromptAttachment[];
   /** Set only for promoted entries; entries are already in delivery order. */
@@ -885,6 +886,7 @@ export class AgentHost {
       content: record.content,
       ...(record.sessionMessageId ? { sessionMessageId: record.sessionMessageId } : {}),
       ...(record.userMessageId ? { userMessageId: record.userMessageId } : {}),
+      ...(record.workflowRunId ? { workflowRunId: record.workflowRunId } : {}),
       ...(record.voiceOrigin ? { voiceOrigin: record.voiceOrigin } : {}),
       ...(record.attachments ? { attachments: record.attachments } : {}),
       ...(record.priority !== undefined ? { priority: record.priority } : {}),
