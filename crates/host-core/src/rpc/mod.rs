@@ -3910,12 +3910,20 @@ async fn handle_request(
             let mut p: ToolsExecuteParams = serde_json::from_value(params.clone())
                 .map_err(|e| rpc_err(1002, e.to_string(), "INVALID_PARAMS"))?;
             let mut workflow_canonical_path = None;
+            let mut workflow_shell = false;
             {
                 let st = state.lock().await;
                 match crate::project_workflow::tool_scope::authorize_tool(&st.db, &p) {
-                    Ok(Some((turn, path))) => {
+                    Ok(Some(crate::project_workflow::tool_scope::ToolScope::File {
+                        turn,
+                        path,
+                    })) => {
                         workflow_canonical_path = Some(path.clone());
                         p.args["path"] = json!(path.to_string_lossy());
+                        p.turn_id = Some(turn);
+                    }
+                    Ok(Some(crate::project_workflow::tool_scope::ToolScope::Shell { turn })) => {
+                        workflow_shell = true;
                         p.turn_id = Some(turn);
                     }
                     Ok(None) => (),
@@ -4110,6 +4118,9 @@ async fn handle_request(
                                 plan_safe_actions: p.plan_safe_actions.as_deref(),
                             },
                         );
+                    if workflow_shell {
+                        auto = None;
+                    }
                     // Write/Edit targeting the session scratch dir never touch
                     // the user's project — skip the prompt (D114). The lexical
                     // pre-check only decides prompting; execution still goes
@@ -4141,7 +4152,9 @@ async fn handle_request(
                             command_shell_id.clone(),
                         )
                     } else {
-                        let reason = if external_path_permission {
+                        let reason = if workflow_shell {
+                            "Approve this exact shell command once. It may access files or resources outside the workflow's writable paths."
+                        } else if external_path_permission {
                             "Accesses a path outside the session workspace"
                         } else {
                             match p.tool_name.as_str() {
@@ -4165,6 +4178,7 @@ async fn handle_request(
                                 reason,
                                 declared_risk: p.declared_risk.as_deref(),
                                 command_shell_id: command_shell_id.as_deref(),
+                                approval_scope: workflow_shell.then_some("workflow-shell"),
                             },
                         );
                         st.register_pending_permission(
@@ -4203,6 +4217,9 @@ async fn handle_request(
                         });
                         if let Some(shell_id) = req.command_shell_id.as_deref() {
                             permission_params["commandShellId"] = json!(shell_id);
+                        }
+                        if let Some(scope) = req.approval_scope.as_deref() {
+                            permission_params["approvalScope"] = json!(scope);
                         }
                         emit_notification(&tx, "permissions.request", permission_params).await;
                         tracing::info!(
@@ -4247,7 +4264,9 @@ async fn handle_request(
                 // microseconds, the prompt path costs however long the user took.
                 let permission_wait_ms = call_started.elapsed().as_millis() as u64;
 
-                if matches!(final_decision, PermissionDecision::Deny) {
+                if matches!(final_decision, PermissionDecision::Deny)
+                    || (workflow_shell && !matches!(final_decision, PermissionDecision::AllowOnce))
+                {
                     let _ = cancel_pending_permission(&state, &p).await;
                     let st = state.lock().await;
                     let mut denied_audit = json!({
@@ -4369,9 +4388,16 @@ async fn handle_request(
                 {
                     let st = state.lock().await;
                     match crate::project_workflow::tool_scope::authorize_tool(&st.db, &p) {
-                        Ok(Some((turn, path))) => {
+                        Ok(Some(crate::project_workflow::tool_scope::ToolScope::File { turn, path })) => {
                             workflow_canonical_path = Some(path.clone());
                             p.args["path"] = json!(path.to_string_lossy());
+                            p.turn_id = Some(turn);
+                        }
+                        Ok(Some(crate::project_workflow::tool_scope::ToolScope::Shell { turn })) => {
+                            if !workflow_shell {
+                                return Ok(crate::project_workflow::tool_scope::denial(&p,
+                                    crate::project_workflow::Error { code: "WORKFLOW_RESOURCE_DENIED", message: "workflow shell requires its own exact approval".into(), conflict: None }));
+                            }
                             p.turn_id = Some(turn);
                         }
                         Ok(None) => (),
@@ -4473,6 +4499,7 @@ async fn handle_request(
                         extra_env: worktree_env.clone(),
                         run_in_background: p.run_in_background,
                         app_state: Some(state.clone()),
+                        workflow_call: workflow_shell.then(|| Box::new(p.clone())),
                     });
                 }
 

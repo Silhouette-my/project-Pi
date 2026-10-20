@@ -186,10 +186,15 @@ pub(crate) fn bind(db: &Database, turn: &str, run: &str, scope: &Value) -> Resul
 }
 
 /// Resolve only persisted Host turn identity. Missing model-supplied turnId never escapes a binding.
+pub(crate) enum ToolScope {
+    File { turn: String, path: PathBuf },
+    Shell { turn: String },
+}
+
 pub(crate) fn authorize_tool(
     db: &Database,
     call: &ToolsExecuteParams,
-) -> Result<Option<(String, PathBuf)>> {
+) -> Result<Option<ToolScope>> {
     let current: Option<(String,Option<String>,Option<String>)> = db.conn().query_row(
         "SELECT t.id,b.run_id,b.scope_json FROM turns t LEFT JOIN workflow_turn_bindings b ON b.turn_id=t.id WHERE t.session_id=?1 AND t.status='running'",
         params![call.session_id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
@@ -215,9 +220,14 @@ pub(crate) fn authorize_tool(
     active(db, &state, &call.session_id, &run)?;
     if call.run_in_background
         || call.delegation_id.is_some()
-        || !["Write", "Edit", "Read"].contains(&call.tool_name.as_str())
+        || !["Write", "Edit", "Read", "Bash"].contains(&call.tool_name.as_str())
     {
         return Err(denied(format!("{} has no contained workflow executor; use scoped Read/Write/Edit or request a supported execution boundary",call.tool_name)));
+    }
+    // Shell is intentionally not file-contained. Its exact invocation requires
+    // a separate, non-reusable user approval in the existing permission gate.
+    if call.tool_name == "Bash" {
+        return Ok(Some(ToolScope::Shell { turn }));
     }
     let scope: Value = serde_json::from_str(&raw)?;
     if call.tool_name == "Edit" {
@@ -252,7 +262,7 @@ pub(crate) fn authorize_tool(
             path.display()
         )));
     }
-    Ok(Some((turn, path)))
+    Ok(Some(ToolScope::File { turn, path }))
 }
 
 pub(crate) fn denial(call: &ToolsExecuteParams, error: Error) -> Value {

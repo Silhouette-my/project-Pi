@@ -344,6 +344,7 @@ pub(super) async fn handle(
                 extra_env: Vec::new(),
                 run_in_background: false,
                 app_state: None,
+                workflow_call: None,
             })
         } else {
             None

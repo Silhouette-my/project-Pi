@@ -62,6 +62,8 @@ pub struct PermissionRequest {
     pub reason: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command_shell_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approval_scope: Option<String>,
 }
 
 pub struct PermissionRequestParams<'a> {
@@ -72,6 +74,7 @@ pub struct PermissionRequestParams<'a> {
     pub reason: &'a str,
     pub declared_risk: Option<&'a str>,
     pub command_shell_id: Option<&'a str>,
+    pub approval_scope: Option<&'a str>,
 }
 
 pub struct PermissionEvaluationParams<'a> {
@@ -285,6 +288,7 @@ impl PermissionManager {
             reason,
             declared_risk: None,
             command_shell_id: None,
+            approval_scope: None,
         })
     }
 
@@ -303,6 +307,7 @@ impl PermissionManager {
             reason,
             declared_risk,
             command_shell_id,
+            approval_scope,
         } = params;
         let request_id = Uuid::new_v4().to_string();
         let request = PermissionRequest {
@@ -311,9 +316,14 @@ impl PermissionManager {
             tool_call_id: tool_call_id.to_string(),
             tool_name: tool_name.to_string(),
             risk: Self::tool_risk_with_declared(tool_name, declared_risk),
-            args_preview: preview_value(&args_preview),
+            args_preview: if approval_scope == Some("workflow-shell") {
+                args_preview
+            } else {
+                preview_value(&args_preview)
+            },
             reason: reason.to_string(),
             command_shell_id: command_shell_id.map(str::to_string),
+            approval_scope: approval_scope.map(str::to_string),
         };
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.next_sequence += 1;
@@ -357,6 +367,13 @@ impl PermissionManager {
             return Err("NOT_FOUND".into());
         };
         if let Some(tx) = pending.tx.take() {
+            let decision = if pending.request.approval_scope.as_deref() == Some("workflow-shell")
+                && decision == PermissionDecision::AllowSession
+            {
+                PermissionDecision::Deny
+            } else {
+                decision
+            };
             let _ = tx.send(decision);
         }
         Ok(())

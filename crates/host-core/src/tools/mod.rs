@@ -612,7 +612,7 @@ const BINARY_EXTENSIONS: &[&str] = &[
     "wasm", "war", "webp", "xls", "xlsx", "zip",
 ];
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolsExecuteParams {
     pub session_id: String,
@@ -839,6 +839,8 @@ pub struct BashExecutionOptions {
     /// Host state the background spawn registers into. Present for RPC-driven
     /// calls; `None` for test/`local` constructions that never go background.
     pub app_state: Option<Arc<tokio::sync::Mutex<crate::state::AppState>>>,
+    /// Trusted RPC call retained across the permission wait, never model metadata.
+    pub workflow_call: Option<Box<ToolsExecuteParams>>,
 }
 
 impl BashExecutionOptions {
@@ -853,6 +855,7 @@ impl BashExecutionOptions {
             extra_env: Vec::new(),
             run_in_background: false,
             app_state: None,
+            workflow_call: None,
         }
     }
 }
@@ -2944,6 +2947,35 @@ async fn tool_bash(
         env_path: shell::user_login_path().map(str::to_string),
         extra_env: options.extra_env.clone(),
     };
+    // Hold the Host mutation lock through runner startup/config release: no
+    // revoke, decision change or turn replacement can slip between this final
+    // check and dispatching the approved command. Never hold it for execution.
+    let workflow_guard = if let Some(call) = options.workflow_call.as_deref() {
+        let state = options.app_state.as_ref().ok_or_else(|| {
+            (
+                "WORKFLOW_RESOURCE_DENIED".into(),
+                "workflow shell requires Host state".into(),
+            )
+        })?;
+        let guard = state.lock().await;
+        match crate::project_workflow::tool_scope::authorize_tool(&guard.db, call)
+            .map_err(|e| (e.code.to_string(), e.message))?
+        {
+            Some(crate::project_workflow::tool_scope::ToolScope::Shell { .. }) => (),
+            _ => {
+                return Err((
+                    "WORKFLOW_RESOURCE_DENIED".into(),
+                    "workflow shell binding lost".into(),
+                ))
+            }
+        }
+        if options.cancellation.as_ref().is_some_and(|rx| *rx.borrow()) {
+            return Err(("TOOL_ABORTED".into(), "bash aborted before launch".into()));
+        }
+        Some(guard)
+    } else {
+        None
+    };
     let SpawnedToolRunner {
         pid,
         mut ownership,
@@ -2952,6 +2984,7 @@ async fn tool_bash(
         stderr,
         mut wait_task,
     } = spawn_tool_runner(&config).await?;
+    drop(workflow_guard);
 
     // Drain both pipes in small chunks while the child is running. Waiting for
     // the process first can deadlock once a command exceeds the OS pipe size.
@@ -4973,6 +5006,7 @@ mod tests {
                 extra_env: Vec::new(),
                 run_in_background: false,
                 app_state: None,
+                workflow_call: None,
             }),
         )
         .await;
@@ -5017,6 +5051,7 @@ mod tests {
                 extra_env: Vec::new(),
                 run_in_background: false,
                 app_state: None,
+                workflow_call: None,
             }),
         )
         .await;
@@ -5056,6 +5091,7 @@ mod tests {
                 extra_env: Vec::new(),
                 run_in_background: false,
                 app_state: None,
+                workflow_call: None,
             }),
         )
         .await;
@@ -5128,6 +5164,7 @@ mod tests {
             extra_env: Vec::new(),
             run_in_background: false,
             app_state: None,
+            workflow_call: None,
         };
         let mut notifier = OutputNotifier::new(&options);
         for _ in 0..(MAX_OUTPUT_NOTIFICATIONS + 100) {
@@ -5156,6 +5193,7 @@ mod tests {
             extra_env: Vec::new(),
             run_in_background: false,
             app_state: None,
+            workflow_call: None,
         };
 
         let output = execute_tool_with_options(
@@ -5246,6 +5284,7 @@ mod tests {
             extra_env: Vec::new(),
             run_in_background: false,
             app_state: None,
+            workflow_call: None,
         };
         execute_tool_with_options(
             Some(workspace),

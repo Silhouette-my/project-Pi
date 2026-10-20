@@ -1,5 +1,6 @@
 use super::*;
 use crate::project_workflow;
+use rusqlite::params;
 use std::fs;
 
 struct Fixture {
@@ -17,6 +18,44 @@ fn mutate(db: &crate::db::Database, kind: &str, mut command: Value) -> Value {
     project_workflow::mutate(db, &command).unwrap()["snapshot"].clone()
 }
 impl Fixture {
+    async fn pending_shell(
+        &self,
+        turn: &str,
+        call: &str,
+        command: &str,
+    ) -> (tokio::task::JoinHandle<Value>, Value) {
+        let shell = crate::tools::shell::catalog(None)
+            .effective
+            .expect("test shell required")
+            .id;
+        let params = json!({"sessionId":self.session,"turnId":turn,"toolCallId":call,
+            "toolName":"Bash","args":{"command":command},"mode":"agent","permissionScope":"auto",
+            "expectedCommandShellId":shell,"expectedCommandShellDialect":crate::tools::shell::dialect_for_id(&shell)});
+        let state = self.state.clone();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let task = tokio::spawn(async move {
+            handle_request(state, "tools.execute", params, tx)
+                .await
+                .unwrap()
+        });
+        let notification = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let notification: Value = serde_json::from_str(&notification).unwrap();
+        assert_eq!(notification["method"], "permissions.request");
+        (task, notification["params"].clone())
+    }
+    async fn resolve(&self, request: &Value, decision: &str) {
+        handle_request(
+            self.state.clone(),
+            "permissions.resolve",
+            json!({"requestId":request["requestId"],"decision":decision}),
+            mpsc::unbounded_channel().0,
+        )
+        .await
+        .unwrap();
+    }
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("project");
@@ -106,6 +145,197 @@ impl Fixture {
         )
         .await
         .unwrap()
+    }
+}
+
+#[tokio::test]
+async fn ordinary_shell_keeps_auto_execution_without_workflow_approval() {
+    let f = Fixture::new();
+    let turn = f.begin(false).await;
+    let shell = crate::tools::shell::catalog(None).effective.unwrap().id;
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let result = handle_request(f.state.clone(), "tools.execute", json!({
+        "sessionId":f.session,"turnId":turn,"toolCallId":"ordinary-shell","toolName":"Bash",
+        "mode":"agent","args":{"command":"printf ordinary > ordinary.txt"},
+        "expectedCommandShellId":shell,"expectedCommandShellDialect":crate::tools::shell::dialect_for_id(&shell)
+    }),tx).await.unwrap();
+    assert_eq!(result["ok"], true, "{result}");
+    assert_eq!(
+        fs::read_to_string(f.root.join("ordinary.txt")).unwrap(),
+        "ordinary"
+    );
+    while let Ok(message) = rx.try_recv() {
+        let message: Value = serde_json::from_str(&message).unwrap();
+        assert_ne!(message["method"], "permissions.request");
+    }
+}
+
+#[tokio::test]
+async fn workflow_shell_requires_exact_once_approval_even_with_auto_and_prior_grant() {
+    let f = Fixture::new();
+    let turn = f.begin(true).await;
+    f.state
+        .lock()
+        .await
+        .session_grants
+        .insert(f.session.clone(), vec!["Bash".into()]);
+    let command = format!(
+        "# {}\nprintf first >> shell-result.txt",
+        "long exact approval ".repeat(150)
+    );
+    let (task, request) = f.pending_shell(&turn, "once-first", &command).await;
+    assert_eq!(request["approvalScope"], "workflow-shell");
+    assert_eq!(request["argsPreview"]["command"], command);
+    assert!(!f.root.join("shell-result.txt").exists());
+    let pending = f
+        .state
+        .lock()
+        .await
+        .permissions
+        .pending_requests(Some(&f.session));
+    assert_eq!(
+        pending[0].request.approval_scope.as_deref(),
+        Some("workflow-shell")
+    );
+    assert_eq!(pending[0].request.args_preview["command"], command);
+    f.resolve(&request, "allow-once").await;
+    let once_request = request.clone();
+    let result = task.await.unwrap();
+    assert_eq!(result["ok"], true, "{result}");
+    assert_eq!(
+        fs::read_to_string(f.root.join("shell-result.txt")).unwrap(),
+        "first"
+    );
+    assert_eq!(
+        f.state.lock().await.session_grants[&f.session],
+        vec!["Bash"]
+    );
+    let (task, request) = f
+        .pending_shell(&turn, "once-second", "printf second >> shell-result.txt")
+        .await;
+    assert_eq!(
+        fs::read_to_string(f.root.join("shell-result.txt")).unwrap(),
+        "first"
+    );
+    f.resolve(&request, "deny").await;
+    assert_eq!(task.await.unwrap()["errorCode"], "TOOL_DENIED");
+    assert_eq!(
+        fs::read_to_string(f.root.join("shell-result.txt")).unwrap(),
+        "first"
+    );
+    // The resolved once request cannot be replayed to release another invocation.
+    assert!(handle_request(
+        f.state.clone(),
+        "permissions.resolve",
+        json!({"requestId":once_request["requestId"],"decision":"allow-once"}),
+        mpsc::unbounded_channel().0
+    )
+    .await
+    .is_err());
+}
+
+#[tokio::test]
+async fn workflow_shell_allow_session_fails_closed_without_grant() {
+    let f = Fixture::new();
+    let turn = f.begin(true).await;
+    let (task, request) = f
+        .pending_shell(&turn, "no-session", "printf no > forbidden.txt")
+        .await;
+    f.resolve(&request, "allow-session").await;
+    assert_eq!(task.await.unwrap()["errorCode"], "TOOL_DENIED");
+    assert!(!f.root.join("forbidden.txt").exists());
+    assert!(!f.state.lock().await.session_grants.contains_key(&f.session));
+    let (task, request) = f
+        .pending_shell(&turn, "still-prompts", "printf no > forbidden.txt")
+        .await;
+    f.resolve(&request, "deny").await;
+    assert_eq!(task.await.unwrap()["ok"], false);
+}
+
+#[tokio::test]
+async fn workflow_shell_pending_rechecks_revocation_expiry_decision_and_turn() {
+    for invalidation in ["revoked", "expired", "decision", "turn", "run", "unknown"] {
+        let f = Fixture::new();
+        let turn = f.begin(true).await;
+        let (task, request) = f
+            .pending_shell(&turn, "pending-invalid", "printf no > forbidden.txt")
+            .await;
+        {
+            let st = f.state.lock().await;
+            // Mutate the authoritative persisted state to isolate the execution
+            // boundary from runtime stop notification timing.
+            if invalidation == "turn" {
+                st.db
+                    .conn()
+                    .execute(
+                        "UPDATE turns SET status='completed' WHERE id=?1",
+                        params![turn],
+                    )
+                    .unwrap();
+            } else {
+                let mut snapshot = project_workflow::snapshot(&st.db, &json!({})).unwrap();
+                match invalidation {
+                    "revoked" => snapshot["authorizations"][0]["revoked"] = json!(true),
+                    "expired" => {
+                        snapshot["authorizations"][0]["expiresAt"] = json!("2000-01-01T00:00:00Z")
+                    }
+                    "decision" => snapshot["workstreams"][0]["decisionRevision"] = json!(1),
+                    "run" => snapshot["runs"][0]["state"] = json!("completed"),
+                    "unknown" => snapshot["runs"][0]["effects"][0]["state"] = json!("unknown"),
+                    _ => unreachable!(),
+                }
+                st.db
+                    .conn()
+                    .execute(
+                        "UPDATE project_workflow SET snapshot_json=?1 WHERE id=1",
+                        params![snapshot.to_string()],
+                    )
+                    .unwrap();
+            }
+        }
+        f.resolve(&request, "allow-once").await;
+        let result = task.await.unwrap();
+        assert_eq!(
+            result["errorCode"], "WORKFLOW_RESOURCE_DENIED",
+            "{invalidation}: {result}"
+        );
+        assert!(!f.root.join("forbidden.txt").exists());
+    }
+}
+
+#[tokio::test]
+async fn workflow_shell_cancel_pending_and_reject_detached_effects() {
+    let f = Fixture::new();
+    let turn = f.begin(true).await;
+    let (task, _) = f
+        .pending_shell(&turn, "cancel-shell", "printf no > forbidden.txt")
+        .await;
+    handle_request(
+        f.state.clone(),
+        "tools.abort",
+        json!({"sessionId":f.session,"toolCallId":"cancel-shell"}),
+        mpsc::unbounded_channel().0,
+    )
+    .await
+    .unwrap();
+    assert_eq!(task.await.unwrap()["errorCode"], "TOOL_ABORTED");
+    assert!(!f.root.join("forbidden.txt").exists());
+    for field in ["runInBackground", "delegationId"] {
+        let mut p = json!({"sessionId":f.session,"turnId":turn,"toolCallId":field,"toolName":"Bash","mode":"agent","args":{"command":"printf no > forbidden.txt"}});
+        p[field] = if field == "runInBackground" {
+            json!(true)
+        } else {
+            json!("delegate")
+        };
+        let result = handle_request(
+            f.state.clone(),
+            "tools.execute",
+            p,
+            mpsc::unbounded_channel().0,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result["errorCode"], "WORKFLOW_RESOURCE_DENIED");
     }
 }
 
@@ -202,7 +432,6 @@ async fn workflow_tool_boundary_allows_typed_output_and_readonly_inputs_but_deni
     );
     assert!(!f.root.join("outside.txt").exists());
     for tool in [
-        "Bash",
         "plugin_untrusted",
         "mcp_external",
         "GenerateImages",
