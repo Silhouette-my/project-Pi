@@ -1,5 +1,6 @@
 export * from "./activation.js";
 export * from "./protocol.js";
+export * from "./chatgpt-chat.js";
 export * from "./errors.js";
 export * from "./rpc-error.js";
 export * from "./certificate-errors.js";

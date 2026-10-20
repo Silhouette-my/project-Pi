@@ -153,6 +153,7 @@ import type {
   TrustedExtensionUiPromptResponse,
   SessionTodoSnapshot,
   StorageInfo,
+  ChatGptChatStatus,
 } from "@pi-desktop/shared";
 import {
   defaultCommandShellForPlatform,
@@ -642,6 +643,9 @@ function normalizePlansChangedEvent(value: unknown): PlanningStateEvent {
 }
 
 export const api = {
+  chatgptChatStatus: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatStatus),
+  chatgptChatLogin: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatLogin),
+  chatgptChatLogout: () => invoke(IPC.invoke.chatgptChatLogout),
   getVersion: () => invoke<AppVersionInfo>(IPC.invoke.appGetVersion),
   health: () => invoke<HostHealth>(IPC.invoke.appHealth),
   getOnboarding: () => invoke<OnboardingState>(IPC.invoke.appGetOnboarding),

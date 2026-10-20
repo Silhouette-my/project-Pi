@@ -5,6 +5,8 @@ export const deEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Die ChatGPT-Anmeldung zeigt Prüfungen und Fehler an und lädt anschließend die Modellauswahl des Kontos statt einer festen Liste.",
+      "Nach einmaliger Browser-Anmeldung mit dem ChatGPT-Abonnement in der nativen Unterhaltung chatten.",
       "Installierte Plugins erscheinen als Karten in einem selbst füllenden Raster, jede mit einer klaren Aktion und sichtbarem Vertrauens-, Update- und Geltungsstatus.",
       "Öffentliche Bewertungen und Rezensionen für Marketplace-Plugins lesen und im Plugin-Center eine schreiben — die Desktop-App meldet sich nie an.",
       "Lange Bash-Befehle laufen nach dem Agenten-Turn als Hintergrundaufgaben weiter; ihre Ausgabe lässt sich später prüfen.",

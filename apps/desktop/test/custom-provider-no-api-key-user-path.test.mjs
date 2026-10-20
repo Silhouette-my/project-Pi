@@ -25,6 +25,11 @@ let createdProvider = null;
 let updatedProvider = null;
 let updateInput = null;
 let savedCallback = false;
+let chatgptAccountStatus = { loggedIn: false, state: "signed_out" };
+let chatgptLoginStarted = false;
+let resolveChatgptLogin;
+let chatgptCatalogCalls = 0;
+let providerTestResult = { ok: true, network: "ok" };
 window.addEventListener("error", (event) => {
   console.error("CUSTOM_PROVIDER_NO_KEY_WINDOW_ERROR", event.error?.stack ?? event.message);
 });
@@ -41,11 +46,45 @@ window.piDesktop = {
     if (channel === "pi-desktop/plugin/providerCatalog") {
       return { ok: true, data: [] };
     }
+    if (channel === "pi-desktop/chatgptChat/status") {
+      return { ok: true, data: chatgptAccountStatus };
+    }
+    if (channel === "pi-desktop/chatgptChat/login") {
+      chatgptLoginStarted = true;
+      return new Promise((resolve) => { resolveChatgptLogin = resolve; });
+    }
+    if (channel === "pi-desktop/chatgptChat/logout") {
+      chatgptAccountStatus = { loggedIn: false, state: "signed_out" };
+      return { ok: true, data: undefined };
+    }
     if (channel === "pi-desktop/providers/listModels") {
+      if (input.apiStyle === "chatgpt_conversation") {
+        if (!chatgptAccountStatus.loggedIn) {
+          return { ok: true, data: { models: [], source: "remote" } };
+        }
+        chatgptCatalogCalls += 1;
+        return {
+          ok: true,
+          data: {
+            models: [{
+              modelId: "fixture-pro-request-slug",
+              displayName: "Fixture Pro",
+              providerId: "custom",
+              toolCall: true,
+              capabilities: ["text", "tools"],
+              source: "discovered",
+            }],
+            source: "remote",
+          },
+        };
+      }
       return { ok: true, data: { models: [], source: "remote" } };
     }
     if (channel === "pi-desktop/providers/lookupModel") {
       return { ok: true, data: { info: null } };
+    }
+    if (channel === "pi-desktop/providers/testConnection") {
+      return { ok: true, data: providerTestResult };
     }
     if (channel === "pi-desktop/providers/create") {
       createdProvider = {
@@ -82,8 +121,8 @@ useAppStore.setState({ providers: [] });
 
 const frame = () => new Promise(requestAnimationFrame);
 async function settle() { await frame(); await frame(); }
-async function waitFor(predicate, message) {
-  for (let attempt = 0; attempt < 120; attempt += 1) {
+async function waitFor(predicate, message, maxAttempts = 120) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     await settle();
     const value = predicate();
     if (value) return value;
@@ -157,6 +196,7 @@ window.customProviderNoApiKeyProbe = async () => {
   const savedAsNoAuth = createdProvider.authKind === "none"
     && !Object.hasOwn(createdProvider, "secretValue")
     && createdProvider.models?.[0]?.id === "no-auth-chat";
+  const selectedNoAuthModel = createdProvider.models?.[0]?.id;
 
   let updateSavedCallback = false;
   mount(React.createElement(ProviderSetupDialog, {
@@ -183,6 +223,152 @@ window.customProviderNoApiKeyProbe = async () => {
   flushSync(() => updateButton.click());
   await waitFor(() => updateSavedCallback && updateInput, "the custom provider auth update was not saved");
 
+  let chatgptSaved = false;
+  mount(React.createElement(ProviderSetupDialog, {
+    key: "chatgpt-provider",
+    provider: null,
+    onClose: () => mount(null),
+    onSaved: () => { chatgptSaved = true; },
+  }));
+  const chatgptCustomTile = await waitFor(
+    () => document.querySelector('[data-service-id="custom"]'),
+    "the custom service option was missing for ChatGPT",
+  );
+  flushSync(() => chatgptCustomTile.click());
+  const apiStyleTrigger = await waitFor(
+    () => [...document.querySelectorAll('button[aria-label="API format"]')][0],
+    "the API format selector was missing",
+  );
+  flushSync(() => apiStyleTrigger.click());
+  const chatgptStyleOption = await waitFor(
+    () => [...document.querySelectorAll('[role="option"]')]
+      .find((option) => option.textContent.includes("ChatGPT (subscription chat)")),
+    "the ChatGPT conversation API format was not offered",
+  );
+  flushSync(() => chatgptStyleOption.click());
+  const chatgptBaseUrl = await waitFor(
+    () => document.querySelector('input[type="url"]')?.value === "https://chatgpt.com/backend-api",
+    "selecting the ChatGPT format did not fill its base URL",
+  );
+  const chatgptEndpointFixed = document.querySelector('input[type="url"]')?.disabled === true;
+  const apiKeyHidden = !document.querySelector('input[type="password"]')
+    && !document.querySelector('[role="switch"][aria-label="No API key required"]');
+  const initialChatgptStatus = await waitFor(
+    () => document.querySelector('[role="status"]')?.textContent.includes("not connected"),
+    "the ChatGPT login status was not shown",
+  );
+  const chatgptLoginButton = [...document.querySelectorAll("button")]
+    .find((button) => button.textContent.includes("Log in to ChatGPT"));
+  if (!chatgptLoginButton) throw new Error("the ChatGPT login action was missing");
+  flushSync(() => chatgptLoginButton.click());
+  chatgptAccountStatus = {
+    loggedIn: false,
+    state: "checking",
+    message: "Waiting for authentication redirect.",
+  };
+  const chatgptRedirectWaitVisible = await waitFor(
+    () => [...document.querySelectorAll('[role="status"]')]
+      .some((node) => node.textContent.includes("Waiting for authentication redirect")),
+    "the pending login redirect message was not shown",
+    240,
+  );
+  chatgptAccountStatus = {
+    loggedIn: false,
+    state: "challenge",
+    message: "Finish sign-in in the ChatGPT window.",
+  };
+  const chatgptChallengeVisible = await waitFor(
+    () => document.querySelector('[role="alert"]')?.textContent.includes("Finish sign-in"),
+    "the pending login challenge did not update the settings status",
+    240,
+  );
+  const loginStillPending = chatgptLoginStarted && typeof resolveChatgptLogin === "function";
+  chatgptAccountStatus = { loggedIn: true, state: "signed_in" };
+  const chatgptLoginUpdatedStatus = await waitFor(
+    () => document.querySelector('[role="status"]')?.textContent.includes("account connected"),
+    "the ChatGPT login action did not update the status",
+    240,
+  );
+  const refreshedCatalog = await waitFor(
+    () => chatgptCatalogCalls > 0
+      && document.querySelector(".provider-models-row-name")?.textContent === "Fixture Pro"
+      && document.querySelector(".provider-chosen-row-id")?.textContent === "fixture-pro-request-slug",
+    "the account model catalog was not reloaded and selected after login",
+    240,
+  );
+  resolveChatgptLogin?.({ ok: true, data: { loggedIn: true, state: "signed_in" } });
+  const modelCheckbox = document.querySelector(".provider-models-row input[type=checkbox]");
+  if (!modelCheckbox?.checked) throw new Error("the discovered ChatGPT model was not preselected");
+  flushSync(() => modelCheckbox.click());
+  await waitFor(
+    () => !document.querySelector(".provider-chosen-row-id"),
+    "the account model could not be deselected",
+  );
+  flushSync(() => modelCheckbox.click());
+  const chatgptNameField = [...document.querySelectorAll("label")]
+    .find((label) => label.textContent.includes("Name"))
+    ?.querySelector("input");
+  if (!chatgptNameField) throw new Error("the ChatGPT provider name field was missing");
+  setValue(chatgptNameField, "ChatGPT Subscription");
+  await waitFor(
+    () => document.querySelector(".provider-chosen-row-id")?.textContent === "fixture-pro-request-slug",
+    "the refreshed account catalog model was not selected for the ChatGPT provider",
+  );
+  const chatgptSaveButton = [...document.querySelectorAll("button")]
+    .find((button) => button.textContent.trim() === "Save provider");
+  if (!chatgptSaveButton) throw new Error("the ChatGPT provider save action was missing");
+  flushSync(() => chatgptSaveButton.click());
+  await waitFor(() => chatgptSaved && createdProvider?.apiStyle === "chatgpt_conversation",
+    "the ChatGPT provider was not saved");
+  const chatgptSavedWithoutKey = createdProvider.authKind === "none"
+    && !Object.hasOwn(createdProvider, "secretValue")
+    && createdProvider.baseUrl === "https://chatgpt.com/backend-api"
+    && createdProvider.models?.[0]?.id === "fixture-pro-request-slug";
+
+  const chatgptLogoutButton = [...document.querySelectorAll("button")]
+    .find((button) => button.textContent.trim() === "Log out");
+  if (!chatgptLogoutButton) throw new Error("the ChatGPT logout action was missing");
+  flushSync(() => chatgptLogoutButton.click());
+  const chatgptLogoutUpdatedStatus = await waitFor(
+    () => document.querySelector('[role="status"]')?.textContent.includes("not connected"),
+    "the ChatGPT logout action did not update the status",
+  );
+  const catalogCallsBeforeRelogin = chatgptCatalogCalls;
+  const reloginButton = [...document.querySelectorAll("button")]
+    .find((button) => button.textContent.includes("Log in to ChatGPT"));
+  if (!reloginButton) throw new Error("the ChatGPT relogin action was missing");
+  flushSync(() => reloginButton.click());
+  chatgptAccountStatus = { loggedIn: true, state: "signed_in" };
+  resolveChatgptLogin({ ok: true, data: chatgptAccountStatus });
+  const chatgptLoginCompletionRefreshed = await waitFor(
+    () => chatgptCatalogCalls > catalogCallsBeforeRelogin
+      && document.querySelector('[role="status"]')?.textContent.includes("account connected"),
+    "a completed login did not refresh the account model catalog",
+  );
+
+  const testToasts = [];
+  useAppStore.setState({ showToast: (message, options) => testToasts.push({ message, ...options }) });
+  mount(React.createElement(ProviderSetupDialog, {
+    key: "saved-chatgpt-test-connection", provider: createdProvider,
+    onClose: () => mount(null), onSaved() {},
+  }));
+  const testButton = await waitFor(
+    () => [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === "Test connection"),
+    "the saved ChatGPT provider Test connection action was missing",
+  );
+  flushSync(() => testButton.click());
+  await waitFor(() => testToasts.some((toast) => toast.variant === "success") && !testButton.disabled,
+    "the successful ChatGPT connection test was not shown");
+  const chatgptTestSavedProviderId = calls.some((call) => call.channel === "pi-desktop/providers/testConnection" && call.input === createdProvider.id);
+  providerTestResult = { ok: false, network: "failed", message: "Fixture ChatGPT login required" };
+  flushSync(() => testButton.click());
+  await waitFor(() => testToasts.some((toast) => toast.message === providerTestResult.message && toast.variant === "error") && !testButton.disabled,
+    "the signed-out ChatGPT connection failure was not shown");
+  providerTestResult = { ok: false, network: "failed", message: "Fixture account catalog failed HTTP 503" };
+  flushSync(() => testButton.click());
+  await waitFor(() => testToasts.some((toast) => toast.message === providerTestResult.message && toast.variant === "error") && !testButton.disabled,
+    "the ChatGPT catalog connection failure was not shown");
+
   return {
     discoveryOmittedApiKey: !Object.hasOwn(discoveryCall.input, "apiKey"),
     noApiKeyDefaultsOff,
@@ -190,11 +376,26 @@ window.customProviderNoApiKeyProbe = async () => {
     keyFieldCleared: keyFieldCleared,
     savedAuthKind: savedAsNoAuth ? "none" : createdProvider.authKind,
     secretValueOmitted: savedAsNoAuth,
-    selectedModel: createdProvider.models?.[0]?.id,
+    selectedModel: selectedNoAuthModel,
     editOpenedAsNoAuth,
     editKeyEnabled,
     updateAuthKind: updateInput.authKind,
     updateStoredKey: updateInput.secretValue === "saved-api-key",
+    chatgptBaseUrl,
+    chatgptEndpointFixed,
+    chatgptApiKeyHidden: apiKeyHidden,
+    chatgptStatusShown: Boolean(initialChatgptStatus),
+    chatgptLoginUpdatedStatus: Boolean(chatgptLoginUpdatedStatus),
+    chatgptLoginRemainedPendingWhileStatusUpdated: loginStillPending && Boolean(chatgptChallengeVisible),
+    chatgptRedirectWaitVisible: Boolean(chatgptRedirectWaitVisible),
+    chatgptCatalogRefreshed: Boolean(refreshedCatalog),
+    chatgptLogoutUpdatedStatus: Boolean(chatgptLogoutUpdatedStatus),
+    chatgptLoginCompletionRefreshed: Boolean(chatgptLoginCompletionRefreshed),
+    chatgptSavedWithoutKey,
+    chatgptTestSavedProviderId,
+    chatgptTestSuccessToast: testToasts.some((toast) => toast.variant === "success"),
+    chatgptTestSignedOutFailureToast: testToasts.some((toast) => toast.message === "Fixture ChatGPT login required" && toast.variant === "error"),
+    chatgptTestCatalogFailureToast: testToasts.some((toast) => toast.message === "Fixture account catalog failed HTTP 503" && toast.variant === "error"),
   };
 };
 `;
@@ -270,7 +471,10 @@ app.whenReady().then(async () => {
     try {
       code = await new Promise((resolve, reject) => {
         child.once("error", reject);
-        child.once("close", resolve);
+        child.once("close", (exitCode, signal) => {
+          if (exitCode === null) output += `\nElectron exited from signal ${signal}`;
+          resolve(exitCode);
+        });
       });
     } finally {
       clearTimeout(timer);
@@ -291,6 +495,21 @@ app.whenReady().then(async () => {
       editKeyEnabled: true,
       updateAuthKind: "api_key_and_base_url",
       updateStoredKey: true,
+      chatgptBaseUrl: true,
+      chatgptEndpointFixed: true,
+      chatgptApiKeyHidden: true,
+      chatgptStatusShown: true,
+      chatgptLoginUpdatedStatus: true,
+      chatgptLoginRemainedPendingWhileStatusUpdated: true,
+      chatgptRedirectWaitVisible: true,
+      chatgptCatalogRefreshed: true,
+      chatgptLogoutUpdatedStatus: true,
+      chatgptLoginCompletionRefreshed: true,
+      chatgptSavedWithoutKey: true,
+      chatgptTestSavedProviderId: true,
+      chatgptTestSuccessToast: true,
+      chatgptTestSignedOutFailureToast: true,
+      chatgptTestCatalogFailureToast: true,
     });
   } finally {
     await rm(temp, { recursive: true, force: true });

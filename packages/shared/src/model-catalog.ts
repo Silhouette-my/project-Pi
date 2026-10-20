@@ -26,6 +26,7 @@ export const API_STYLES = [
   "anthropic_messages",
   "google_generative_ai",
   "openai_codex_responses",
+  "chatgpt_conversation",
   "pi_messages",
   "opencode_go",
 ] as const;

@@ -7,6 +7,8 @@ import { parseMcpServerIds, parseMcpToolNames } from "./mcp-tool-selection.js";
 import { randomUUID } from "node:crypto";
 import type { ModelAuth } from "@earendil-works/pi-ai";
 import { ParentHostProxy } from "./parent-host-proxy.js";
+import { createChatGptConversationStreams } from "./chatgpt-conversation.js";
+import type { ProviderStreams } from "@earendil-works/pi-ai";
 import { visionFromModelConfig } from "./model-capabilities.js";
 import { hydrateAttachmentHistory } from "./attachment-history.js";
 import { classifyAgentError } from "./agent-errors.js";
@@ -64,6 +66,7 @@ async function getNativePiService() {
 
 const runtimes: RuntimeMap = new Map();
 const hostProxy = new ParentHostProxy();
+const chatGptStreams = new Map<string, ProviderStreams>();
 const testRuntimeIds = new WeakMap<DesktopAgentRuntime, string>();
 function testRuntimeIdentity(sessionId: string) {
   if (process.env.PI_DESKTOP_PLAN_UI_PROBE !== "1") {
@@ -152,6 +155,15 @@ function withVendorAuth<T extends RuntimeProviderConfig>(
   sessionId: string,
   provider: T,
 ): T {
+  if (provider?.apiStyle === "chatgpt_conversation") {
+    const key = `${sessionId}:${provider.id}:${provider.modelId}`;
+    let streams = chatGptStreams.get(key);
+    if (!streams) {
+      streams = createChatGptConversationStreams(hostProxy, (activity) => runtimes.get(sessionId)?.emitHostedToolActivity(activity));
+      chatGptStreams.set(key, streams);
+    }
+    return { ...provider, authKind: "none", chatGptStreams: streams };
+  }
   if (provider?.authKind !== OAUTH_AUTH_KIND) return provider;
   return {
     ...provider,
@@ -614,6 +626,9 @@ async function handle(method: string, params: any): Promise<unknown> {
       if (runtime) {
         await runtime.dispose();
         runtimes.delete(sessionId);
+      }
+      for (const key of chatGptStreams.keys()) {
+        if (key.startsWith(`${sessionId}:`)) chatGptStreams.delete(key);
       }
       return { ok: true };
     }

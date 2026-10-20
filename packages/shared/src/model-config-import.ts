@@ -85,6 +85,8 @@ const API_STYLE_ALIASES: Record<string, CatalogApiStyle> = {
   openai_codex_responses: "openai_codex_responses",
   "openai-codex-responses": "openai_codex_responses",
   "openai-codex": "openai_codex_responses",
+  chatgpt_conversation: "chatgpt_conversation",
+  "chatgpt-conversation": "chatgpt_conversation",
   pi_messages: "pi_messages",
   "pi-messages": "pi_messages",
   opencode_go: "opencode_go",

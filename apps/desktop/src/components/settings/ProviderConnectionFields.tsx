@@ -7,14 +7,23 @@
  * (`useProbeFeedback`), so pasting a key is visibly the whole job on a named
  * service without a status row holding the dialog open for it.
  */
-import type { RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import type { CatalogApiStyle } from "@pi-desktop/shared";
-import { Field, Input, SettingsToggle } from "../ui";
+import type { CatalogApiStyle, ChatGptChatStatus } from "@pi-desktop/shared";
+import { api } from "../../lib/api";
+import { Button, Field, Input, SettingsToggle } from "../ui";
 import { SettingsMenuSelect } from "./SettingsMenuSelect";
 import { ServiceMonogram } from "./ServiceMonogram";
 import { endpointLabel } from "./service-catalog";
 import { API_STYLE_LABEL_KEYS, CUSTOM_PROVIDER_API_STYLES } from "./provider-api-style";
+
+const CHATGPT_STATUS_LABEL_KEYS = {
+  signed_out: "settings.chatgptChatLoggedOut",
+  checking: "settings.chatgptChatCheckingStatus",
+  challenge: "settings.chatgptChatChallenge",
+  error: "settings.chatgptChatError",
+  signed_in: "settings.chatgptChatLoggedIn",
+} as const;
 
 export type ProviderConnectionFieldsProps = {
   named: boolean;
@@ -47,6 +56,7 @@ export type ProviderConnectionFieldsProps = {
   apiStyleNote?: string;
   accountOnlyApiStyle: boolean;
   requiresApiStyleChoice: boolean;
+  onChatgptLoginChanged?: () => void;
 };
 
 export function ProviderConnectionFields({
@@ -76,9 +86,121 @@ export function ProviderConnectionFields({
   apiStyleNote,
   accountOnlyApiStyle,
   requiresApiStyleChoice,
+  onChatgptLoginChanged,
 }: ProviderConnectionFieldsProps) {
   const { t } = useTranslation();
   const keyHint = editing ? t("settings.apiKeyKeepHint") : undefined;
+  const chatgptStyle = custom && apiStyle === "chatgpt_conversation";
+  const [chatgptStatus, setChatgptStatus] = useState<ChatGptChatStatus | null>(null);
+  const [chatgptBusy, setChatgptBusy] = useState(false);
+  const [chatgptError, setChatgptError] = useState<string | null>(null);
+  const chatgptRequest = useRef(0);
+  const chatgptStatusRef = useRef<ChatGptChatStatus | null>(null);
+  const loginChangedRef = useRef(onChatgptLoginChanged);
+  loginChangedRef.current = onChatgptLoginChanged;
+  const chatgptLoggedIn = chatgptStatus?.loggedIn ?? null;
+
+  const acceptChatgptStatus = (status: ChatGptChatStatus) => {
+    chatgptStatusRef.current = status;
+    setChatgptStatus(status);
+    setChatgptError(null);
+  };
+
+  useEffect(() => {
+    if (chatgptStatus?.loggedIn) {
+      loginChangedRef.current?.();
+    }
+  }, [chatgptStatus?.loggedIn]);
+
+  useEffect(() => {
+    const requestId = ++chatgptRequest.current;
+    setChatgptBusy(false);
+    if (!chatgptStyle) {
+      chatgptStatusRef.current = null;
+      setChatgptStatus(null);
+      setChatgptError(null);
+      return;
+    }
+    let current = true;
+    void api.chatgptChatStatus().then((status) => {
+      if (current && requestId === chatgptRequest.current) acceptChatgptStatus(status);
+    }).catch((error: unknown) => {
+      if (current && requestId === chatgptRequest.current) {
+        const message = error instanceof Error ? error.message : String(error);
+        const status: ChatGptChatStatus = { loggedIn: false, state: "error", message };
+        chatgptStatusRef.current = status;
+        setChatgptStatus(status);
+        setChatgptError(message);
+      }
+    });
+    return () => {
+      current = false;
+      chatgptRequest.current += 1;
+    };
+  }, [chatgptStyle]);
+
+  useEffect(() => {
+    if (!chatgptStyle || !chatgptBusy || chatgptLoggedIn === true) return;
+    const requestId = chatgptRequest.current;
+    let active = true;
+    let timer: number | undefined;
+    const poll = async () => {
+      try {
+        const status = await api.chatgptChatStatus();
+        if (!active || requestId !== chatgptRequest.current) return;
+        acceptChatgptStatus(status);
+        if (status.loggedIn) {
+          chatgptRequest.current += 1;
+          setChatgptBusy(false);
+          return;
+        }
+      } catch (error) {
+        if (!active || requestId !== chatgptRequest.current) return;
+        setChatgptError(error instanceof Error ? error.message : String(error));
+      }
+      if (active && requestId === chatgptRequest.current) {
+        timer = window.setTimeout(() => void poll(), 1_000);
+      }
+    };
+    timer = window.setTimeout(() => void poll(), 1_000);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [chatgptBusy, chatgptLoggedIn, chatgptStyle]);
+
+  const changeChatgptLogin = async () => {
+    const requestId = chatgptRequest.current;
+    setChatgptBusy(true);
+    setChatgptError(null);
+    try {
+      if (chatgptLoggedIn) {
+        await api.chatgptChatLogout();
+        if (requestId === chatgptRequest.current) {
+          acceptChatgptStatus({ loggedIn: false, state: "signed_out" });
+        }
+      } else {
+        acceptChatgptStatus({ loggedIn: false, state: "checking" });
+        const status = await api.chatgptChatLogin();
+        if (requestId === chatgptRequest.current) acceptChatgptStatus(status);
+      }
+    } catch (error) {
+      if (requestId === chatgptRequest.current) {
+        const message = error instanceof Error ? error.message : String(error);
+        setChatgptError(message);
+        if (!chatgptStatusRef.current?.loggedIn) {
+          const status: ChatGptChatStatus = { loggedIn: false, state: "error", message };
+          chatgptStatusRef.current = status;
+          setChatgptStatus(status);
+        }
+      }
+    } finally {
+      if (requestId === chatgptRequest.current) setChatgptBusy(false);
+    }
+  };
+  const chatgptStatusLabel = chatgptStatus
+    ? t(CHATGPT_STATUS_LABEL_KEYS[chatgptStatus.state])
+    : t("settings.chatgptChatCheckingStatus");
 
   return (
     <div className={named ? "provider-setup-fields is-named" : "provider-setup-fields is-custom"}>
@@ -113,7 +235,7 @@ export function ProviderConnectionFields({
           </div>
         </div>
 
-        {named ? (
+        {named && !chatgptStyle ? (
           <div className="provider-setup-key">
             <Field label={t("settings.apiKey")} hint={apiKeyHint ?? keyHint}>
               <Input
@@ -143,12 +265,16 @@ export function ProviderConnectionFields({
               />
             </Field>
             <div className="provider-setup-base-url">
-              <Field label={t("settings.baseUrl")}>
+              <Field
+                label={t("settings.baseUrl")}
+                hint={chatgptStyle ? t("settings.chatgptChatEndpointFixed") : undefined}
+              >
                 <Input
                   value={baseUrl}
                   type="url"
                   inputMode="url"
                   autoComplete="url"
+                  disabled={saving || chatgptStyle}
                   className="font-mono text-sm-plus"
                   placeholder="https://api.example.com/v1"
                   aria-invalid={Boolean(baseUrlError)}
@@ -169,36 +295,66 @@ export function ProviderConnectionFields({
             </div>
           </div>
           <div className="provider-setup-field-row provider-setup-custom-auth-row">
-            <div className="provider-setup-key">
-              <Field label={t("settings.apiKey")} hint={keyHint}>
-                <Input
-                  ref={apiKeyRef}
-                  type="password"
-                  value={apiKey}
-                  placeholder="sk-…"
-                  className="font-mono text-sm-plus"
-                  autoComplete="off"
-                  disabled={saving || noApiKeyRequired}
-                  onChange={(event) => onApiKeyChange(event.target.value)}
-                />
-              </Field>
-              <div className="provider-setup-no-api-key-option">
+            {chatgptStyle ? (
+              <div className="provider-setup-key space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-text-secondary">
-                    {t("settings.noApiKeyRequired")}
+                  <span className="text-sm text-text-secondary" role="status">
+                    {chatgptStatusLabel}
                   </span>
-                  <SettingsToggle
-                    checked={noApiKeyRequired}
-                    label={t("settings.noApiKeyRequired")}
-                    disabled={saving}
-                    onChange={() => onNoApiKeyRequiredChange(!noApiKeyRequired)}
-                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={saving || chatgptBusy || chatgptLoggedIn === null}
+                    onClick={() => void changeChatgptLogin()}
+                  >
+                    {chatgptBusy
+                      ? t("settings.chatgptChatWorking")
+                      : chatgptLoggedIn
+                        ? t("settings.chatgptChatLogout")
+                        : t("settings.chatgptChatLogin")}
+                  </Button>
                 </div>
-                <p className="text-xs text-text-muted">
-                  {t("settings.noApiKeyHint")}
-                </p>
+                {chatgptError || chatgptStatus?.message ? (
+                  <p
+                    className={`text-xs ${!chatgptError && chatgptStatus?.state === "checking" ? "text-text-secondary" : "text-error"}`}
+                    role={!chatgptError && chatgptStatus?.state === "checking" ? "status" : "alert"}
+                  >
+                    {chatgptError ?? chatgptStatus?.message}
+                  </p>
+                ) : null}
               </div>
-            </div>
+            ) : (
+              <div className="provider-setup-key">
+                <Field label={t("settings.apiKey")} hint={keyHint}>
+                  <Input
+                    ref={apiKeyRef}
+                    type="password"
+                    value={apiKey}
+                    placeholder="sk-…"
+                    className="font-mono text-sm-plus"
+                    autoComplete="off"
+                    disabled={saving || noApiKeyRequired}
+                    onChange={(event) => onApiKeyChange(event.target.value)}
+                  />
+                </Field>
+                <div className="provider-setup-no-api-key-option">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-text-secondary">
+                      {t("settings.noApiKeyRequired")}
+                    </span>
+                    <SettingsToggle
+                      checked={noApiKeyRequired}
+                      label={t("settings.noApiKeyRequired")}
+                      disabled={saving}
+                      onChange={() => onNoApiKeyRequiredChange(!noApiKeyRequired)}
+                    />
+                  </div>
+                  <p className="text-xs text-text-muted">
+                    {t("settings.noApiKeyHint")}
+                  </p>
+                </div>
+              </div>
+            )}
             <Field
               label={t("settings.apiStyle")}
               hint={apiStyleNote ?? (accountOnlyApiStyle ? t(requiresApiStyleChoice

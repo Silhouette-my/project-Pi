@@ -3118,6 +3118,9 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
         append(m.id, assistant);
         toolCarrier = assistant;
       } else if (m.role === "tool") {
+        // Account-side connector rows describe server activity. They were
+        // never local pi tool calls and must not become local tool results on restore.
+        if (isRecord(m.toolArgs) && m.toolArgs.execution === "ChatGPT account connector") continue;
         if (!m.toolCallId || !m.toolName) continue;
         if (!toolCarrier) {
           // Tool row whose assistant row was lost (truncated branch):
@@ -6175,6 +6178,18 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     };
   }
 
+  /** Server-owned connector activity is presentation only, never a local tool invocation. */
+  emitHostedToolActivity(activity: import("./chatgpt-conversation.js").ChatGptToolActivity): void {
+    if (activity.type === "start") {
+      this.clearAgentActivity();
+      this.activeToolCalls.set(activity.toolCallId, { toolName: activity.toolName, args: { execution: "ChatGPT account connector" }, startedAt: Date.now() });
+      this.emit({ type: "tool_start", toolCallId: activity.toolCallId, toolName: activity.toolName, args: { execution: "ChatGPT account connector" } });
+    } else {
+      this.activeToolCalls.delete(activity.toolCallId);
+      this.emit({ type: "tool_end", toolCallId: activity.toolCallId, result: activity.result ?? { content: [{ type: "text", text: activity.error ?? "Completed by ChatGPT account connector" }] }, isError: Boolean(activity.error) });
+    }
+  }
+
   private emit(event: AgentEventEnvelope["event"], turnId?: string, ts = Date.now()) {
     this.onEvent({
       sessionId: this.sessionId,
@@ -6234,6 +6249,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     error: ReturnType<typeof classifyAgentError>,
     phase: "request" | "stream",
   ): number | undefined {
+    if (this.provider.apiStyle === "chatgpt_conversation") return undefined;
     if (!error.retriable || error.details?.origin === "local") return undefined;
     const infinite = this.infiniteProviderRetry;
     if (error.code === "PROVIDER_RATE_LIMITED") {
@@ -6291,6 +6307,9 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
         : undefined;
     return {
       ...explained,
+      ...(this.provider.apiStyle === "chatgpt_conversation"
+        ? { retriable: false }
+        : {}),
       details: {
         ...existingDetails,
         phase: captured ? "request" : phase,
@@ -8221,7 +8240,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
           const exemptSilence = silence && this.allowSilentCompletion;
           if (!failed && !aborted) this.allowSilentCompletion = false;
           const silentTurn = silence && !exemptSilence;
-          if (silentTurn && !this.silentTurnRerunAttempted) {
+          if (silentTurn && !this.silentTurnRerunAttempted && this.provider.apiStyle !== "chatgpt_conversation") {
             this.silentTurnRerunAttempted = true;
             this.pendingSilentTurnRerun = true;
             this.suppressSilentTurnRunEnd = true;
@@ -8265,6 +8284,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
           // Autonomous plan/goal: clearly forward-looking text without a tool
           // call is probably progress, not a final answer. Nudge once (#43).
           const progressOnlyTurn =
+            this.provider.apiStyle !== "chatgpt_conversation" &&
             !failed &&
             !aborted &&
             !silentTurn &&
@@ -8295,6 +8315,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
             break;
           }
           const canRecoverOverflow =
+            this.provider.apiStyle !== "chatgpt_conversation" &&
             this.compactionEnabled &&
             overflow &&
             !this.overflowRecoveryAttempted;

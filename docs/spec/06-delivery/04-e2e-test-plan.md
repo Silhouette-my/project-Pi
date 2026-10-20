@@ -8,6 +8,44 @@
 
 ## 1. Goals
 
+### E2E-PROVIDER-chatgpt-chat-login-and-stream
+
+- **Preconditions:** Dedicated candidate worktree and built desktop. Automated
+  tests use synthetic stream/page/host boundaries. Manual acceptance requires
+  an authorized ChatGPT subscription account; no real account is used by CI.
+- **Steps:** Add a custom service using `chatgpt_conversation`; verify no API
+  key input. Open login and complete authentication; confirm the window closes
+  and the form shows signed in. Refresh the consumer account model list and
+  select an actual returned model, including Pro if the account returns it.
+  Save the service explicitly. Send two ordinary chat turns, then test Pro,
+  cancel another turn, restart the application, and send another.
+  With an enabled account connector, request a connector operation. Log out.
+- **Expected:** Status reflects login; replies stream in the native transcript;
+  CF HTML200, redirects and network failures do not count as login. Checking,
+  verification and error states are visible; navigation/polling cannot wait
+  indefinitely. Login success refreshes account models and preserves their
+  request slugs/default effort. No guessed Pro slug or Codex fallback appears;
+  continuation uses the remote parent ID; cancel/close/logout cannot start or
+  leak an in-flight request. Restart preserves login and replays history into
+  a new remote conversation. Connector activity is displayed without local
+  agent tool execution. Logout clears the dedicated partition only.
+- **Specs:** `03-runtime/11-provider-model-system.md`; ADR
+  `chatgpt-conversation-browser-transport`.
+- **Acceptance:** B / C / Security / Quality; post-MVP provider increment.
+- **Coverage:** Desktop `chatgpt-chat*.test.mjs`, runtime
+  `chatgpt-conversation.test.ts`, host `chatgpt-sidecar.test.ts`, and shared
+  `chatgpt-chat.test.ts` cover synthetic user paths and transport contracts.
+  Native `chatgpt-browser-lifecycle.test.mjs` covers offscreen iframe scheduling,
+  temporary interactive login-view disposal, and shared synthetic login state
+  across a process restart without a transport host window.
+- **Status:** User testing confirmed login, consumer catalog (including
+  `gpt-6-pro`), service save and connection testing, but generation timed out
+  during Sentinel authorization before the conversation POST. Native synthetic
+  tests reproduce the ordinary unattached-view scheduling failure and validate
+  the offscreen lifecycle repair. Successful real generation after this repair,
+  connectors and ChatGPT-versus-Codex quota accounting require user acceptance;
+  the implementer does not send account-side test messages.
+
 ### E2E-QUEUE-send-now-wakes-subagents
 
 - **Preconditions:** Dedicated request worktree with built workspace packages,
@@ -10100,6 +10138,7 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 
 | Acceptance | Scenarios |
 |---|---|
+| B / C / Security / Quality — ChatGPT subscription chat | E2E-PROVIDER-chatgpt-chat-login-and-stream |
 | C / E / F / Quality / Security — Session Todo checklist | E2E-CHAT-session-todo-checklist |
 | C / E / Security / Quality — Live Voice four-stage interaction | E2E-LIVE-VOICE-four-stage-ui |
 | C / F — Hourly task updates | E2E-SCHEDULED-manual-to-hourly |

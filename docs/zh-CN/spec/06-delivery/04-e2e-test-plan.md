@@ -9,6 +9,31 @@
 
 ---
 
+### E2E-PROVIDER-chatgpt-chat-login-and-stream
+
+- **前提：** 隔离 worktree 和已构建桌面端；自动化仅使用合成 page/host/SSE。
+  真实登录验收需用户授权的 ChatGPT 订阅账号。
+- **步骤：** 添加 `chatgpt_conversation` 自定义服务，确认无 API key 输入；
+  完成登录，确认窗口关闭且PI显示已登录。刷新消费者账号目录，选中实际返回的
+  模型（账号返回Pro时一并选择），明确保存服务。先发两轮普通聊天，再测Pro；
+  取消另一轮，重启后继续；测试已启用的connector，最后退出登录。
+- **预期：** 原生界面流式回复，远端 parent 连续，取消/关闭/退出不遗留请求；重启
+  保留登录并重放历史至新远端会话；connector 活动可见但不执行本地 agent 工具；
+  退出仅清除独立分区。
+- **登录及目录预期：** CF HTML200不算登录；验证、跳转和网络失败可见，等待有界。
+  登录成功刷新真实模型slug/default effort，无猜测Pro slug或Codex兜底。
+- **规格：** `03-runtime/11-provider-model-system.md` 及
+  `chatgpt-conversation-browser-transport` ADR。
+- **验收：** B / C / Security / Quality，post-MVP。
+- **覆盖：** `chatgpt-chat*.test.mjs`、`chatgpt-conversation.test.ts`、
+  `chatgpt-sidecar.test.ts` 和 shared `chatgpt-chat.test.ts`。
+  原生 `chatgpt-browser-lifecycle.test.mjs` 覆盖离屏 iframe 调度、临时交互登录
+  视图销毁，以及无传输宿主窗口时跨进程重启的合成登录状态共享。
+- **状态：** 用户已实测登录、消费端目录（含 `gpt-6-pro`）、保存服务及测试连接
+  成功，但生成在对话 POST 前的 Sentinel 授权步骤超时。原生合成测试复现了普通
+  未挂载视图的调度问题并验证离屏生命周期修复。修复后的真实生成、connector及
+  额度归属仍由用户验收；实现者不代发账号侧测试消息。
+
 ### E2E-LEGACY-DICTATION-idle-model-release
 
 - **前提：** 通过 `VoiceService` 接口测试保留的本地 Dictation 服务，使用确定性的
@@ -5723,6 +5748,7 @@ eleven-tool-round desktop paths are verified by
 ## 8. 可追溯性矩阵
 | 验收 | 应用场景 |
 |---|---|
+| B / C / Security / Quality — ChatGPT 订阅聊天 | E2E-PROVIDER-chatgpt-chat-login-and-stream |
 | C / E / F / Quality / Security — Session Todo checklist | E2E-CHAT-session-todo-checklist |
 | C / E / Security / Quality — Live Voice 四阶段交互 | E2E-LIVE-VOICE-four-stage-ui |
 | C / F — Hourly task updates | E2E-SCHEDULED-manual-to-hourly |

@@ -426,6 +426,11 @@ export function createProviderRetryStream(
   createStream: StreamFactory,
   controller: ProviderRetryController,
 ): AssistantMessageEventStream {
+  // Consumer conversations may already have advanced the remote branch when
+  // they fail. Surface the first failure instead of replaying or repairing it.
+  if (model.api === "chatgpt-conversation") {
+    return createStream({ ...options, maxRetries: 0 });
+  }
   // Keep the context in the signature: it prevents callers from accidentally
   // building a retry stream around a different request than the provider call.
   void context;
