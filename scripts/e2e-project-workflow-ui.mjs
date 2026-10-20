@@ -259,6 +259,13 @@ try {
   assert.ok(setupSession, "new folder chat appears in the ordinary session inventory");
   await page.evaluate(`document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-label')?.click()`);
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat input[type=checkbox]')`), "folder chat selectable in organization mode");
+  assert.ok(await page.evaluate(`(() => { const button=document.querySelector('[data-workflow-folder="${folderNested.id}"] .thread-item-main'); if(!button) return false; button.click(); return true })()`));
+  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.lastAccessedAt, "folder chat recorded in recent view");
+  assert.ok(await page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat')`), "recent view preserves folder visibility");
+  assert.ok(await clickAria("收藏对话", `[data-workflow-folder="${folderNested.id}"] button[aria-label]`));
+  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.favorite, "folder chat favorited");
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] button[aria-label="收藏对话"][aria-pressed=true]')`), "favorite remains visible in its folder");
+  coverage.push("Opened and favorited a folder chat through its rendered row; Recent and Favorites preserve its stable folder location");
   const selectedChat = await page.evaluate(`(() => { const input=document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat input[type=checkbox]'); if(!input) return false; input.click(); return true })()`);
   assert.ok(selectedChat, "folder chat can be selected without opening its transcript");
   await until(() => page.evaluate(`!![...document.querySelectorAll('label')].find(x=>x.textContent?.includes('移动所选的'))`), "move-selected destination");
