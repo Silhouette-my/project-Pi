@@ -5,6 +5,7 @@ export const trEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Sohbet içinde etkileşimli görselleştirmeler: Asistanın yazdığı HTML parçaları, etkileşime girip sonraki soruları sorabileceğiniz sandbox'lı kartlar olarak oluşturuluyor.",
       "ChatGPT girişi doğrulama ve hataları gösterir, ardından sabit liste yerine hesabınızın modellerini yükler.",
       "Tarayıcıda bir kez oturum açarak yerel sohbet arayüzünde ChatGPT aboneliğinizle konuşun.",
       "Yüklü eklentiler kendiliğinden dolan bir kart ızgarasında görünür; her kartta net bir eylem ile güven, güncelleme ve kapsam durumu yer alır.",

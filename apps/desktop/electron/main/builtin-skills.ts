@@ -19,6 +19,9 @@ export const PLUGIN_DEV_SKILL_FILE = "plugin-development.md";
 export const PLUGIN_DEV_SKILL_ID = "pi-desktop/plugin-development";
 export const IMAGE_GENERATION_SKILL_ID = "pi-desktop/imagegen";
 const IMAGE_GENERATION_SKILL_FILE = "image-generation.md";
+/** Bundled skill authoring in-conversation visualization fragments. */
+export const VISUALIZE_SKILL_ID = "pi-desktop/visualize";
+const VISUALIZE_SKILL_FILE = "visualize.md";
 
 /** electron-builder copies `resources/skills` to `<resources>/skills`. */
 function resolveBuiltinSkillPath(fileName: string): string | null {
@@ -89,6 +92,7 @@ export type BuiltinSkillInput = {
 
 const BUILTIN_SKILL_FILES = [
   [IMAGE_GENERATION_SKILL_ID, IMAGE_GENERATION_SKILL_FILE],
+  [VISUALIZE_SKILL_ID, VISUALIZE_SKILL_FILE],
   [PLUGIN_DEV_SKILL_ID, PLUGIN_DEV_SKILL_FILE],
 ] as const;
 
@@ -107,7 +111,7 @@ export function builtinSkillCatalog(): PluginSkillDef[] {
  * fresh so a packaged update takes effect without a restart.
  */
 export function builtinSkills(input: BuiltinSkillInput): PluginSkillDef[] {
-  const ids = [IMAGE_GENERATION_SKILL_ID];
+  const ids = [IMAGE_GENERATION_SKILL_ID, VISUALIZE_SKILL_ID];
   if (isPluginWorkspace(input.workspacePath, input.pluginPaths)) ids.push(PLUGIN_DEV_SKILL_ID);
   const activeIds = new Set(ids);
   const disabled = new Set(input.disabledIds ?? []);
@@ -121,7 +125,13 @@ export async function assertBuiltinSkillEnabled(
   id: string,
   loadDisabledIds: () => Promise<string[]>,
 ): Promise<void> {
-  if (id !== IMAGE_GENERATION_SKILL_ID && id !== PLUGIN_DEV_SKILL_ID) return;
+  if (
+    id !== IMAGE_GENERATION_SKILL_ID &&
+    id !== PLUGIN_DEV_SKILL_ID &&
+    id !== VISUALIZE_SKILL_ID
+  ) {
+    return;
+  }
   if ((await loadDisabledIds()).includes(id)) {
     throw new Error(`Built-in skill "${id}" is disabled in Settings`);
   }
@@ -131,11 +141,16 @@ export async function assertBuiltinSkillEnabled(
  * Load a built-in skill body for the `Skill` tool. Returns null for any id the
  * host does not ship, which is the caller's cue to try the plugin registry.
  */
+const BUILTIN_SKILL_FILE_BY_ID: Record<string, string> = {
+  [PLUGIN_DEV_SKILL_ID]: PLUGIN_DEV_SKILL_FILE,
+  [IMAGE_GENERATION_SKILL_ID]: IMAGE_GENERATION_SKILL_FILE,
+  [VISUALIZE_SKILL_ID]: VISUALIZE_SKILL_FILE,
+};
+
 export function loadBuiltinSkillBody(id: string): LoadedSkillDocument | null {
-  if (id !== PLUGIN_DEV_SKILL_ID && id !== IMAGE_GENERATION_SKILL_ID) return null;
-  const raw = readBuiltinSkill(
-    id === IMAGE_GENERATION_SKILL_ID ? IMAGE_GENERATION_SKILL_FILE : PLUGIN_DEV_SKILL_FILE,
-  );
+  const file = BUILTIN_SKILL_FILE_BY_ID[id];
+  if (!file) return null;
+  const raw = readBuiltinSkill(file);
   if (!raw?.raw.trim()) return null;
   const parsed = parseSkillFrontmatter(raw.raw);
   if (!parsed.body) return null;

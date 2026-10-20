@@ -5,6 +5,7 @@ export const ptBREntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Visualizações interativas na conversa: fragmentos HTML escritos pelo assistente são exibidos como cards isolados em sandbox, com os quais você interage e faz perguntas de acompanhamento.",
       "O login do ChatGPT mostra a verificação e os erros e depois carrega os modelos da sua conta, sem uma lista fixa.",
       "Converse com sua assinatura do ChatGPT na interface nativa após um único login no navegador.",
       "Os plugins instalados aparecem como cartões em uma grade de preenchimento automático, cada um com uma ação clara e o estado de confiança, atualização e escopo à vista.",

@@ -5,6 +5,7 @@ export const deEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Interaktive Visualisierungen direkt in der Unterhaltung: Vom Assistenten geschriebene HTML-Fragmente erscheinen als sandboxisierte Karten, mit denen du interagieren und Nachfragen stellen kannst.",
       "Die ChatGPT-Anmeldung zeigt Prüfungen und Fehler an und lädt anschließend die Modellauswahl des Kontos statt einer festen Liste.",
       "Nach einmaliger Browser-Anmeldung mit dem ChatGPT-Abonnement in der nativen Unterhaltung chatten.",
       "Installierte Plugins erscheinen als Karten in einem selbst füllenden Raster, jede mit einer klaren Aktion und sichtbarem Vertrauens-, Update- und Geltungsstatus.",

@@ -96,8 +96,10 @@ import {
   themeForMode,
   tokenizeIncremental,
   type LineCache,
-  type ThemeMode,
 } from "../lib/shiki";
+import { useThemeMode } from "../lib/use-theme-mode";
+import { parseVisualizeFence } from "../features/visualize/visualize-fence";
+import { VisualizeCard } from "../features/visualize/VisualizeCard";
 
 /*
  * Streaming-optimized chat markdown renderer.
@@ -122,35 +124,6 @@ export function useCopy() {
     });
   }, []);
   return { copied, copy };
-}
-
-/* ---------- theme (follows documentElement[data-theme]) ---------- */
-
-const themeListeners = new Set<() => void>();
-let themeObserver: MutationObserver | null = null;
-
-function subscribeTheme(listener: () => void): () => void {
-  if (!themeObserver) {
-    themeObserver = new MutationObserver(() => {
-      for (const cb of themeListeners) cb();
-    });
-    themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-  }
-  themeListeners.add(listener);
-  return () => {
-    themeListeners.delete(listener);
-  };
-}
-
-function getThemeSnapshot(): ThemeMode {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
-}
-
-function useThemeMode(): ThemeMode {
-  return useSyncExternalStore(subscribeTheme, getThemeSnapshot, getThemeSnapshot);
 }
 
 /* ---------- syntax highlighting ---------- */
@@ -485,6 +458,24 @@ function PreBlock({
     info.lang.toLowerCase() === "mermaid"
   ) {
     return <MermaidBlock code={info.code} {...sourcePositionProps(rest)} />;
+  }
+  // A visualize fence becomes a sandboxed card only once it is closed, so a
+  // half-typed reference streams as plain text; an unparseable payload
+  // stays a plain code block.
+  if (
+    renderDiagrams &&
+    closedFence &&
+    info.lang.toLowerCase() === "visualize"
+  ) {
+    const spec = parseVisualizeFence(info.code);
+    if (spec) {
+      return (
+        <VisualizeCard
+          spec={spec}
+          sourcePosition={sourcePositionProps(rest)}
+        />
+      );
+    }
   }
   if (blockEntry) {
     return (
