@@ -1,5 +1,58 @@
 # Interface Handoff — Owner A
 
+## C0 executable symbol map
+
+`packages/shared/src/project-workflow.ts` (exported from the shared package root)
+is the cross-process schema/type authority. `ProjectWorkflowSnapshotSchema` and
+`ProjectWorkflowSnapshot` contain folders/navigation, workstreams, conversations,
+resources, decisions, authorizations, runs, artifacts, evidence, feedback and
+deliveries. All records use the existing `ProjectGroupRecord.id` as `projectId`;
+session and message IDs retain their existing meaning.
+
+| Consumer | Symbol / path | Use |
+| --- | --- | --- |
+| B renderer | `api.projectWorkflow` in `apps/desktop/src/lib/api.ts` | `snapshot`, `mutate`, `action`, `search`, `onChanged` |
+| B/C fixtures | `packages/shared/src/project-workflow-fixtures.ts` | Synthetic `projectWorkflowFixture`, `workflowFixtureWorkstream`; never production defaults |
+| Host commands | `ProjectWorkflowUserCommandSchema` / `ProjectWorkflowRuntimeCommandSchema` | Closed, capability-specific discriminated unions; no arbitrary JSON state replacement |
+| C runtime persistence | `ProjectWorkflowHostPort` | `snapshot(query?)`, `mutate(command)` returning `{ snapshot, replayed }` |
+| A/C runtime composition | `ProjectWorkflowRuntimePort` | `action`, optional `onHostChanged`, `dispose`; C supplies implementation to A |
+| Runtime intents | `ProjectWorkflowActionSchema` / `ProjectWorkflowAction` | `start`, `discuss`, `adopt`, `pause`, `resume`, `cancel`, `side.create`, `reconcile` |
+| IPC | `IPC.invoke.projectWorkflow{Snapshot,Mutate,Action,Search}` | Named preload allowlist; user mutation endpoint excludes runtime-only commands |
+| Updates | `IPC.event.projectWorkflowChanged` / `ProjectWorkflowChanged` | Revision, command identity and affected project/workstream; reload snapshot after event |
+| Rust RPC | `project.workflow.snapshot`, `.mutate`, `.search` | A implements durable state; Main invokes runtime port for actions |
+
+### Revisions, authority and errors
+
+- Empty state has `schemaVersion: 1`, global `revision: 0`. Every accepted mutation
+  requires a unique `commandId` and current `expectedRevision`; one atomic mutation
+  increments the global revision. Repeating the same command returns `replayed: true`
+  without applying it twice. Reusing its ID with different input is a conflict.
+- Filtered snapshots retain the global revision. `ProjectWorkflowQuery` can select
+  project/workstream; folders/navigation stay global. Refresh after `CONFLICT`;
+  error details identify expected/actual revisions. Never blindly overwrite.
+- Workstream `revision` advances for relevant state changes; `decisionRevision`
+  advances on adoption. Runs/deliveries capture these fences. A stale delivery may
+  be retained/consumed as stale, never replace current effective decisions.
+- `authorization.grant` requires an explicit user source; it describes scope, not
+  extra host/tool permissions. `start` names that authorization. Main validates
+  renderer commands using `isProjectWorkflowUserCommand`; runtime-only transitions,
+  run observations and deliveries are available only through the trusted host port.
+- `run.observe` completion does not complete a workstream. `evidence.add` records
+  evidence and its acceptance association, but does not automatically satisfy it.
+  Submit an explicit acceptance update before `workstream.transition: completed`;
+  completion requires all conditions satisfied and passed current-candidate evidence.
+- Boundary failures use existing `INVALID_ARGUMENT`, `NOT_FOUND`, `CONFLICT`,
+  `UNAUTHORIZED` codes; ambiguous effect recovery uses `WORKFLOW_EFFECT_UNKNOWN`.
+  Existing API invocation throws with `code`/`details`, as other renderer APIs do.
+- `discuss` includes an explicit `pause` choice. Side creation includes independent
+  purpose/visibility/readContext and optional source message; only Work may execute
+  under a supplied authorization. No side transcript is an authorization source.
+
+C0 declares the actual API/ports and adds validation tests, without fake Host or
+runtime implementations. A owns subsequent host wiring. C must report the exported
+factory and dependencies needed for final composition; no unpublished C imports
+are required by this milestone.
+
 This file freezes product semantics and the handoff procedure. Exact TypeScript,
 Rust, RPC and IPC signatures become authoritative in A's first committed contract
 milestone. B and C must consume that milestone, not maintain private parallel types.

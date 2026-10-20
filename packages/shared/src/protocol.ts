@@ -57,6 +57,10 @@ export type LifecycleDialogRequest = {
 export type LifecycleDialogDismiss = { requestId: string };
 export const IPC = {
   invoke: {
+    projectWorkflowSnapshot: "pi-desktop/projectWorkflow/snapshot",
+    projectWorkflowMutate: "pi-desktop/projectWorkflow/mutate",
+    projectWorkflowAction: "pi-desktop/projectWorkflow/action",
+    projectWorkflowSearch: "pi-desktop/projectWorkflow/search",
     storageGet: "pi-desktop/storage/get",
     storageChoose: "pi-desktop/storage/choose",
     storageMigrate: "pi-desktop/storage/migrate",
@@ -435,6 +439,7 @@ export const IPC = {
     nativeMenuAction: "pi-desktop/menu/nativeAction",
   },
   event: {
+    projectWorkflowChanged: "pi-desktop/projectWorkflow/event/changed",
     pluginChanged: "pi-desktop/event/pluginChanged",
     /** Progress of an install or update, while it is still running. */
     pluginInstallProgress: "pi-desktop/plugin/event/installProgress",
