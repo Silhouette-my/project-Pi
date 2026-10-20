@@ -4,7 +4,7 @@ import test from "node:test";
 import { IPC, emptyProjectWorkflowSnapshot } from "@pi-desktop/shared";
 register(new URL("./helpers/ts-import-hooks.mjs", import.meta.url));
 const { registerProjectWorkflowIpc } = await import("../electron/main/ipc/project-workflow-ipc.ts");
-const { createProjectWorkflowHostPort } = await import("../electron/main/services/project-workflow-host.ts");
+const { createProjectWorkflowHostPort, workflowChange } = await import("../electron/main/services/project-workflow-host.ts");
 
 function fixture() {
   const handlers = new Map(), events = [], calls = [], actions = [];
@@ -63,4 +63,12 @@ test("explicit runtime intents use the owner port and unavailable execution stay
   await assert.rejects(f.invoke("projectWorkflowAction", { ...action, kind: "start" }), { errorCode: "INVALID_ARGUMENT" });
   f.disconnectRuntime();
   await assert.rejects(f.invoke("projectWorkflowAction", action), { errorCode: "AGENT_UNAVAILABLE" });
+});
+
+test("project-wide resource changes are not mislabeled as a workstream event", () => {
+  const command = { commandId: "resource-1", expectedRevision: 0, kind: "resource.put",
+    resource: { id: "constraint-1", projectId: "project-1", label: "Constraint", uri: "CONSTRAINTS.md", kind: "constraint",
+      revision: "revision-1", updatedAt: "now", state: "effective", source: { kind: "user", ref: "source-1" } } };
+  assert.deepEqual(workflowChange(command, 1), { commandId: "resource-1", kind: "resource.put", revision: 1, projectId: "project-1" });
+  assert.equal(workflowChange({ ...command, resource: { ...command.resource, workstreamId: "work-1" } }, 2).workstreamId, "work-1");
 });

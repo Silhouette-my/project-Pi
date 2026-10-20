@@ -26,8 +26,11 @@ export function workflowChange(command: ProjectWorkflowCommand, revision: number
     "run" in command ? command.run : undefined,
     "delivery" in command ? command.delivery : undefined,
   ]) {
-    if (record) return { ...event, projectId: record.projectId,
-      workstreamId: "workstreamId" in record ? record.workstreamId : record.id };
+    if (record) {
+      const workstreamId = command.kind === "workstream.create" ? record.id
+        : "workstreamId" in record ? record.workstreamId : undefined;
+      return { ...event, projectId: record.projectId, ...(workstreamId ? { workstreamId } : {}) };
+    }
   }
   return event;
 }
