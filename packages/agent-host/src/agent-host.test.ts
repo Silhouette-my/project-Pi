@@ -1051,6 +1051,7 @@ describe("AgentHost queue extras", () => {
     await host.prioritizeTurn(owner, bounded.turn.id);
     expect(runtime.steers).toEqual([]);
     expect((await store.listAll()).find((row) => row.id === bounded.turn.id)?.workflowRunId).toBe("workflow:next");
+    expect(host.queueEntries("s1").find((entry) => entry.turn.id === bounded.turn.id)?.workflowRunId).toBe("workflow:next");
     // A restored queue cannot promote the assignment into the preceding
     // ordinary turn; it keeps its own Host binding and terminal receipt.
     const restored = build({ queueStore: store });
