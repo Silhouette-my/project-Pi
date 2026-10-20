@@ -606,6 +606,8 @@ export function registerSessionIpc({
         modelId?: string;
         thinkingLevel?: SessionThinkingLevel;
         permissionMode?: "inherit" | "ask" | "accept-edits" | "auto";
+        /** Chat instruction preset id; null clears it (spec 03-runtime/11). */
+        promptPreset?: string | null;
       },
     ) => {
       rejectNativeMutation(id, "configuration");

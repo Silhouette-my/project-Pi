@@ -772,7 +772,10 @@ export const api = {
   configureSession: (
     id: string,
     config: Pick<SessionSummary, "mode" | "providerId" | "modelId"> &
-      Partial<Pick<SessionSummary, "thinkingLevel" | "permissionMode">>,
+      Partial<Pick<SessionSummary, "thinkingLevel" | "permissionMode">> & {
+        /** Chat instruction preset id; null clears it (spec 03-runtime/11). */
+        promptPreset?: string | null;
+      },
   ) =>
     invoke<{ session: SessionSummary }>(
       IPC.invoke.sessionConfigure,
@@ -1152,6 +1155,12 @@ export const api = {
       content,
       ...(projectPath === undefined ? {} : { projectPath }),
     }),
+  /** ChatGPT chat-mode instruction preset ids (spec 03-runtime/11). */
+  listPromptPresets: (projectPath?: string) =>
+    invoke<{ presets: Array<{ id: string }> }>(
+      IPC.invoke.promptPresetList,
+      projectPath === undefined ? {} : { projectPath },
+    ),
   resolvePermission: (resolution: ToolPermissionResolution) =>
     invoke(IPC.invoke.toolResolvePermission, resolution),
   resolveAskTool: (resolution: AskToolResolution) =>

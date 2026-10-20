@@ -5,9 +5,9 @@ import { EventEmitter } from "node:events";
 import vm from "node:vm";
 import test from "node:test";
 import { pageModels, parseChatGptChatModels } from "../electron/main/chatgpt-chat-models.ts";
-import { createChatGptDiagnosticLogger, chatGptDocumentEndpoint, logChatGptDocumentEvent, logChatGptConversationEvent } from "../electron/main/chatgpt-chat-diagnostics.ts";
+import { createChatGptDiagnosticLogger, chatGptDocumentEndpoint, logChatGptDocumentEvent, logChatGptConversationEvent, conversationRequestFacts, conversationValidationErrors, sanitizeConversationRequestFacts } from "../electron/main/chatgpt-chat-diagnostics.ts";
 
-const pageContext = { pageModels, parseChatGptChatModels, URL };
+const pageContext = { pageModels, parseChatGptChatModels, conversationRequestFacts, conversationValidationErrors, sanitizeConversationRequestFacts, URL };
 const pageSource = stripTypeScriptTypes(readFileSync(new URL("../electron/main/chatgpt-chat-page.ts", import.meta.url), "utf8")).replace(/^import .*;$/gm, "").replace(/export /g, "");
 vm.runInNewContext(`${pageSource}\nglobalThis.api = {authStatusScript, conversationScript, streamPayload, trustedChatGptUrl}`, pageContext);
 const { authStatusScript, conversationScript, streamPayload, trustedChatGptUrl } = pageContext.api;
@@ -131,7 +131,11 @@ for (const [name, body, defaults, expected] of [
   ["account default", { model: "account-pro-slug" }, new Map([["account-pro-slug", { defaultEffort: "account-effort-value", efforts: [] }]]), "account-effort-value"],
   ["instant default", { model: "account-pro-slug" }, new Map([["account-pro-slug", { defaultEffort: "medium", efforts: ["instant", "medium", "high"] }]]), "instant"],
   ["explicit effort", { model: "account-pro-slug", thinking_effort: "explicit-value" }, new Map([["account-pro-slug", { defaultEffort: "account-effort-value", efforts: [] }]]), "explicit-value"],
-  ["clamped explicit effort", { model: "account-pro-slug", thinking_effort: "extra_high" }, new Map([["account-pro-slug", { defaultEffort: "high", efforts: ["low", "medium", "high"] }]]), "high"],
+  ["mapped high effort", { model: "account-pro-slug", thinking_effort: "high" }, new Map([["account-pro-slug", { efforts: ["standard", "extended"] }]]), "extended"],
+  ["mapped medium effort", { model: "account-pro-slug", thinking_effort: "medium" }, new Map([["account-pro-slug", { efforts: ["standard", "extended"] }]]), "standard"],
+  ["account-native effort", { model: "account-pro-slug", thinking_effort: "extended" }, new Map([["account-pro-slug", { efforts: ["standard", "extended"] }]]), "extended"],
+  ["exact high effort", { model: "account-pro-slug", thinking_effort: "high" }, new Map([["account-pro-slug", { efforts: ["high", "extended"] }]]), "high"],
+  ["no default", { model: "account-pro-slug" }, new Map([["account-pro-slug", { efforts: ["standard", "extended"] }]]), undefined],
   ["unknown default", { model: "account-pro-slug" }, new Map(), undefined],
 ]) {
   test(`conversation forwards selected slug with ${name} without inventing Pro parameters`, async () => {
@@ -150,7 +154,7 @@ for (const [name, body, defaults, expected] of [
     assert.equal(requestBody.model, "account-pro-slug");
     assert.equal(requestBody.thinking_effort, expected);
     assert.deepEqual(Object.keys(requestBody).sort(), expected === undefined ? ["model"] : ["model", "thinking_effort"]);
-    assert.equal(Object.hasOwn(body, "thinking_effort"), ["explicit effort", "clamped explicit effort"].includes(name));
+    assert.equal(Object.hasOwn(body, "thinking_effort"), ["explicit effort", "mapped high effort", "mapped medium effort", "account-native effort", "exact high effort"].includes(name));
   });
 }
 
@@ -900,4 +904,71 @@ test("page stage diagnostics are sender-bound, sanitized and never forwarded as 
   ipcMain.emit("pi-desktop/chatgpt-chat/stream", { sender: wc, senderFrame: wc.mainFrame }, { requestId: "diag", type: "diagnostic", stage: "post", outcome: "failed", reason: "post_http_error", status: 403, detail: "r".repeat(300) });
   assert.equal(logs.at(-1)[4].data.detail, undefined);
   host.dispose();
+});
+
+
+test("POST diagnostics describe actual request structure and allowlisted validation errors without content", async () => {
+  const events = [];
+  let sentBody;
+  const body = { model: "gpt-6-thinking", requested_default_model: "gpt-6", thinking_effort: "high", conversation_id: null, parent_message_id: "PARENT_SECRET", messages: [{ id: "MESSAGE_SECRET", author: { role: "user" }, content: { parts: ["BODY_SECRET"] } }, { author: { role: "assistant" }, content: { parts: [""] } }] };
+  await vm.runInNewContext(conversationScript("req", body, {}), {
+    window: { SentinelSDK: { token: async () => "TOKEN_SECRET" }, __piChatModelDefaults: new Map([["gpt-6-thinking", { efforts: ["standard", "extended"] }]]), __piBridge: { send: (event) => events.push(event) } },
+    document: { cookie: "oai-did=COOKIE_SECRET" }, navigator: { language: "en" }, crypto: { randomUUID: () => "ID_SECRET" }, AbortController, setTimeout, clearTimeout,
+    fetch: async (url, options) => {
+      if (url === "/api/auth/session") return validSession();
+      if (url.includes("/sentinel/")) return { ok: false, status: 403 };
+      sentBody = JSON.parse(options.body);
+      return { ok: false, status: 422, headers: { get: () => "application/json" }, json: async () => ({ detail: [{ loc: ["body", "messages", 0, "content", "parts", "USER_KEY_SECRET"], type: "string_type", msg: "MSG_SECRET", input: "INPUT_SECRET", ctx: { secret: "CTX_SECRET" } }, { loc: ["body"], type: "TYPE_SECRET" }] }) };
+    },
+  });
+  assert.equal(sentBody.thinking_effort, "extended");
+  const started = events.find((event) => event.stage === "post" && event.outcome === "started");
+  const failed = events.find((event) => event.stage === "post" && event.outcome === "failed");
+  assert.deepEqual(JSON.parse(JSON.stringify(started.requestFacts)), { model: "gpt-6-thinking", requestedDefaultModel: "gpt-6", requestedThinkingEffort: "high", thinkingEffort: "extended", catalogPresent: true, catalogEfforts: ["standard", "extended"], conversationId: "null", parentMessageId: "nonempty_string", messages: [{ role: "user", content: "nonempty" }, { role: "assistant", content: "empty" }] });
+  assert.deepEqual(JSON.parse(JSON.stringify(failed.validationErrors)), [{ loc: ["body", "messages", 0, "content", "parts", "unknown"], type: "string_type" }]);
+  const projected = streamPayload(failed);
+  const logs = [];
+  createChatGptDiagnosticLogger({ log: (...args) => logs.push(args) });
+  logChatGptConversationEvent(projected);
+  assert.doesNotMatch(JSON.stringify(logs), /SECRET/);
+  assert.equal(logs.at(-1)[4].data.requestFacts.requestedThinkingEffort, "high");
+  assert.equal(events.filter((event) => event.type === "error").length, 1);
+});
+
+test("diagnostic projection drops free-form errors and nested untrusted fields", () => {
+  const payload = streamPayload({ requestId: "req", type: "diagnostic", stage: "post", outcome: "failed", detail: "BODY_SECRET", requestFacts: { model: "gpt-6-thinking", conversationId: "ID_SECRET", parentMessageId: "absent", catalogPresent: false, messages: [{ role: "ROLE_SECRET", content: "BODY_SECRET", text: "TEXT_SECRET" }], body: "BODY_SECRET" }, validationErrors: [{ loc: ["body", "KEY_SECRET"], type: "value_error", msg: "MSG_SECRET", input: "INPUT_SECRET" }] });
+  assert.doesNotMatch(JSON.stringify(payload), /SECRET/);
+  assert.equal(payload.detail, undefined);
+  assert.equal(payload.requestFacts.conversationId, "other");
+  assert.equal(conversationValidationErrors(Array(30).fill({ loc: Array(30).fill("messages"), type: "missing" })).length, 16);
+});
+
+
+test("request diagnostics preserve the adapter extra_high effort", () => {
+  const facts = conversationRequestFacts({ model: "gpt-6-thinking", thinking_effort: "extra_high" }, "extra_high", { efforts: ["high", "extra_high"], defaultEffort: "extra_high" });
+  const safe = sanitizeConversationRequestFacts(facts);
+  assert.equal(safe.requestedThinkingEffort, "extra_high");
+  assert.equal(safe.thinkingEffort, "extra_high");
+  assert.equal(safe.catalogDefaultEffort, "extra_high");
+  assert.deepEqual(safe.catalogEfforts, ["high", "extra_high"]);
+});
+
+
+test("unsupported explicit thinking effort fails before POST without lowering to a default", async () => {
+  const events = [];
+  const urls = [];
+  const body = { model: "gpt-6-thinking", thinking_effort: "extra_high", messages: [{ author: { role: "user" }, content: { parts: ["BODY_SECRET"] } }] };
+  const original = JSON.stringify(body);
+  await vm.runInNewContext(conversationScript("req", body, {}), {
+    window: { SentinelSDK: { token: async () => "TOKEN_SECRET" }, __piChatModelDefaults: new Map([["gpt-6-thinking", { efforts: ["standard", "extended"], defaultEffort: "standard" }]]), __piBridge: { send: (event) => events.push(event) } },
+    document: { cookie: "oai-did=COOKIE_SECRET" }, navigator: { language: "en" }, crypto: { randomUUID: () => "ID_SECRET" }, AbortController, setTimeout, clearTimeout,
+    fetch: async (url) => { urls.push(url); if (url === "/api/auth/session") return validSession(); throw new Error("unexpected POST"); },
+  });
+  assert.deepEqual(urls, ["/api/auth/session"]);
+  assert.equal(JSON.stringify(body), original);
+  const failed = events.find((event) => event.outcome === "failed");
+  assert.equal(failed.reason, "thinking_effort_unsupported");
+  assert.equal(failed.stage, "catalog");
+  assert.match(events.find((event) => event.type === "error").error, /unsupported.*catalog/);
+  assert.doesNotMatch(JSON.stringify(events), /BODY_SECRET|TOKEN_SECRET|COOKIE_SECRET/);
 });

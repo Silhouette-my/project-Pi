@@ -753,6 +753,34 @@ fn thinking_level_param(params: &Value) -> Result<Option<String>, JsonRpcError> 
     Ok(Some(level.to_string()))
 }
 
+/// Parse the optional per-session chat instruction preset id (spec
+/// 03-runtime/11). A missing key leaves the stored preset untouched; an
+/// explicit JSON null clears it back to the built-in chat persona; a string
+/// selects that preset id.
+fn prompt_preset_param(params: &Value) -> Result<Option<Option<String>>, JsonRpcError> {
+    let Some(value) = params.get("promptPreset") else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(Some(None));
+    }
+    let Some(id) = value.as_str() else {
+        return Err(rpc_err(
+            1002,
+            "promptPreset must be a string or null",
+            "INVALID_PARAMS",
+        ));
+    };
+    if !sessions::is_valid_prompt_preset(id) {
+        return Err(rpc_err(
+            1002,
+            "promptPreset must be a preset file stem (no path separators, 1-200 chars)",
+            "INVALID_PARAMS",
+        ));
+    }
+    Ok(Some(Some(id.to_string())))
+}
+
 /// Parse the optional parent session used for permission inheritance. The
 /// caller supplies an existing session id, never an arbitrary permission mode;
 /// the host resolves the persisted mode while holding its state lock.
@@ -2789,6 +2817,7 @@ async fn handle_request(
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| rpc_err(1002, "mode required", "INVALID_PARAMS"))?;
             let thinking_level = thinking_level_param(&params)?;
+            let prompt_preset = prompt_preset_param(&params)?;
             let st = state.lock().await;
             let session = sessions::configure_session_with_thinking(
                 &st.db,
@@ -2798,6 +2827,7 @@ async fn handle_request(
                 params.get("modelId").and_then(|v| v.as_str()),
                 thinking_level.as_deref(),
                 params.get("permissionMode").and_then(|v| v.as_str()),
+                prompt_preset.as_ref().map(|value| value.as_deref()),
             )
             .map_err(|e| {
                 let message = e.to_string();
@@ -6858,6 +6888,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn session_configure_rpc_treats_prompt_preset_as_tristate() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let mut app_state = AppState::open(data_dir.path()).unwrap();
+        app_state.handshook = true;
+        let session_id = sessions::create_session(&app_state.db, None, None, None, None, None)
+            .unwrap()
+            .id;
+        let state = Arc::new(Mutex::new(app_state));
+        let (tx, _rx) = mpsc::unbounded_channel();
+
+        let selected = handle_request(
+            state.clone(),
+            "session.configure",
+            json!({ "id": session_id, "mode": "chat", "promptPreset": "review-style" }),
+            tx.clone(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(selected["session"]["promptPreset"], "review-style");
+
+        // Omitting the key preserves the selection.
+        let preserved = handle_request(
+            state.clone(),
+            "session.configure",
+            json!({ "id": session_id, "mode": "chat" }),
+            tx.clone(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(preserved["session"]["promptPreset"], "review-style");
+
+        // An explicit null clears it back to the built-in default.
+        let cleared = handle_request(
+            state.clone(),
+            "session.configure",
+            json!({ "id": session_id, "mode": "chat", "promptPreset": null }),
+            tx.clone(),
+        )
+        .await
+        .unwrap();
+        assert!(cleared["session"].get("promptPreset").is_none());
+
+        let invalid = handle_request(
+            state,
+            "session.configure",
+            json!({ "id": session_id, "mode": "chat", "promptPreset": "a/b" }),
+            tx,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(invalid.data.unwrap()["errorCode"], "INVALID_PARAMS");
+    }
+
+    #[tokio::test]
     async fn plugin_session_rpc_routes_the_full_p0_p1_surface() {
         let data_dir = tempfile::tempdir().unwrap();
         let mut app_state = AppState::open(data_dir.path()).unwrap();
@@ -8377,6 +8461,7 @@ mod tests {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -8492,6 +8577,7 @@ mod tests {
             None,
             None,
             Some("ask"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -8579,6 +8665,7 @@ mod tests {
             None,
             None,
             Some("ask"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -8691,6 +8778,7 @@ mod tests {
             None,
             None,
             Some("ask"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -8786,6 +8874,7 @@ mod tests {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -8876,6 +8965,7 @@ mod tests {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -8955,6 +9045,7 @@ mod tests {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -9430,6 +9521,7 @@ mod tests {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -9578,6 +9670,7 @@ mod tests {
             None,
             None,
             Some("ask"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -9671,6 +9764,7 @@ mod tests {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         let auto = handle_request(
@@ -9718,6 +9812,7 @@ mod tests {
             None,
             None,
             Some("ask"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -9865,6 +9960,7 @@ mod tests {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -9930,6 +10026,7 @@ mod tests {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
@@ -9999,6 +10096,7 @@ mod tests {
             None,
             None,
             Some("ask"),
+            None,
         )
         .unwrap();
         #[cfg(windows)]
@@ -10066,6 +10164,7 @@ mod tests {
             None,
             None,
             Some("auto"),
+            None,
         )
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));

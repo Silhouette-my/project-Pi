@@ -78,6 +78,40 @@
   connectors and ChatGPT-versus-Codex quota accounting require user acceptance;
   the implementer does not send account-side test messages.
 
+### E2E-PROVIDER-chatgpt-chat-instruction-presets
+
+- **Preconditions:** A saved `chatgpt_conversation` service with a logged-in
+  account; preset files under `<workspace>/.pi/chat-instructions/` and
+  `~/.pi/agent/chat-instructions/`, including one id present in both.
+  Automated tests use synthetic fs/runtime boundaries; no real account is
+  used by CI.
+- **Steps:** Open a chat session with the ChatGPT model and open the Chat
+  instructions chip. Select Default, then None, then the shadowing workspace
+  preset, sending a turn after each selection. Restart the application and
+  confirm the selection persists. Delete the preset file and send again.
+  On an unpersisted new-task draft, select None or a preset, change the model,
+  and confirm the chip and first submitted turn retain the selection. Reset
+  the draft to Default and confirm that reset also survives model changes.
+  Open a non-chat session and confirm the chip is absent.
+- **Expected:** The chip appears only for `chatgpt_conversation` models on
+  local sessions. Default sends the built-in chat persona with no tool rules;
+  None sends no system section on the wire; a preset sends its file content
+  verbatim, workspace before global. The selection persists across restart in
+  the session record; a deleted preset falls back to the built-in persona
+  silently. The menu lists ids only — never file content — and never the
+  reserved `none` id as a file.
+- **Specs:** `03-runtime/11-provider-model-system.md`.
+- **Acceptance:** B / C / Quality; chat-mode prompt control.
+- **Coverage:** agent-runtime `chat-instructions.test.ts`,
+  `chat-instructions-runtime.test.ts` and `chatgpt-conversation.test.ts`;
+  desktop `chat-instruction-presets.test.mjs` and
+  `composer-chat-instructions.test.mjs` and `chat-instruction-draft-flow.test.mjs`;
+  host-core `prompt_preset`
+  migration/configure tests.
+- **Status:** Implemented with native synthetic coverage; real-account
+  generation with each selection requires user acceptance alongside
+  `E2E-PROVIDER-chatgpt-chat-login-and-stream`.
+
 ### E2E-QUEUE-send-now-wakes-subagents
 
 - **Preconditions:** Dedicated request worktree with built workspace packages,
@@ -10197,6 +10231,7 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 |---|---|
 | B / C / Security / Quality — ChatGPT subscription chat | E2E-PROVIDER-chatgpt-chat-login-and-stream |
 | B / Security / Quality — Optional provider client certificate requests | E2E-PROVIDER-optional-client-certificate |
+| B / C / Quality — ChatGPT chat instruction presets | E2E-PROVIDER-chatgpt-chat-instruction-presets |
 | C / E / F / Quality / Security — Session Todo checklist | E2E-CHAT-session-todo-checklist |
 | C / E / Security / Quality — Live Voice four-stage interaction | E2E-LIVE-VOICE-four-stage-ui |
 | C / F — Hourly task updates | E2E-SCHEDULED-manual-to-hourly |

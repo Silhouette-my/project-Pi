@@ -23,6 +23,8 @@ pub(crate) fn migrate_v25_to_v26(conn: &Connection, path: &Path) -> Result<()> {
     if !has_column {
         tx.execute_batch("ALTER TABLE turn_queue ADD COLUMN workflow_run_id TEXT;")?;
     }
+    // The parallel Chat preview also used v25, without the workflow tables.
+    tx.execute_batch(super::PROJECT_WORKFLOW_DDL)?;
     tx.execute_batch(WORKFLOW_BOUNDARY_DDL)?;
     tx.pragma_update(None, "user_version", 26i64)?;
     tx.commit().with_context(|| {

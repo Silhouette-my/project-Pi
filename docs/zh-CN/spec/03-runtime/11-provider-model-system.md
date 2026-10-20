@@ -85,6 +85,19 @@ HTTP 429 以账号限流错误呈现并附带服务端给出的重试等待时�
 或发生了自动 reasoning 切换时，assistant 消息附带 `chatgpt.model_route` 诊断，
 但不因此失败轮次。
 
+聊天模式不发送桌面 agent 系统提示词，其系统提示词来自按会话选择的聊天指令
+预设。仅当本地会话使用 `chatgpt_conversation` 模型时，输入框在模型选择旁显示
+「聊天指令」按钮：**默认**使用内置聊天人格（以用户语言回答，简洁、直接、可执行，
+不含工具规则），**无**表示完全不发送系统提示词，其余选项按 id 列出已发现的预设。
+预设是 `<workspace>/.pi/chat-instructions/` 与 `~/.pi/agent/chat-instructions/`
+中的 Markdown 文件；id 即文件名（不含扩展名），同名时工作区文件覆盖全局文件，
+保留 id `none` 不作为文件提供。选择通过 `session.configure` 持久化为会话的
+`promptPreset`（null 恢复默认）；预设文件被删除后静默回退内置人格。
+Electron Main 在启动时把 id 解析为内容并以 `chatInstructions` 传给 sidecar
+（`undefined` = 内置人格，`""` = 不发送系统提示词，其他字符串 = 预设内容原文）；
+更改会使可复用 runtime 失效，下一轮重新组装。预设列表通道只返回 id，
+文件内容不进入渲染层。
+
 Pro 仅在账号目录实际返回时可选，不能由显示名称推导 slug 或额外参数。
 桌面思考等级映射为账号 effort 枚举（`low`、`medium`、`high`、`extra_high`），
 "off" 不显式指定。未指定时优先采用目录 `thinking_efforts` 中该模型 advertised 的

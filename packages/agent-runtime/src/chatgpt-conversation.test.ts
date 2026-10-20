@@ -41,6 +41,25 @@ describe("ChatGPT conversation", () => {
     expect(body.messages).toEqual([expect.objectContaining({ author: { role: "user" }, content: { content_type: "text", parts: ["hello"] } })]);
   });
 
+  it("sends a chat instruction as a system row but drops an empty one", () => {
+    const withInstruction = buildChatGptConversationBody("gpt-6", [
+      { role: "system" as const, content: "Answer in haiku.", timestamp: 0 },
+      user("hello"),
+    ]);
+    expect((withInstruction.messages as unknown[]).length).toBe(2);
+    expect(withInstruction.messages).toEqual([
+      expect.objectContaining({ author: { role: "system" }, content: { content_type: "text", parts: ["Answer in haiku."] } }),
+      expect.objectContaining({ author: { role: "user" } }),
+    ]);
+    // The "None" chat instruction keeps a bookkeeping row in the transcript,
+    // but no empty system section may reach the wire (spec 03-runtime/11).
+    const none = buildChatGptConversationBody("gpt-6", [
+      { role: "system" as const, content: "", timestamp: 0 },
+      user("hello"),
+    ]);
+    expect(none.messages).toEqual([expect.objectContaining({ author: { role: "user" }, content: { content_type: "text", parts: ["hello"] } })]);
+  });
+
   it("maps desktop thinking levels onto account efforts", async () => {
     expect(buildChatGptConversationBody("gpt-6", [user("hello")], undefined, "extra_high")).toMatchObject({ thinking_effort: "extra_high" });
     const fixture = hostFixture();

@@ -204,9 +204,13 @@ export function buildChatGptConversationBody(model: string, messages: Message[],
   const users = messages.filter((message) => message.role === "user");
   const newMessages = previous ? users.slice(previous.userCount) : messages;
   if (!newMessages.some((message) => message.role === "user")) throw new Error("ChatGPT Chat requires a new user message; local tool continuations are unsupported.");
+  // The "None" chat instruction selects an empty system prompt (spec
+  // 03-runtime/11): the transcript keeps its bookkeeping row, but no empty
+  // system section reaches the wire.
+  const wireMessages = newMessages.filter((message) => message.role !== "system" || textContent(message).trim() !== "");
   return {
     action: "next",
-    messages: newMessages.map((message) => ({ id: randomUUID(), author: { role: message.role }, content: { content_type: "text", parts: [textContent(message)] }, metadata: {} })),
+    messages: wireMessages.map((message) => ({ id: randomUUID(), author: { role: message.role }, content: { content_type: "text", parts: [textContent(message)] }, metadata: {} })),
     conversation_id: previous?.conversationId ?? null,
     ...(previous ? { parent_message_id: previous.lastParentId } : {}),
     model, requested_default_model: model, client_prepare_state: "N/A",

@@ -43,7 +43,12 @@ export type SessionConfiguration = Pick<
   SessionSummary,
   "mode" | "providerId" | "modelId" | "thinkingLevel"
 > &
-  Partial<Pick<SessionSummary, "permissionMode">>;
+  Partial<Pick<SessionSummary, "permissionMode">> & {
+    // ChatGPT chat-mode instruction preset id (spec 03-runtime/11). null
+    // clears it back to the built-in chat persona; mergeSessionConfiguration
+    // forwards null while skipping only undefined.
+    promptPreset?: string | null;
+  };
 
 export type SessionSelection = { id: string; intent: number };
 

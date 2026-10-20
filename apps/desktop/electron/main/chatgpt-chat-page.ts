@@ -1,5 +1,6 @@
 import type { ChatGptChatStatus } from "@pi-desktop/shared";
 import { pageModels, parseChatGptChatModels } from "./chatgpt-chat-models";
+import { conversationRequestFacts, conversationValidationErrors, sanitizeConversationRequestFacts } from "./chatgpt-chat-diagnostics";
 import type { ChatGptConversationDiagnostic } from "./chatgpt-chat-diagnostics";
 
 /** Code executed in the ChatGPT page's main world. No credentials leave it. */
@@ -56,7 +57,7 @@ async function pageAuthStatus(includeBackendDiagnostic: boolean, diagnoseAuthent
 }
 
 export function conversationScript(requestId: string, body: Record<string, unknown>, observedHeaders: Record<string, string>): string {
-  return `(${pageConversation.toString()})(${JSON.stringify(requestId)},${JSON.stringify(body)},${JSON.stringify(observedHeaders)},${pageModels.toString()},${parseChatGptChatModels.toString()},${solveProofOfWork.toString()})`;
+  return `(${pageConversation.toString()})(${JSON.stringify(requestId)},${JSON.stringify(body)},${JSON.stringify(observedHeaders)},${pageModels.toString()},${parseChatGptChatModels.toString()},${solveProofOfWork.toString()},${conversationRequestFacts.toString()},${conversationValidationErrors.toString()})`;
 }
 
 /**
@@ -112,7 +113,7 @@ function solveProofOfWork(seed: string, difficulty: string, maxAttempts = 400000
   return undefined;
 }
 
-async function pageConversation(requestId: string, body: Record<string, unknown>, observedHeaders: Record<string, string>, loadModels: typeof pageModels, parseModels: typeof parseChatGptChatModels, solvePow: typeof solveProofOfWork) {
+async function pageConversation(requestId: string, body: Record<string, unknown>, observedHeaders: Record<string, string>, loadModels: typeof pageModels, parseModels: typeof parseChatGptChatModels, solvePow: typeof solveProofOfWork, requestFacts: typeof conversationRequestFacts, validationErrors: typeof conversationValidationErrors) {
   const page = window as unknown as {
     SentinelSDK?: { token: (action: string) => Promise<unknown> };
     __piChatSentinelLoad?: Promise<void>;
@@ -130,11 +131,13 @@ async function pageConversation(requestId: string, body: Record<string, unknown>
   let retryAfterSeconds: string | undefined;
   let contentType: string | null | undefined;
   let detail: string | undefined;
+  let postRequestFacts: ReturnType<typeof conversationRequestFacts> | undefined;
+  let postValidationErrors: ReturnType<typeof conversationValidationErrors> | undefined;
   let turnstileRequired: string | undefined;
   let powRequested = false;
   let powSolved = false;
   let requirementsResolved = false;
-  const diagnostic = (outcome: ChatGptConversationDiagnostic["outcome"], reason?: string) => send({ type: "diagnostic", stage: progress.stage, outcome, ...(reason ? { reason } : {}), ...(httpStatus !== undefined ? { status: httpStatus } : {}), ...(contentType !== undefined ? { contentType } : {}), ...(detail !== undefined ? { detail } : {}), ...(turnstileRequired !== undefined ? { turnstileRequired } : {}), ...(powRequested ? { powRequested: true } : {}), ...(powSolved ? { powSolved: true } : {}), ...(requirementsResolved ? { requirementsResolved: true } : {}) });
+  const diagnostic = (outcome: ChatGptConversationDiagnostic["outcome"], reason?: string) => send({ type: "diagnostic", stage: progress.stage, outcome, ...(reason ? { reason } : {}), ...(httpStatus !== undefined ? { status: httpStatus } : {}), ...(contentType !== undefined ? { contentType } : {}), ...(detail !== undefined ? { detail } : {}), ...(postRequestFacts ? { requestFacts: postRequestFacts } : {}), ...(postValidationErrors ? { validationErrors: postValidationErrors } : {}), ...(turnstileRequired !== undefined ? { turnstileRequired } : {}), ...(powRequested ? { powRequested: true } : {}), ...(powSolved ? { powSolved: true } : {}), ...(requirementsResolved ? { requirementsResolved: true } : {}) });
   const begin = (next: ChatGptConversationDiagnostic["stage"], reason: string) => { progress.stage = next; failureReason = reason; httpStatus = undefined; retryAfterSeconds = undefined; contentType = undefined; detail = undefined; turnstileRequired = undefined; powRequested = false; powSolved = false; requirementsResolved = false; diagnostic("started"); };
   const fail: (reason: string, message: string) => never = (reason, message) => { failureReason = reason; throw new Error(message); };
   const bounded = async <T>(work: Promise<T>, timeoutReason: string, ms: number): Promise<T> => {
@@ -210,16 +213,25 @@ async function pageConversation(requestId: string, body: Record<string, unknown>
         diagnostic("failed");
       }
     }
-    // The desktop thinking selector maps to an account effort; "off" sends
-    // none. Prefer the model's instant effort when it offers one, otherwise
-    // the account default, and clamp explicit values the model does not offer.
+    // Preserve account-native efforts. The consumer thinking models advertise
+    // standard/extended rather than the desktop selector's medium/high values.
     const entry = typeof body.model === "string" ? page.__piChatModelDefaults?.get(body.model) : undefined;
     let effort = typeof body.thinking_effort === "string" ? body.thinking_effort : undefined;
     if (entry) {
       if (!effort) effort = entry.efforts.includes("instant") ? "instant" : entry.defaultEffort;
-      else if (entry.efforts.length > 0 && !entry.efforts.includes(effort)) effort = entry.defaultEffort;
+      else if (entry.efforts.length > 0 && !entry.efforts.includes(effort)) {
+        const mapped = effort === "high" ? "extended" : effort === "medium" ? "standard" : undefined;
+        if (mapped && entry.efforts.includes(mapped)) effort = mapped;
+        else {
+          progress.stage = "catalog";
+          postRequestFacts = requestFacts(body, body.thinking_effort, entry);
+          fail("thinking_effort_unsupported", "The selected thinking level is unsupported by this ChatGPT model. Check its account model catalog.");
+        }
+      }
     }
-    const requestBody = effort !== undefined ? { ...body, thinking_effort: effort } : body;
+    const requestBody = { ...body };
+    if (effort !== undefined) requestBody.thinking_effort = effort;
+    else delete requestBody.thinking_effort;
     // The consumer risk engine expects the chat-requirements token group the
     // official client prefetches (prepare -> finalize). Best-effort: any
     // failure degrades to the previous header set, mirroring the official
@@ -260,6 +272,7 @@ async function pageConversation(requestId: string, body: Record<string, unknown>
       diagnostic("failed", failureReason === "chatreq_timeout" ? "chatreq_timeout" : "chatreq_failed");
     }
     if (controller.signal.aborted) throw new Error("ChatGPT request cancelled.");
+    postRequestFacts = requestFacts(requestBody, body.thinking_effort, entry);
     begin("post", "post_failed");
     const response = await fetch("/backend-api/conversation", {
       method: "POST", credentials: "include", signal: controller.signal,
@@ -283,7 +296,8 @@ async function pageConversation(requestId: string, body: Record<string, unknown>
       try {
         const parsed: unknown = await response.json();
         const serverDetail = (parsed as { detail?: unknown } | null)?.detail;
-        if (typeof serverDetail === "string") detail = serverDetail.slice(0, 200);
+        if (typeof serverDetail === "string" && ["Invalid conversation body", "Unusual activity detected from your device", "Too many requests"].includes(serverDetail)) detail = serverDetail;
+        postValidationErrors = validationErrors(serverDetail);
       } catch { /* unreadable or non-JSON body: keep the generic failure */ }
       if (response.status === 429) {
         const retryAfter = response.headers.get("retry-after");
@@ -330,6 +344,7 @@ async function pageConversation(requestId: string, body: Record<string, unknown>
       sdk_token_timeout: "ChatGPT request authorization timed out. Reopen login and try again.",
       sdk_token_invalid: "ChatGPT could not authorize this request. Open login and try again.",
       device_missing: "ChatGPT device session is missing. Open login again.",
+      thinking_effort_unsupported: "The selected thinking level is unsupported by this ChatGPT model. Check its account model catalog.",
       catalog_failed: "Could not load the ChatGPT account model catalog. Refresh models in provider settings and try again.",
       post_failed: "Could not send the ChatGPT conversation request. Check your connection and login.",
       post_http_error: safeHttpStatus === undefined ? "ChatGPT rejected the conversation request." : `ChatGPT request failed (HTTP ${safeHttpStatus}).`,
@@ -359,7 +374,9 @@ export function streamPayload(raw: unknown): ({ requestId: string; type: "chunk"
       ...(typeof value.reason === "string" ? { reason: value.reason } : {}),
       ...(typeof value.status === "number" && Number.isInteger(value.status) && value.status >= 0 && value.status <= 599 ? { status: value.status } : {}),
       ...(value.contentType === null || (typeof value.contentType === "string" && /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(value.contentType)) ? { contentType: value.contentType as string | null } : {}),
-      ...(typeof value.detail === "string" && value.detail.length <= 200 ? { detail: value.detail } : {}),
+      ...(typeof value.detail === "string" && ["Invalid conversation body", "Unusual activity detected from your device", "Too many requests"].includes(value.detail) ? { detail: value.detail } : {}),
+      ...(value.requestFacts ? { requestFacts: sanitizeConversationRequestFacts(value.requestFacts) } : {}),
+      ...(value.validationErrors ? { validationErrors: conversationValidationErrors(value.validationErrors) } : {}),
       ...(value.turnstileRequired === "not_required" || value.turnstileRequired === "delayed" || value.turnstileRequired === "required" ? { turnstileRequired: value.turnstileRequired } : {}),
       ...(value.powRequested === true ? { powRequested: true } : {}),
       ...(value.powSolved === true ? { powSolved: true } : {}),

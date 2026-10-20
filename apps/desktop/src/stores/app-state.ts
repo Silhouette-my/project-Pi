@@ -111,6 +111,7 @@ export type DraftSessionConfiguration = {
   providerId?: string;
   modelId?: string;
   permissionMode?: PermissionMode;
+  promptPreset?: string | null;
 };
 
 
@@ -234,6 +235,8 @@ export type AppState = {
     modelId?: string;
     thinkingLevel: SessionThinkingLevel;
     permissionMode?: PermissionMode;
+    /** Chat instruction preset id; null resets to the built-in chat persona. */
+    promptPreset?: string | null;
   }) => Promise<void>;
   /** Returns true once accepted unless concurrent smart Stop restores it. */
   sendPrompt: (

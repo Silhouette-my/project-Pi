@@ -782,15 +782,10 @@ export function createSessionSlice({
       const sessionId = get().activeSessionId;
       if (!sessionId) {
         set((state) => ({
-          draftConfiguration: {
-            mode: config.mode,
-            thinkingLevel: config.thinkingLevel,
-            providerId:
-              config.providerId ?? state.draftConfiguration?.providerId,
-            modelId: config.modelId ?? state.draftConfiguration?.modelId,
-            permissionMode:
-              config.permissionMode ?? state.draftConfiguration?.permissionMode,
-          },
+          draftConfiguration: runtime.mergeSessionConfiguration(
+            state.draftConfiguration ?? undefined,
+            config,
+          ),
         }));
         return;
       }

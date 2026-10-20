@@ -103,3 +103,13 @@ test("changing only the thinking level keeps pinned session capabilities", () =>
   assert.equal(next.supportsReasoning, true);
   assert.deepEqual(next.supportedThinkingLevels, ["low", "high", "max"]);
 });
+
+test("optimistic configuration preserves omitted presets and applies explicit resets", () => {
+  const session = { providerId: "chat", modelId: "gpt-6", promptPreset: "exploration" };
+  const next = applyOptimisticSessionConfiguration(session, {
+    modelId: "gpt-6-thinking", promptPreset: undefined,
+  });
+  assert.equal(next.promptPreset, "exploration");
+  assert.equal(applyOptimisticSessionConfiguration(next, { promptPreset: null }).promptPreset, null);
+  assert.equal(applyOptimisticSessionConfiguration(next, { promptPreset: "none" }).promptPreset, "none");
+});

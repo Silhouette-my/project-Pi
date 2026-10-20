@@ -92,15 +92,46 @@ The renderer can invoke status/login/logout only. Local tools are not sent
 as ChatGPT tools; account-side connectors execute on the service and appear
 as activity in the transcript.
 
+Chat mode never sends the desktop agent system prompt. Its system prompt comes
+from a per-session chat instruction preset. The composer shows a **Chat
+instructions** chip next to the model picker, only for `chatgpt_conversation`
+models on local sessions: **Default** selects the built-in chat persona
+(answer in the user's language; concise, direct, actionable — no tool rules),
+**None** sends no system prompt at all, and any discovered preset is listed by
+id. Presets are Markdown files in `<workspace>/.pi/chat-instructions/` and
+`~/.pi/agent/chat-instructions/`; the id is the file stem, a workspace file
+shadows a global file with the same id, and the reserved id `none` is never
+offered as a file. The selection persists as the session's `promptPreset`
+value through `session.configure` (null resets it to Default); a preset id
+that no longer resolves falls back to the built-in persona silently. Electron
+main resolves the id to content at launch and passes it to the sidecar as
+`chatInstructions` (`undefined` = built-in persona, `""` = no system prompt,
+any other string = the preset content verbatim); changing it retires the
+reusable runtime so the next turn recomposes. The preset list channel returns
+ids only; file content never reaches the renderer. Before a session exists,
+the chip displays the draft selection and retains it across model changes.
+The selected preset is configured on the new session before its first turn;
+an omitted selection keeps the existing default, while null explicitly resets it.
+For project discussions and work items, the host-selected workflow snapshot
+travels as explicit user-side reference data, separate from the preset. It
+includes shared constraints, progress, decisions and continuation context without
+importing ordinary repository instructions. None still sends no system persona.
+A changed snapshot retires the runtime before the next request.
+SQLite schema v27 adds the nullable preset column after workflow v25/v26.
+Upgrade also accepts the parallel Chat v25 preview: it preserves selected
+presets and sessions while adding the missing workflow tables.
+
 Pro is selectable only when returned by the account catalog. Its title never
 determines a slug or enables assumed Pro flags. The desktop thinking selector
-maps to the account effort enum (`low`, `medium`, `high`, `extra_high`);
-"off" sends no explicit effort. When none is set, the page prefers the
-model's advertised `instant` effort from the catalog `thinking_efforts`,
-otherwise `default_thinking_effort`; when neither exists the field is
-omitted and the service applies its default. An explicit effort outside the
-model's advertised efforts falls back to the account default; when the
-catalog is unavailable an explicit effort is sent unclamped. Actual Pro
+first maps to `low`, `medium`, `high`, or `extra_high`. The page preserves an
+exact match in the account's `thinking_efforts`; for catalogs using consumer
+labels, it maps `high` to `extended` and `medium` to `standard` only when the
+target is advertised. Other unsupported explicit efforts fail before POST,
+rather than silently using a lower default. "off" sends no explicit effort:
+the page prefers advertised `instant`, then `default_thinking_effort`; when
+neither exists it omits the field and the service applies its default. When
+the catalog is unavailable or advertises no effort list, an explicit effort
+is sent unchanged. Actual Pro
 availability and successful generation remain account-side acceptance
 checks. After page reload, first use of a model refreshes the account
 catalog before submitting, preserving account limits across restart.
