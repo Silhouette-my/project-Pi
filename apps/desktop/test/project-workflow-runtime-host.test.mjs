@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import test from "node:test";
 import { AgentHost } from "@pi-desktop/agent-host";
-import { createHostSessionPort } from "@pi-desktop/host-runtime";
+import { createHostSessionPort, listPendingToolRequests } from "@pi-desktop/host-runtime";
 import { Host } from "../../../scripts/e2e/host.mjs";
 register(new URL("./helpers/ts-import-hooks.mjs", import.meta.url));
 const { createProjectWorkflowHostPort } = await import("../electron/main/services/project-workflow-host.ts");
@@ -39,7 +39,8 @@ test("Real Host validates continuation receipts, exact scope, actual consumption
         return { turnId: `synthetic-model-edge-${++sequence}` };
       },
       async stop() { return { requested: true }; }, async abort() {}, async respondInput() {},
-    }, approvals: { listPending: async () => [], resolveTool: async () => {}, resolveContract: async () => {} },
+    }, approvals: { listPendingTools: (sessionId) => listPendingToolRequests(() => host, sessionId),
+      resolveTool: async () => {}, resolveContract: async () => {} },
   });
   const execution = createProjectWorkflowExecution({ getAgentHost: () => agentHost, getHost: () => host, flushTranscript: async () => true,
     assertExecutableSession: async () => {}, // This test owns the synthetic tool-capable model boundary.
