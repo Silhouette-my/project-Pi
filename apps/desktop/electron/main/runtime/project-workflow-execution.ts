@@ -56,7 +56,9 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     const rows = start < 0 ? [] : messages.slice(start + 1, next < 0 ? undefined : next);
     const effects: WorkflowRun["effects"] = [...run.effects.filter((effect) => !effect.action.startsWith("tool:")), ...rows.filter((message) => message.toolName).map((message) => ({
       id: message.toolCallId ?? message.id, action: `tool:${message.toolName}`, resource: `message:${message.id}`,
-      state: message.toolStatus === "success" ? "confirmed" as const : message.toolStatus === "denied" ? "failed" as const : "unknown" as const,
+      state: message.toolStatus === "success" ? "confirmed" as const
+        : message.toolStatus === "denied" || (message.toolResult as { details?: { code?: unknown } } | null)?.details?.code === "WORKFLOW_RESOURCE_DENIED"
+          ? "failed" as const : "unknown" as const,
       detail: `Transcript ${run.sessionId}/${message.id}; tool status ${message.toolStatus ?? "unknown"}`,
     }))];
     const final = rows.filter((message) => message.role === "assistant" && message.status === "complete" && !message.parentToolCallId).at(-1);

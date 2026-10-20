@@ -519,6 +519,9 @@ test("A resource denial keeps its precise authorization guidance and never dispa
   await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
   const turnId = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
   const reason = "WORKFLOW_RESOURCE_DENIED: Write /synthetic/other requires explicit workflow resource authorization";
+  f.transcripts.get("session-1").push({ id: "denied-write", role: "tool", content: reason, status: "complete", createdAt: timestamp,
+    toolName: "Write", toolCallId: "denied-write", toolStatus: "error",
+    toolResult: { isError: true, terminate: true, details: { code: "WORKFLOW_RESOURCE_DENIED", error: reason } } });
   f.agentHost.ingest({ sessionId: "session-1", turnId, ts: Date.parse(timestamp),
     event: { type: "error", error: { code: "WORKFLOW_RESOURCE_DENIED", message: reason, retriable: false } } });
   await f.runtime.onTurnSettled("session-1");
@@ -526,5 +529,9 @@ test("A resource denial keeps its precise authorization guidance and never dispa
   assert.equal(state.runs[0].state, "failed");
   assert.equal(state.workstreams[0].status, "awaiting_user");
   assert.match(state.workstreams[0].blocker.reason, /Write \/synthetic\/other requires explicit workflow resource authorization/);
+  assert.equal(state.runs[0].effects.find((effect) => effect.id === "denied-write").state, "failed", "a trusted pre-effect refusal is not an uncertain external effect");
   assert.equal(f.prompts.length, 1);
+  f.host.edit((snapshot) => { snapshot.workstreams[0].nextAction = "Write only the authorized output after explicit user correction"; });
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  assert.equal(f.prompts.length, 2, "only a fresh explicit user start may recover the known refusal");
 });
