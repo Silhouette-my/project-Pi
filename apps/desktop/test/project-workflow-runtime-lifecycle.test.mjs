@@ -51,8 +51,25 @@ function durableHost(initial) {
         case "workstream.transition": Object.assign(w, { status: command.status, nextAction: command.nextAction, blocker: command.blocker, revision: w.revision + 1 }); break;
         case "workstream.update": Object.assign(w, command.patch); w.revision++; break;
         case "conversation.link": state.conversations = state.conversations.filter((c) => c.sessionId !== command.conversation.sessionId); state.conversations.push(command.conversation); break;
-        case "run.start": state.runs.push(command.run); break;
-        case "run.observe": Object.assign(state.runs.find((r) => r.id === command.runId), { state: command.state, outcome: command.outcome, effects: command.effects, completionKey: command.completionKey }); break;
+        case "run.start": {
+          const auth = state.authorizations.find((a) => a.id === command.run.authorizationId);
+          assert.equal(command.run.workstreamRevision, w.revision);
+          for (const effect of command.run.effects) {
+            assert.ok(auth.actions.includes(effect.action), "planned effect action must be authorized");
+            assert.ok(auth.resources.includes(effect.resource), "planned effect resource must be authorized");
+          }
+          state.runs.push(command.run); break;
+        }
+        case "run.observe": {
+          const run = state.runs.find((r) => r.id === command.runId);
+          for (const prior of run.effects) {
+            const effect = command.effects.find((e) => e.id === prior.id);
+            assert.ok(effect, "observed effects cannot be erased");
+            assert.equal(effect.action, prior.action); assert.equal(effect.resource, prior.resource);
+            if (prior.state === "confirmed") assert.equal(effect.state, "confirmed");
+          }
+          Object.assign(run, { state: command.state, outcome: command.outcome, effects: command.effects, completionKey: command.completionKey }); break;
+        }
         case "delivery.publish": state.deliveries.push(command.delivery); break;
         case "delivery.consume": Object.assign(state.deliveries.find((d) => d.id === command.deliveryId), { state: "consumed", disposition: command.disposition }); break;
         case "decision.propose": state.decisions.push(command.decision); break;
@@ -302,7 +319,8 @@ test("A queued workflow can pause before execution and resume without repeating 
   await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
   assert.equal((await f.host.snapshot()).runs[0].state, "queued");
   await f.action("pause");
-  assert.equal((await f.host.snapshot()).runs[0].state, "paused");
+  assert.equal((await f.host.snapshot()).runs[0].state, "cancelled");
+  assert.match((await f.host.snapshot()).runs[0].completionKey, /paused-before-start$/);
   await f.action("resume");
   const state = await f.host.snapshot();
   assert.equal(state.runs.length, 2);

@@ -6,6 +6,7 @@ import type {
 } from "@pi-desktop/shared";
 import { assembleWorkflowContext, WORKFLOW_CHECKPOINT_INSTRUCTIONS } from "./project-workflow-context";
 import { parseWorkflowCheckpoint, type WorkflowCheckpoint, type WorkflowStep } from "./project-workflow-checkpoint";
+import { workflowAssignment } from "./project-workflow-receipt";
 
 export type WorkflowObservation = { state: WorkflowRun["state"]; content: string; effects: WorkflowRun["effects"] };
 export interface WorkflowExecutionPort {
@@ -82,15 +83,15 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     if (currentRuns(w).some((r) => r.sessionId === sessionId)) return;
     const run: WorkflowRun = { id: `workflow:${key}`, ...scope(w), sessionId, executor: "agent-host",
       workstreamRevision: w.revision, decisionRevision: w.decisionRevision, authorizationId: auth.id,
-      state: "queued", outcome: "", effects: [
-        { id: "dispatch", action: step.action, resource: sessionId, state: "planned", detail: step.prompt },
-        { id: "assignment", action: step.action, resource: sessionId, state: "planned", detail: JSON.stringify(step) },
-        ...deliveries.map((delivery) => ({ id: `delivery:${delivery.id}`, action: "result.consume", resource: delivery.id, state: "planned" as const, detail: "Awaiting owner checkpoint" })),
-      ],
+      state: "queued", outcome: "", effects: step.resources.map((resource, index) => ({
+        id: index === 0 ? "dispatch" : `scope:${index}`, action: step.action, resource, state: "planned",
+        detail: index === 0 ? JSON.stringify({ step, deliveryIds: deliveries.map((d) => d.id) }) : "Authorized bounded assignment scope",
+      })),
       startedAt: now(), updatedAt: now() };
     if (state.runs.some((r) => r.id === run.id)) return;
     await mutate({ kind: "run.start", run }, `${run.id}:start`);
     const pending = deliveries.length ? `\nResults to consume:\n${JSON.stringify(deliveries)}` : "";
+    let admitted = false;
     try {
       if (disposed) fail("ABORTED", "Workflow stopped before dispatch");
       await reload();
@@ -102,15 +103,21 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       }
       const result = await deps.execution.start({ run, authorization: auth,
         content: assembleWorkflowContext(state, w, { conversation: conversation(sessionId), authorization: auth })
-          + pending + "\n\nAssignment:\n" + step.prompt + "\n\n" + WORKFLOW_CHECKPOINT_INSTRUCTIONS });
+          + pending + `\nRun identity: ${run.id}` + "\n\nAssignment:\n" + step.prompt + "\n\n" + WORKFLOW_CHECKPOINT_INSTRUCTIONS });
+      admitted = true;
       await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: result.queued ? "queued" : "executing", outcome: "",
-        effects: [{ ...run.effects[0], state: "confirmed", detail: result.turnId }, ...run.effects.slice(1)] });
+        effects: [{ ...run.effects[0], state: "confirmed", detail: JSON.stringify({ ...workflowAssignment(run), turnId: result.turnId }) }, ...run.effects.slice(1)] });
     } catch (error) {
-      const code = (error as { code?: string; errorCode?: string }).errorCode ?? (error as { code?: string }).code;
-      const rejected = ["ABORTED", "FORBIDDEN", "INVALID_ARGUMENT", "NOT_FOUND", "AGENT_BUSY", "WORKSPACE_CHANGED", "IDEMPOTENCY_CONFLICT", "CONFLICT"].includes(code ?? "");
+      const code = (error as { code?: string; errorCode?: string } | null)?.errorCode ?? (error as { code?: string } | null)?.code;
+      const rejected = !admitted && ["ABORTED", "FORBIDDEN", "INVALID_ARGUMENT", "NOT_FOUND", "AGENT_BUSY", "WORKSPACE_CHANGED", "IDEMPOTENCY_CONFLICT", "CONFLICT"].includes(code ?? "");
       // Explicit admission rejection did not execute; an uncertain RPC may have.
+      await reload();
+      const recorded = state.runs.find((record) => record.id === run.id)!;
+      const effects: WorkflowRun["effects"] = recorded.effects.map((effect) => effect.id === "dispatch" && effect.state !== "confirmed"
+        ? { ...effect, state: rejected ? "failed" : "unknown" } : effect);
+      if (!rejected && recorded.effects[0].state === "confirmed") effects.push({ ...recorded.effects[0], id: "dispatch-outcome", state: "unknown", detail: String(error) });
       await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: rejected ? "failed" : "unknown", outcome: String(error),
-        effects: [{ ...run.effects[0], state: rejected ? "failed" : "unknown", detail: String(error) }, ...run.effects.slice(1)] });
+        effects });
       await transition(w, "awaiting_user", "Reconcile the uncertain dispatch before resuming", String(error));
       throw error;
     }
@@ -119,8 +126,8 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     for (const run of currentRuns(w)) {
       const result = await deps.execution.stop(run, cancel);
       if (result.cancelledBeforeStart && !cancel) {
-        await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: "paused", outcome: "Paused before runtime admission; no external work executed",
-          effects: run.effects.map((e) => e.id === "dispatch" ? { ...e, state: "failed" } : e), completionKey: `${run.id}:paused-before-start` });
+        await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: "cancelled", outcome: "Paused before runtime admission; no external work executed",
+          effects: run.effects, completionKey: `${run.id}:paused-before-start` });
       }
     }
   }
@@ -135,7 +142,8 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       await transition(w, "blocked", w.nextAction, "The accountable owner is executing another workstream"); return;
     }
     const latest = state.runs.filter((r) => r.workstreamId === w.id && conversation(r.sessionId)?.relation === "main").at(-1);
-    if (latest && ["unknown", "interrupted", "failed", "cancelled"].includes(latest.state)) {
+    if (latest && ["unknown", "interrupted", "failed", "cancelled"].includes(latest.state)
+      && !latest.completionKey?.endsWith(":paused-before-start")) {
       await transition(w, "awaiting_user", "Resolve the last execution outcome before resuming", latest.outcome); return;
     }
     const authorizationId = authId ?? latest?.authorizationId
@@ -165,6 +173,10 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     if (live({ ...run, state: observation.state })) return;
     const w = work(run.workstreamId);
     const completionKey = `${run.id}:terminal`;
+    if (run.state === "queued" && observation.state === "completed") {
+      await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: "executing", outcome: "Runtime admission confirmed before terminal receipt",
+        effects: observation.effects }, `${run.id}:admitted`);
+    }
     await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: observation.state,
       outcome: observation.content, effects: observation.effects }, `${run.id}:observed`);
     const finish = () => mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: observation.state,
@@ -179,7 +191,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     catch (error) { if (!["paused", "cancelled"].includes(w.status)) await transition(w, "awaiting_user", "Review the missing or invalid work checkpoint", String(error)); await finish(); return; }
     const side = conversation(run.sessionId)?.relation !== "main";
     const stale = run.decisionRevision !== w.decisionRevision;
-    const offered = run.effects.filter((e) => e.action === "result.consume").map((e) => e.resource);
+    const offered = workflowAssignment(run).deliveryIds;
     for (const deliveryId of report.consumedDeliveryIds) {
       if (!offered.includes(deliveryId)) fail("INVALID_ARGUMENT", "The checkpoint acknowledged a result not offered to this run");
       const delivery = state.deliveries.find((d) => d.id === deliveryId);
@@ -189,6 +201,8 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     for (const artifact of stale ? [] : report.artifacts) {
       await mutate({ kind: "artifact.put", artifact: { ...artifact, ...scope(w), runId: run.id, source: { kind: "run", ref: run.id } } }, `${run.id}:artifact:${artifact.id}`);
     }
+    const candidate = !side && !stale ? report.artifacts.filter((a) => a.kind === "candidate").at(-1) : undefined;
+    if (candidate) await mutate({ kind: "workstream.update", ...scope(w), patch: { currentCandidateId: candidate.id } }, `${run.id}:candidate`);
     for (const evidence of stale ? [] : report.evidence) {
       await mutate({ kind: "evidence.add", evidence: { ...evidence, ...scope(w), source: { kind: "run", ref: run.id },
         limits: `Agent-reported checkpoint; verify against the linked source. ${evidence.limits}` } }, `${run.id}:evidence:${evidence.id}`);
@@ -269,8 +283,8 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
         }
         await transition(w, "ready", w.nextAction);
         const last = state.runs.filter((r) => r.workstreamId === w.id && conversation(r.sessionId)?.relation === "main").at(-1);
-        const assignment = last?.state === "paused" ? last.effects.find((effect) => effect.id === "assignment") : undefined;
-        const next: WorkflowStep | undefined = assignment ? JSON.parse(assignment.detail) : last?.state === "completed" ? parseWorkflowCheckpoint(last.outcome).next : undefined;
+        const assignment = last?.completionKey?.endsWith(":paused-before-start") ? workflowAssignment(last).step : undefined;
+        const next: WorkflowStep | undefined = assignment ?? (last?.state === "completed" ? parseWorkflowCheckpoint(last.outcome).next : undefined);
         if (last?.state === "completed" && !next) await transition(work(w.id), "awaiting_user", "Choose a new bounded action after the last checkpoint");
         else await continueWork(work(w.id), undefined, next, input.commandId);
       } else await reconcile(w.id);

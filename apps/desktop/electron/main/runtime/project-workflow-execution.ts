@@ -3,6 +3,7 @@ import type { HostRpc } from "@pi-desktop/host-runtime";
 import type { UiMessage, WorkflowRun } from "@pi-desktop/shared";
 import type { WorkflowExecutionPort, WorkflowObservation } from "./project-workflow-runtime";
 import { DESKTOP_PRINCIPAL } from "../agent-host-bridge";
+import { workflowTurnId } from "./project-workflow-receipt";
 
 type SessionCreator = WorkflowExecutionPort["createSession"];
 export type WorkflowExecutionDependencies = {
@@ -13,9 +14,6 @@ export type WorkflowExecutionDependencies = {
   flushTranscript: () => Promise<boolean>;
 };
 const messageId = (runId: string) => `workflow-run:${runId}`;
-function turnId(run: WorkflowRun): string | undefined {
-  return run.effects.find((effect) => effect.id === "dispatch" && effect.state === "confirmed")?.detail;
-}
 
 /** Uses the existing admission, permission, queue, transcript and cancellation path. */
 export function createProjectWorkflowExecution(deps: WorkflowExecutionDependencies): WorkflowExecutionPort {
@@ -29,7 +27,7 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     const active = await agentHost.workSnapshot(run.sessionId);
     const queueEntry = agentHost.queue.list(run.sessionId).find((entry) => entry.userMessageId === messageId(run.id));
     if (queueEntry) return { state: "queued", content: "", effects: run.effects };
-    const expectedTurnId = turnId(run) ?? readTurns.get(run.sessionId);
+    const expectedTurnId = workflowTurnId(run) ?? readTurns.get(run.sessionId);
     if (expectedTurnId && active.activeTurnId === expectedTurnId && active.state !== "idle") {
       return { state: "executing", content: "", effects: run.effects };
     }
@@ -61,7 +59,8 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
       return { state: "completed", content: final.content, effects };
     }
     return { state: "unknown", content: "The prior dispatch has no confirmed terminal checkpoint; inspect its session and external effects before resuming",
-      effects: effects.map((effect) => ({ ...effect, state: "unknown" })) };
+      effects: run.effects.length ? [...effects, { id: "terminal-outcome", action: run.effects[0].action,
+        resource: run.effects[0].resource, state: "unknown", detail: "No trusted terminal receipt after dispatch" }] : effects };
   }
   return {
     createSession: deps.createSession,
@@ -83,7 +82,7 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     },
     observe,
     stop: async (run, cancel) => {
-      const turn = turnId(run);
+      const turn = workflowTurnId(run);
       if (!turn) return { cancelledBeforeStart: false }; // Never cancel by a guessed session identity.
       try {
         if (deps.getAgentHost().getTurn(turn).status === "queued") {
