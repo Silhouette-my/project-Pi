@@ -93,7 +93,7 @@ export function PermissionCard({
           {t("permission.workflowShellWarning")}
         </div>
       ) : null}
-      {permission.reason ? (
+      {permission.reason && permission.approvalScope !== "workflow-shell" ? (
         <div className="permission-card-reason">{permission.reason}</div>
       ) : null}
       {argBlocks.length > 0 ? (

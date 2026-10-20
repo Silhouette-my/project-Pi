@@ -49,6 +49,7 @@ window.permissionCardProbe = async () => {
   render(shellPermission);
   const shellCard = document.querySelector("[aria-label='Permission needed']");
   check(shellCard?.querySelector('[role="note"]')?.textContent.includes("Each shell command needs separate approval"), "Shell approval warning is missing");
+  check(!shellCard.textContent.includes(shellPermission.reason), "Shell boundary repeats the untranslated Host reason");
   check(![...shellCard.querySelectorAll("button")].some((item) => item.textContent.trim() === "Allow for this chat"), "Shell request offered session-wide approval");
   const preview = shellCard.querySelector(".large-text-preview");
   check(preview && Number(preview.dataset.pageCount) > 1, "Long shell command was not paginated for review");
@@ -70,6 +71,7 @@ window.permissionCardProbe = async () => {
   render(ordinaryPermission);
   const ordinaryCard = document.querySelector("[aria-label='Permission needed']");
   check(!ordinaryCard.querySelector('[role="note"]'), "Ordinary permission showed the shell-only warning");
+  check(ordinaryCard.textContent.includes(ordinaryPermission.reason), "Ordinary permission lost its reason");
   check([...ordinaryCard.querySelectorAll("button")].some((item) => item.textContent.trim() === "Allow for this chat"), "Ordinary permission lost session-wide approval");
   check(ordinaryCard.textContent.includes("/project/README.md"), "Ordinary tool arguments were not shown in full");
   button("Allow for this chat").click(); await settle();
