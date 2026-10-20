@@ -190,14 +190,20 @@ export type AppState = {
   toasts: ToastItem[];
   notifications: AppNotification[];
   unreadNotificationCount: number;
-  page: "chat" | "scheduled" | "plugins" | "settings";
+  page: "chat" | "scheduled" | "plugins" | "settings" | "project";
+  /** Renderer route identity for the independent Project Console. */
+  projectConsoleId?: string;
   /** Tab ids come from the shared settings index. */
   settingsTab: SettingsTabId;
   /** Pending row anchor (i18n key) to flash after landing on a settings tab. */
   settingsAnchor: string | null;
   /** Bumped by every setSettingsTab so a same-tab navigation is observable. */
   settingsTabNonce: number;
-  navStack: Array<{ page: AppState["page"]; sessionId?: string }>;
+  navStack: Array<{
+    page: AppState["page"];
+    sessionId?: string;
+    projectId?: string;
+  }>;
   navIndex: number;
   error?: string | null;
   errorCode?: string | null;
@@ -361,7 +367,10 @@ export type AppState = {
   refreshPlanCheckpoints: () => Promise<void>;
   handleAgentEvent: (envelope: AgentEventEnvelope) => void;
   handlePlansChanged: (event: PlanningStateEvent) => void;
-  setPage: (page: AppState["page"], opts?: { record?: boolean }) => void;
+  setPage: (
+    page: AppState["page"],
+    opts?: { record?: boolean; projectId?: string },
+  ) => void;
   setSettingsTab: (tab: AppState["settingsTab"]) => void;
   setSettingsAnchor: (key: string | null) => void;
   navBack: () => void;
