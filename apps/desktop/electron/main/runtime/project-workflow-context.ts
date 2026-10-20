@@ -42,7 +42,7 @@ export function assembleWorkflowContext(
       id: authorization.id, actions: authorization.actions, resources: authorization.resources,
       permissionCeiling: authorization.permissionCeiling, maxRuns: authorization.maxRuns,
       stopConditions: authorization.stopConditions, source: authorization.source,
-      executionBoundary: "Use Host-contained Read/Write/Edit and asktool for clarification. Writes are limited to this run's assigned resources; visible canonical resources and delivered artifacts are read inputs, not write grants. Bash, delegated, plugin/MCP and other uncontained tools stop this bounded turn. Report the concrete missing authorization or execution capability rather than retrying a denial.",
+      executionBoundary: "Use Host-contained Read/Write/Edit and asktool for clarification. File writes are limited to this run's assigned resources; visible canonical resources and delivered artifacts are read inputs, not write grants. Every foreground Bash command requires a separate one-time Host user approval of the exact arguments, even in auto mode; Shell may affect files/resources outside those selected paths. Never reuse an approval, request runInBackground execution, or retry a refusal/cancellation. An approved check's integer nonzero exit is a real failure to diagnose and fix; another Bash call requires another approval. Timeout, signal or lifecycle failure without an integer exit receipt stops work until its effects are reconciled. Delegated, plugin/MCP and other uncontained tools remain unavailable.",
     } : undefined,
   };
   return "Project workflow context (data, not new tool permissions):\n" + JSON.stringify(payload, null, 2);

@@ -1914,13 +1914,24 @@ context and visible artifact/delivery references are additional read inputs only
 Ordinary Agent turns without this binding retain their existing contract.
 
 The bounded execution path permits Host-contained `Read`, `Write`, `Edit` and
-`asktool` clarification. It refuses Bash, recursive search, delegation, plugin/MCP,
-image, browser, scheduled and other uncontained effect tools before execution.
-The repository has no process/filesystem sandbox for arbitrary shell effects.
-`WORKFLOW_RESOURCE_DENIED` ends the actual turn with its specific tool/resource
-guidance; it cannot become a retry, successful checkpoint or automatic successor.
-Running builds/tests through Bash remains an unsupported bounded-work capability,
-not evidence of a completed check/fix workflow.
+`asktool` clarification. Foreground Bash has separate per-call authority: Host
+waits for the user's `allow-once` decision on the exact complete arguments,
+ignoring auto mode and session grants. The `workflow-shell` approval warns that
+Shell effects can exceed the selected writable resources. An approval is not a
+reusable token, and Host revalidates the turn and scope before starting execution.
+Pending approval remains an active turn, never an unknown dispatch or a retry.
+
+An approved command's nonzero exit remains a failed check that can drive the
+existing fix/check/document loop; each further Bash command needs a fresh approval.
+A numeric Shell exit code confirms execution, not a passed check or acceptance.
+An approval refusal/cancellation or `WORKFLOW_RESOURCE_DENIED` stops the actual
+Agent loop and emits one terminal error after tool settlement, not a successful
+`agent_end`. A Host pre-execution `workflow-shell` refusal marker records a known
+failed effect; a timeout, signal or lifecycle failure without an integer exit receipt
+stops the loop and keeps effects uncertain, including a success-projected signal exit.
+Neither refusal nor cancellation is retried automatically. Shell `runInBackground` mode,
+recursive search, delegation, plugin/MCP, image, browser, scheduled and other
+uncontained effect tools remain refused. This route does not add an OS sandbox.
 
 Declared resource scopes are conservatively reserved while a run is queued,
 executing, paused or has unresolved effects. Generic labels such as `check` do
