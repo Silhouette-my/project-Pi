@@ -33,6 +33,8 @@ const shellBuildCommand = `printf 'build\\n' >> ${json(join(shellResource, "buil
 const shellCheckCommand = `if grep -q 'candidate-v2' ${json(join(shellResource, "candidate.txt"))}; then printf 'check-passed\\n'; else printf 'check-failed\\n'; exit 1; fi`;
 const shellRecheckCommand = `grep -q 'candidate-v2' ${json(join(shellResource, "candidate.txt"))} && printf 'check-passed\\n'`;
 const shellDeniedCommand = `printf 'unsafe' > ${json(join(canonicalWorkspace, "unsafe-bash.txt"))}`;
+const unknownMarker = join(canonicalWorkspace, "unknown-timeout.txt");
+const unknownCommand = `printf 'started\\n' >> ${json(unknownMarker)}; sleep 5; printf 'after\\n' >> ${json(unknownMarker)}`;
 const pendingCommand = key => `printf '${key}\\n' >> ${json(join(canonicalWorkspace, `pending-${key}.txt`))}`;
 const hostBinary = join(root, "target/debug/pi-desktop-host-core");
 const requests = [], checkpoints = [], coverage = [], conflictRefreshes = [];
@@ -113,7 +115,10 @@ const model = createServer(async (req, res) => {
         reply(res, body.model, null, { id: `discover-${id}`, name: "ToolSearch", args: { query: name } });
       } else reply(res, body.model, null, { id, name, args });
     };
-    if (prompt.includes("SHELL_PENDING_PAUSE") || prompt.includes("SHELL_PENDING_CANCEL")) {
+    if (prompt.includes("UNKNOWN_TIMEOUT")) {
+      assert.equal(runRequests.get(runId), 1, "an uncertain post-start Shell effect never causes another model request");
+      reply(res, body.model, null, { id: "unknown-timeout", name: "Bash", args: { command: unknownCommand, timeout: 1 } });
+    } else if (prompt.includes("SHELL_PENDING_PAUSE") || prompt.includes("SHELL_PENDING_CANCEL")) {
       const key = prompt.includes("SHELL_PENDING_PAUSE") ? "pause" : "cancel";
       const toolId = `pending-shell-${key}-${runId}`;
       if (toolResults.some(result => result.tool_call_id === toolId)) {
@@ -481,6 +486,21 @@ try {
   await mutate("authorization.revoke", { projectId, workstreamId: "work-main", authorizationId: "auth-main" });
   await mutate("feedback.add", { feedback: { id: "feedback-1", projectId, workstreamId: "work-main", candidateId: "candidate-1", candidateRevision: "candidate-r1", environment: "loopback-synthetic-model", acceptanceId: "acceptance-1", comment: "Request a separately authorized improvement", source: { kind: "user", ref: "fixture-user" }, createdAt: stamp() } });
   lastSnapshot = await snapshot(); assert.equal(lastSnapshot.feedback[0].candidateRevision, "candidate-r1");
+  const unknown = await createWork("work-unknown", "UNKNOWN_TIMEOUT: Preserve uncertain effects from an approved Shell command that times out after it starts; never replay.");
+  const unknownStart = await unknown.start();
+  await shellApproval(unknown.sessionId, unknownCommand, "shell-unknown-timeout");
+  assert.equal(await absent(unknownMarker), true, "timeout scenario cannot start before its own explicit approval");
+  const unknownApprovedAt = Date.now();
+  await clickShellDecision(true);
+  lastSnapshot = await until(async () => { const state = await snapshot(); return runsFor(state, "work-unknown").some(run => ["failed", "unknown"].includes(run.state) && run.effects.some(effect => effect.state === "unknown") && run.completionKey) ? state : null; }, "real approved Shell times out after a confirmed partial filesystem effect");
+  assert.equal(await readFile(unknownMarker, "utf8"), "started\n");
+  assert.equal(runsFor(lastSnapshot, "work-unknown").length, 1, "unknown effects do not auto-dispatch a successor");
+  assert.equal(runRequests.get(unknownStart.runId), 1);
+  assert.ok(["awaiting_user", "blocked"].includes(lastSnapshot.workstreams.find(work => work.id === "work-unknown").status), "uncertain execution blocks for human reconciliation");
+  const unknownBeforeRecord = runsFor(lastSnapshot, "work-unknown")[0];
+  await writeFile(join(output, "unknown-timeout-session.json"), json(await invoke("sessionGet", { id: unknown.sessionId }), null, 2));
+  const stableRecords = { artifacts: lastSnapshot.artifacts, evidence: lastSnapshot.evidence, feedback: lastSnapshot.feedback, decisions: lastSnapshot.decisions };
+  coverage.push("Real individually approved Shell timeout after actual started marker records unknown effect and terminal failure/uncertain run, blocking without retry or continuation");
   const totalRunsBeforeRestart = lastSnapshot.runs.length;
   const countBeforeRestart = requests.length;
   await writeFile(join(output, "before-restart.json"), json(lastSnapshot, null, 2));
@@ -488,15 +508,25 @@ try {
   lastSnapshot = await snapshot();
   assert.equal(lastSnapshot.runs.length, totalRunsBeforeRestart); assert.equal(lastSnapshot.artifacts.find(item => item.id === "candidate-1").revision, "candidate-r1");
   assert.equal(lastSnapshot.feedback[0].candidateRevision, "candidate-r1");
+  assert.deepEqual({ artifacts: lastSnapshot.artifacts, evidence: lastSnapshot.evidence, feedback: lastSnapshot.feedback, decisions: lastSnapshot.decisions }, stableRecords, "unknown recovery preserves unrelated accepted project records");
+  assert.equal(runsFor(lastSnapshot, "work-unknown").length, 1);
+  assert.ok(["failed", "unknown"].includes(runsFor(lastSnapshot, "work-unknown")[0].state));
+  assert.ok(runsFor(lastSnapshot, "work-unknown")[0].effects.some(effect => effect.state === "unknown"));
   for (const sessionId of new Set(lastSnapshot.runs.map(run => run.sessionId))) {
     const status = await invoke("agentGetStatus", sessionId);
     assert.equal(status.status?.isRunning, false, "post-recovery real AgentHost is idle");
   }
   assert.equal(requests.length, countBeforeRestart, "completed run recovery sends no model request");
-  coverage.push("Actual app/profile restart preserves candidate/evidence/feedback and does not replay completed work");
+  // Observe past the deliberately delayed after-write, so a surviving timed-out
+  // process cannot masquerade as a safe stop merely because restart was quick.
+  await until(() => Date.now() >= unknownApprovedAt + 6500, "past the original command's delayed after-write deadline", 10000);
+  assert.equal(await readFile(unknownMarker, "utf8"), "started\n", "unknown command is not replayed and its delayed after-write never executes");
+  assert.equal(requests.length, countBeforeRestart, "unknown recovery sends no model request even after the original command's effect window");
+  await writeFile(join(output, "unknown-recovery.json"), json({ builtCommit, command: unknownCommand, timeoutSeconds: 1, before: unknownBeforeRecord, after: runsFor(lastSnapshot, "work-unknown")[0], marker: await readFile(unknownMarker, "utf8"), modelRequestsBeforeRestart: countBeforeRestart, modelRequestsAfterRecovery: requests.length, delayedEffectWindowObserved: true }, null, 2));
+  coverage.push("Actual app/profile restart preserves candidate/evidence/feedback and unknown run, sends no new model request, retains exactly one started marker and never performs delayed after-write");
   const shot = await page.call("Page.captureScreenshot", { format: "png" });
   await writeFile(join(output, "production-renderer.png"), Buffer.from(shot.data, "base64"));
-  await writeFile(join(output, "result.json"), json({ ok: true, builtCommit, output, scratch, projectId, coverage, gaps: ["B Project Console DOM/visual interactions are a separate final integration check", "Ambiguous crash recovery is covered by lower-level tests, not this completed-run restart", "No live account or deployment"], modelRequests: requests.length }, null, 2));
+  await writeFile(join(output, "result.json"), json({ ok: true, builtCommit, output, scratch, projectId, coverage, scope: "Production cross-process workflow and real permission-card journey; Project Console visual evidence is maintained separately", gaps: ["No live account or deployment"], modelRequests: requests.length }, null, 2));
   console.log(`PASS production workflow ${output}`);
 } catch (error) {
   const diagnostics = [];
