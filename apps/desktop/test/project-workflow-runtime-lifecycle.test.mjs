@@ -158,6 +158,7 @@ test("Discuss -> Work -> evidence -> discuss -> adopt -> authorized check/fix/do
   const f = await setup();
   await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
   assert.equal(f.prompts[0].effectivePermissionMode, "ask");
+  assert.equal(f.prompts[0].workflowRunId, (await f.host.snapshot()).runs[0].id);
   await f.finish("session-1", checkpoint("Implementation produced", next("Run the critical test")));
   assert.equal(f.prompts.length, 2);
   const discussion = await f.action("discuss", { pause: false });
