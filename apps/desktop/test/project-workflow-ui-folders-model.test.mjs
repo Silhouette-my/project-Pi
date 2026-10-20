@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
 register(new URL("./helpers/ts-import-hooks.mjs", import.meta.url));
-const { navigationSessions, folderParents, workflowGroupForPath, workflowProjectEntries } =
+const { navigationHighlights, navigationSessions, folderParents, workflowGroupForPath, workflowProjectEntries } =
   await import("../src/features/project-workflow/navigation-model.ts");
 const { createSessionSlice } = await import("../src/stores/slices/session-slice.ts");
 const { createSessionRuntime } = await import("../src/stores/runtime/session-runtime.ts");
@@ -46,6 +46,33 @@ test("folder parent choices prevent cycles and third nesting level", () => {
   assert.deepEqual(
     folderParents(folders, folders[1]).map((f) => f.id),
     ["parent", "other"],
+  );
+});
+test("navigation highlights are disjoint and do not alter folder ownership or access dates", () => {
+  const snapshot = {
+    conversations: [{ sessionId: "side" }],
+    projectAgents: [{ projectId: "project", sessionId: "agent" }],
+    navigation: [
+      { sessionId: "favorite", favorite: true, order: 2, lastAccessedAt: "2026-10-20", folderId: "folder" },
+      { sessionId: "recent", favorite: false, order: 0, lastAccessedAt: "2026-10-19", folderId: "folder" },
+      { sessionId: "ordinary", favorite: false, order: 1 },
+      { sessionId: "side", favorite: true, order: 0 },
+      { sessionId: "agent", favorite: true, order: 0 },
+    ],
+  };
+  const before = structuredClone(snapshot);
+  const sessions = ["favorite", "recent", "ordinary", "side", "agent"].map((id) => ({ id, createdAt: "2026-10-01" }));
+  const highlights = navigationHighlights(snapshot, sessions);
+  assert.deepEqual(highlights.favorites.map((item) => item.id), ["favorite"]);
+  assert.deepEqual(highlights.recent.map((item) => item.id), ["recent"]);
+  const remaining = navigationSessions(snapshot, sessions).filter((item) => !highlights.promotedIds.has(item.id));
+  assert.deepEqual(remaining.map((item) => item.id), ["ordinary"]);
+  assert.deepEqual(snapshot, before);
+  const folder = navigationSessions(snapshot, sessions, "folder");
+  assert.deepEqual(
+    folder.map((item) => item.id),
+    ["recent", "favorite"],
+    "highlight views must not remove chats from their owning folder",
   );
 });
 test("durable project identity resolves an existing visible path without inventing navigation entries", () => {

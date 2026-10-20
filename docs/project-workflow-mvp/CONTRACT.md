@@ -202,6 +202,36 @@ do not assume inaccessible backend model state can be transferred.
 
 ## Handoff/change protocol
 
+### Project Agent discussion extension
+
+`action({ kind: "agent.open", projectId, commandId, expectedRevision })` opens
+the project's canonical discussion session and returns `{ snapshot, sessionId }`.
+It needs no workstream, including for an empty project. Revisit and application
+restart resolve the same live session; deleting that session permits a new one.
+Opening the Agent never creates a workstream, conversation link, run or grant.
+
+The optional `snapshot.projectAgents` array contains `{ projectId, sessionId }`
+associations. The Host normalizes older v1 snapshots to an empty array. The
+runtime-only `agent.create` mutation creates session metadata and its association
+inside the same Host CAS transaction; no session is published before both commit.
+A stale revision creates nothing; persistence failure rolls both records back.
+The internal `agent.link` validation prevents replacing a live canonical Agent;
+renderer user mutations cannot create or bind Agent associations.
+
+The canonical session has an immutable discussion boundary independent of its
+displayed mode and permission mode. Main resolves this Host mapping on every
+launch and supplies `discussionOnly`; runtime publishes no tool catalog and loads
+no trusted extensions or delegates. Host tool admission independently denies all
+tools for the persisted session identity, including absent/forged turn IDs,
+auto mode and reusable tool grants. Selecting the session for Work is rejected.
+Execution requires a separate work item and its existing explicit authorization.
+
+Project instructions and project memory still use the existing launch pipeline.
+The current workstreams, effective decisions/resources, artifacts, evidence and
+deliveries are added as reference data on each turn. Discussion does not adopt
+those records or write project memory. Existing ordinary and workstream-bound
+sessions retain their previous behavior.
+
 A writes the C0 commit ID and exported symbol map to its status record. B/C commit
 their own safe checkpoint, then merge that exact published milestone into their own
 branches. No dependency on A's uncommitted worktree. Later contract changes stay

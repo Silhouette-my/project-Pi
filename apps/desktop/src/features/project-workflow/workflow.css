@@ -3,28 +3,30 @@
   flex: 1 1 auto;
   min-height: 0;
   color: var(--ds-text-primary);
+  container-type: inline-size;
+  margin-top: 46px;
 }
 .workflow-page {
-  max-width: 1080px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 28px clamp(20px, 4vw, 52px) 80px;
+  padding: 18px 30px 70px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 0;
 }
 .workflow-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 16px;
+  padding: 0 0 14px;
 }
 .workflow-header h1 {
-  font-size: var(--text-2xl);
+  font-size: var(--text-lg-plus);
   line-height: var(--leading-tighter);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--tracking-tight);
-  margin: 4px 0;
+  margin: 0 0 3px;
   overflow-wrap: anywhere;
 }
 .workflow-eyebrow,
@@ -39,7 +41,7 @@
   text-transform: uppercase;
 }
 .workflow-page h2 {
-  font-size: var(--text-lg-plus);
+  font-size: var(--text-md);
   font-weight: var(--font-weight-semibold);
   margin: 0;
 }
@@ -100,22 +102,25 @@
 .workflow-workstream-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
+  border-top: 1px solid var(--ds-border-default);
 }
 .workflow-workstream.btn {
   width: 100%;
   min-width: 0;
   justify-content: space-between;
   text-align: left;
-  padding: 14px;
-  border-radius: var(--radius-sm);
-  gap: 16px;
+  padding: 15px 2px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--ds-border-default);
+  gap: 12px;
 }
-.workflow-workstream > span:first-child {
+.workflow-workstream .workflow-row-copy {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  flex: 1;
 }
 .workflow-workstream strong {
   font-size: var(--text-md);
@@ -149,7 +154,7 @@
   align-items: flex-start;
 }
 .workflow-detail {
-  padding-top: 8px;
+  padding-top: 12px;
 }
 .workflow-controls {
   display: flex;
@@ -241,6 +246,8 @@
   border-bottom: 1px solid var(--ds-border-default);
   color: var(--ds-text-secondary);
   font-size: var(--text-sm);
+  margin-top: 46px;
+  flex-shrink: 0;
 }
 .workflow-conversation-bar > div {
   display: flex;

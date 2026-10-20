@@ -390,6 +390,7 @@ const createdSessionLaunchRuntime = createSessionLaunchRuntime({
   effectiveSubagentModelConfig,
   normalizeThinkingLevel,
   workflowContextForSession: (sessionId) => projectWorkflow.contextForSession(sessionId),
+  isProjectAgentSession: (sessionId) => projectWorkflow.isProjectAgentSession(sessionId),
 });
 sessionLaunchRuntime = createdSessionLaunchRuntime;
 const {

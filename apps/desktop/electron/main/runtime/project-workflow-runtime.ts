@@ -272,6 +272,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     for (const run of [...state.runs].filter((r) => (live(r) || r.state === "unknown" || !r.completionKey) && (!workstreamId || r.workstreamId === workstreamId))) await settle(run);
   }
   async function action(input: ProjectWorkflowAction): Promise<ProjectWorkflowActionResult> {
+    if (input.kind === "agent.open") fail("INVALID_ARGUMENT", "Project Agent opening is owned by desktop session orchestration");
     return serial(async () => {
       await reload();
       if (input.expectedRevision !== state.revision) fail("CONFLICT", "The project changed; refresh before applying this intent");

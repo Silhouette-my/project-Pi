@@ -47,8 +47,10 @@ function projectName(path?: string | null, name?: string | null) {
  */
 export const ChatSurface = memo(function ChatSurface({
   visible = true,
+  discussionOnly = false,
 }: {
   visible?: boolean;
+  discussionOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const activeSessionId = useAppStore((state) => state.activeSessionId);
@@ -178,7 +180,7 @@ export const ChatSurface = memo(function ChatSurface({
                   <HomeMascotLogo />
                 </div>
                 <h1>
-                  {heroProject ? (
+                  {discussionOnly ? t("workflow.agentTitle") : heroProject ? (
                     <>
                       {emptyTitleParts.before}
                       <HomeProjectSwitcher name={heroProject} path={isRemoteSession(activeSession) ? null : workspace?.path || activeSession?.projectPath || null} />
@@ -191,11 +193,13 @@ export const ChatSurface = memo(function ChatSurface({
                   )}
                 </h1>
               </div>
-              {!isRemoteSession(activeSession) ? <OnboardingChecklist /> : null}
+              {discussionOnly ? (
+                <p className="workflow-muted">{t("workflow.agentDiscussionHint")}</p>
+              ) : !isRemoteSession(activeSession) ? <OnboardingChecklist /> : null}
             </div>
           </div>
           <div className="home-composer-wrap">
-            <StableComposer variant="home" />
+            <StableComposer variant="home" discussionOnly={discussionOnly} />
           </div>
         </div>
       ) : (
@@ -209,7 +213,7 @@ export const ChatSurface = memo(function ChatSurface({
               />
             ))}
           </div>
-          <StableComposer variant="docked" />
+          <StableComposer variant="docked" discussionOnly={discussionOnly} />
         </>
       )}
 

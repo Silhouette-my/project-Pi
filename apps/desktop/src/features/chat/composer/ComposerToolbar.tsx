@@ -42,6 +42,7 @@ export type ComposerToolbarProps = {
   setPermissionOpen: Dispatch<SetStateAction<boolean>>;
   controlsBlocked: boolean;
   localToolsAllowed?: boolean;
+  discussionOnly?: boolean;
   attachmentsAllowed?: boolean;
   stopAllowed?: boolean;
   pasting: boolean;
@@ -83,6 +84,7 @@ export function ComposerToolbar({
   setPermissionOpen,
   controlsBlocked,
   localToolsAllowed = true,
+  discussionOnly = false,
   attachmentsAllowed = true,
   stopAllowed = true,
   pasting,
@@ -129,7 +131,9 @@ export function ComposerToolbar({
           </TooltipButton>
         </div>
         {localToolsAllowed ? <LiveVoiceControls t={t} workSessionId={workSessionId} /> : null}
-        <ComposerModePicker
+        {discussionOnly ? (
+          <span className="composer-mode-chip-face text-sm">{t("workflow.agentTitle")}</span>
+        ) : <ComposerModePicker
           t={t}
           mode={mode}
           planningLive={planningLive}
@@ -154,8 +158,8 @@ export function ComposerToolbar({
               });
             }
           }}
-        />
-        <ComposerPermissionPicker t={t} mode={mode}
+        />}
+        {!discussionOnly && <ComposerPermissionPicker t={t} mode={mode}
           composerPermissionMode={composerPermissionMode}
           permissionOpen={permissionOpen} setPermissionOpen={setPermissionOpen}
           controlsBlocked={controlsBlocked}
@@ -177,7 +181,7 @@ export function ComposerToolbar({
                     variant: "error",
                   });
                 }
-          }} />
+          }} />}
         {localToolsAllowed ? <ComposerControlSlots side="left" /> : null}
       </div>
 

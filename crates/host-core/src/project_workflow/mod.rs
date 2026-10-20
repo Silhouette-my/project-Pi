@@ -56,7 +56,7 @@ impl From<anyhow::Error> for Error {
 }
 
 fn empty() -> Value {
-    json!({"schemaVersion":1,"revision":0,"folders":[],"navigation":[],"expandedIds":[],
+    json!({"schemaVersion":1,"revision":0,"projectAgents":[],"folders":[],"navigation":[],"expandedIds":[],
         "workstreams":[],"conversations":[],"resources":[],"decisions":[],"authorizations":[],
         "runs":[],"artifacts":[],"evidence":[],"feedback":[],"deliveries":[]})
 }
@@ -80,6 +80,11 @@ fn load(db: &Database) -> Result<Value> {
                     "workflow aggregate revision/version mismatch",
                 ));
             }
+            let mut value = value;
+            // Additive v1 extension: pre-Agent snapshots have no project mapping.
+            if value.get("projectAgents").is_none() {
+                value["projectAgents"] = json!([]);
+            }
             Ok(value)
         }
         Some(_) => Err(Error::new("INTERNAL", "unsupported workflow format")),
@@ -92,6 +97,7 @@ pub fn snapshot(db: &Database, query: &Value) -> Result<Value> {
     let query = check_query(db, &value, query)?;
     if query.get("projectId").is_some() || query.get("workstreamId").is_some() {
         for key in [
+            "projectAgents",
             "workstreams",
             "conversations",
             "resources",
@@ -110,6 +116,13 @@ pub fn snapshot(db: &Database, query: &Value) -> Result<Value> {
         }
     }
     Ok(value)
+}
+
+pub(crate) fn is_project_agent(db: &Database, session_id: &str) -> Result<bool> {
+    Ok(load(db)?["projectAgents"].as_array().is_some_and(|rows| {
+        rows.iter()
+            .any(|row| row["sessionId"].as_str() == Some(session_id))
+    }))
 }
 
 fn scoped(row: &Value, query: &Value) -> bool {

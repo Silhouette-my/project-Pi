@@ -6,6 +6,83 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
     // Every reference enters through this boundary; navigation never changes workspace roots.
     check_sources(db, value, command)?;
     match command["kind"].as_str().unwrap() {
+        "agent.create" => {
+            let project = db
+                .list_project_groups()?
+                .into_iter()
+                .find(|project| Some(project.id.as_str()) == command["projectId"].as_str())
+                .ok_or_else(|| Error::missing("ProjectGroup not found"))?;
+            if project.remote.is_some() {
+                return Err(Error::invalid(
+                    "Project Agent currently requires a local project",
+                ));
+            }
+            if value.get("projectAgents").is_none() {
+                value["projectAgents"] = json!([]);
+            }
+            if rows(value, "projectAgents").iter().any(|agent| {
+                agent["projectId"] == command["projectId"]
+                    && check_session(db, &agent["sessionId"]).is_ok()
+            }) {
+                return Ok(());
+            }
+            // mutate() already owns an IMMEDIATE CAS transaction. Session
+            // metadata and its discussion boundary commit together; no ordinary
+            // session is observable if creation/linking or persistence fails.
+            let session = crate::sessions::create_session(
+                db,
+                Some(project.name),
+                Some("plan".into()),
+                None,
+                None,
+                Some(project.primary_path),
+            )?;
+            apply(
+                db,
+                value,
+                &json!({"kind":"agent.link", "agent":{"projectId":command["projectId"],"sessionId":session.id}}),
+            )
+        }
+        "agent.link" => {
+            let agent = &command["agent"];
+            check_project(db, &agent["projectId"])?;
+            check_session_scope(db, &agent["sessionId"], &agent["projectId"])?;
+            if value.get("projectAgents").is_none() {
+                value["projectAgents"] = json!([]);
+            }
+            if rows(value, "conversations")
+                .iter()
+                .any(|row| row["sessionId"] == agent["sessionId"])
+                || rows(value, "runs")
+                    .iter()
+                    .any(|row| row["sessionId"] == agent["sessionId"])
+            {
+                return Err(Error::conflict(
+                    "execution sessions cannot become project Agents",
+                ));
+            }
+            if let Some(i) = rows(value, "projectAgents")
+                .iter()
+                .position(|row| row["projectId"] == agent["projectId"])
+            {
+                if value["projectAgents"][i] == *agent {
+                    return Ok(());
+                }
+                if check_session(db, &value["projectAgents"][i]["sessionId"]).is_ok() {
+                    return Err(Error::conflict("project already has a live Agent session"));
+                }
+                value["projectAgents"][i] = agent.clone();
+            } else {
+                if rows(value, "projectAgents")
+                    .iter()
+                    .any(|row| row["sessionId"] == agent["sessionId"])
+                {
+                    return Err(Error::conflict("Agent session belongs to another project"));
+                }
+                rows_mut(value, "projectAgents").push(agent.clone());
+            }
+            Ok(())
+        }
         "folder.create" | "folder.update" | "folder.remove" | "navigation.move"
         | "navigation.update" | "navigation.expand" | "conversation.link" => {
             organization::apply(db, value, command)

@@ -122,6 +122,12 @@ export function WorkflowArtifacts({
   const history = artifacts.filter((item) => !currentIds.has(item.id));
   const deliveries = snapshot.deliveries.filter(inScope);
   const runs = snapshot.runs.filter(inScope);
+  if (!artifacts.length && !deliveries.length && !runs.length) {
+    return <section className="workflow-context-artifacts" aria-label={t("workflowArtifacts.title")}>
+      <h3>{t("workflowArtifacts.title")}</h3>
+      <p className="workflow-record-muted">{t("workflowArtifacts.noCurrentCandidate")}</p>
+    </section>;
+  }
   const workstreamLabel = (id: string) => workstreams.find((item) => item.id === id)?.title ?? id;
   function artifactView(item: WorkflowArtifact, isCurrent: boolean) {
     const workstream = workstreams.find((entry) => entry.id === item.workstreamId);

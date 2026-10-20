@@ -1005,6 +1005,8 @@ export type AgentRuntimeOptions = {
   projectInstructions?: ProjectInstructions;
   /** Durable project context loaded from host-owned project memory. */
   projectMemory?: string;
+  /** Project Agent conversations have no executable tools, in every mode. */
+  discussionOnly?: boolean;
   /** Persisted transcript to seed the agent with (session isolation: each
    * session's agent carries only its own history). */
   history?: UiMessage[];
@@ -1057,6 +1059,7 @@ export type AgentRuntimeDiagnostic = {
 };
 
 export type RuntimeMatchConfig = {
+  discussionOnly?: boolean;
   mode: Mode;
   provider: RuntimeProviderConfig;
   thinkingLevel: SessionThinkingLevel;
@@ -2029,7 +2032,10 @@ export class DesktopAgentRuntime {
     plannedChunks: number;
   };
 
+  private readonly discussionOnly: boolean;
+
   constructor(opts: AgentRuntimeOptions) {
+    this.discussionOnly = opts.discussionOnly === true;
     this.sessionId = opts.sessionId;
     this.turnId = opts.turnId;
     this.mode = opts.mode;
@@ -2047,8 +2053,8 @@ export class DesktopAgentRuntime {
     this.onEvent = (envelope) => this.streamSink.push(envelope);
     this.pluginTools = opts.pluginTools ?? [];
     this.pluginSkills = [...(opts.pluginSkills ?? [])].sort((left, right) => left.id.localeCompare(right.id));
-    this.trustedExtensionSpecs = opts.trustedExtensions ?? [];
-    this.subagents = opts.subagents ?? [];
+    this.trustedExtensionSpecs = this.discussionOnly ? [] : opts.trustedExtensions ?? [];
+    this.subagents = this.discussionOnly ? [] : opts.subagents ?? [];
     this.subagentProviders = opts.subagentProviders ?? {};
     this.subagentModelKeys = new Set(opts.subagentModelKeys ?? []);
     this.subagentOverrideProviders = {};
@@ -2738,6 +2744,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     );
     return (
       !this.disposed &&
+      this.discussionOnly === (config.discussionOnly === true) &&
       providerMatches &&
       this.mode === config.mode &&
       this.jevApiKey === config.jevApiKey &&
@@ -2758,14 +2765,14 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
       // Editing `~/.agents/subagents/*.md` must reach the next prompt. Definition
       // bodies are part of the `Task` tool's behavior, so unlike skills they
       // are compared in full.
-      safeJson(this.subagents) === safeJson(config.subagents ?? []) &&
+      safeJson(this.subagents) === safeJson(this.discussionOnly ? [] : config.subagents ?? []) &&
       safeJson(this.subagentProviders) === safeJson(config.subagentProviders ?? {}) &&
       safeJson([...this.subagentModelKeys].sort()) ===
         safeJson([...new Set(config.subagentModelKeys ?? [])].sort()) &&
       // Enabling or disabling a trusted extension retires the runtime so the
       // next prompt reloads the set (spec 16 §4.3).
       trustedExtensionIds(this.trustedExtensionSpecs) ===
-        trustedExtensionIds(config.trustedExtensions ?? [])
+        trustedExtensionIds(this.discussionOnly ? [] : config.trustedExtensions ?? [])
     );
   }
 
@@ -4035,6 +4042,13 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
    */
   private rebuildToolCatalog(): void {
     const catalog = new Map<string, AgentTool>();
+    if (this.discussionOnly) {
+      this.toolCatalog = catalog;
+      this.deferredToolNames = new Set();
+      this.activeDeferredToolNames.clear();
+      if (this.model) this.refreshToolDeclarationPolicy();
+      return;
+    }
     for (const tool of this.buildToolDefinitions()) {
       if (!this.isToolAllowedInMode(tool.name) && !retainModeToolDeclaration(tool.name)) continue;
       // The execution mode is decided here, in one place, so no tool can grow

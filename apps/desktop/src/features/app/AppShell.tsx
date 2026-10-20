@@ -23,7 +23,7 @@ import { workPanelLayout } from "../../lib/work-panel-resize";
 import { LiveVoiceStatusHost } from "../voice/live/LiveVoiceStatusHost";
 import { CollapsedTitlebarActions, RoutePending } from "./chrome";
 import { useAppShellRuntime } from "./useAppShellRuntime";
-import { ProjectWorkflowProvider } from "../project-workflow/useProjectWorkflow";
+import { ProjectWorkflowProvider, useProjectWorkflow } from "../project-workflow/useProjectWorkflow";
 import { WorkflowConversationBar } from "../project-workflow/WorkflowConversationBar";
 import { useAppStore } from "../../stores/app-store";
 
@@ -62,6 +62,7 @@ export function AppShell() {
 
 function AppShellContent() {
   const projectConsoleId = useAppStore((state) => state.projectConsoleId);
+  const { snapshot } = useProjectWorkflow();
   const {
     t,
     ready,
@@ -296,7 +297,10 @@ function AppShellContent() {
                       <PluginsPage />
                     </div>
                   ) : (
-                    <ChatSurface visible={page === "chat"} />
+                    <ChatSurface
+                      visible={page === "chat"}
+                      discussionOnly={snapshot?.projectAgents?.some((item) => item.sessionId === activeSessionId) ?? false}
+                    />
                   )}
                 </Suspense>
               </section>

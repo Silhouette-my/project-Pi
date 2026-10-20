@@ -115,9 +115,12 @@ export const WorkflowNavigationSchema = object({
   lastAccessedAt: Type.Optional(id), lastMessageId: optionalId,
 });
 export type WorkflowNavigation = Type.Static<typeof WorkflowNavigationSchema>;
+export const ProjectAgentSchema = object({ projectId: id, sessionId: id });
+export type ProjectAgent = Type.Static<typeof ProjectAgentSchema>;
 
 export const ProjectWorkflowSnapshotSchema = object({
   schemaVersion: Type.Literal(PROJECT_WORKFLOW_VERSION), revision,
+  projectAgents: Type.Optional(Type.Array(ProjectAgentSchema)),
   folders: Type.Array(WorkflowFolderSchema), navigation: Type.Array(WorkflowNavigationSchema),
   expandedIds: strings, workstreams: Type.Array(WorkflowWorkstreamSchema),
   conversations: Type.Array(WorkflowConversationSchema), resources: Type.Array(WorkflowResourceSchema),
@@ -160,6 +163,8 @@ export const ProjectWorkflowUserCommandSchema = Type.Union([
 ]);
 export type ProjectWorkflowUserCommand = Type.Static<typeof ProjectWorkflowUserCommandSchema>;
 export const ProjectWorkflowRuntimeCommandSchema = Type.Union([
+  command("agent.create", { projectId: id }),
+  command("agent.link", { agent: ProjectAgentSchema }),
   command("workstream.transition", { ...scope, status: WorkflowWorkstreamSchema.properties.status, nextAction: text,
     blocker: Type.Optional(WorkflowWorkstreamSchema.properties.blocker) }),
   command("run.start", { run: WorkflowRunSchema }),
@@ -178,6 +183,7 @@ export type ProjectWorkflowChanged = { revision: number; commandId: string; kind
 
 const actionBase = { ...common, ...scope };
 export const ProjectWorkflowActionSchema = Type.Union([
+  object({ ...common, kind: Type.Literal("agent.open"), projectId: id }),
   object({ ...actionBase, kind: Type.Literal("start"), sessionId: optionalId, authorizationId: id }),
   object({ ...actionBase, kind: Type.Literal("discuss"), sessionId: optionalId, pause: Type.Boolean() }),
   object({ ...actionBase, kind: Type.Literal("adopt"), decisionId: id, source: WorkflowSourceSchema }),

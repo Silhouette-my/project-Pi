@@ -1,5 +1,112 @@
 use super::*;
 
+#[test]
+fn project_agent_creation_is_atomic_with_cas_and_persistence_failure() {
+    let f = Fixture::new();
+    let count = || {
+        f.db.conn()
+            .query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get::<_, i64>(0))
+            .unwrap()
+    };
+    let before = count();
+    let mut stale = f.command("agent.create", json!({"projectId":f.project}));
+    stale["expectedRevision"] = json!(99);
+    assert_eq!(mutate(&f.db, &stale).unwrap_err().code, "CONFLICT");
+    assert_eq!(count(), before, "CAS must precede session creation");
+
+    f.db.conn().execute_batch("CREATE TEMP TRIGGER fail_agent_snapshot BEFORE INSERT ON project_workflow BEGIN SELECT RAISE(ABORT, 'injected snapshot failure'); END;").unwrap();
+    let command = f.command("agent.create", json!({"projectId":f.project}));
+    assert!(mutate(&f.db, &command).is_err());
+    assert_eq!(
+        count(),
+        before,
+        "snapshot failure must roll back session metadata too"
+    );
+    assert_eq!(
+        snapshot(&f.db, &json!({})).unwrap()["projectAgents"],
+        json!([])
+    );
+    f.db.conn()
+        .execute_batch("DROP TRIGGER fail_agent_snapshot;")
+        .unwrap();
+
+    let result = mutate(&f.db, &command).unwrap();
+    let agent = &result["snapshot"]["projectAgents"][0];
+    assert!(is_project_agent(&f.db, agent["sessionId"].as_str().unwrap()).unwrap());
+    assert_eq!(count(), before + 1);
+    assert_eq!(mutate(&f.db, &command).unwrap()["replayed"], true);
+    let reopen = f.command("agent.create", json!({"projectId":f.project}));
+    assert_eq!(
+        mutate(&f.db, &reopen).unwrap()["snapshot"]["projectAgents"][0],
+        *agent
+    );
+    assert_eq!(
+        count(),
+        before + 1,
+        "replay/reopen cannot create another session"
+    );
+}
+
+#[test]
+fn project_agent_link_is_durable_without_work_or_authority() {
+    let f = Fixture::new();
+    let state = f.execute(
+        "agent.link",
+        json!({"agent":{"projectId":f.project,"sessionId":f.session}}),
+    );
+    assert_eq!(state["projectAgents"][0]["sessionId"], f.session);
+    for key in ["workstreams", "conversations", "runs", "authorizations"] {
+        assert!(rows(&state, key).is_empty());
+    }
+    let reopened = Database::open(&f._dir.path().join("pi.sqlite")).unwrap();
+    assert!(is_project_agent(&reopened, &f.session).unwrap());
+    let scoped = snapshot(&reopened, &json!({"projectId":f.project})).unwrap();
+    assert_eq!(scoped["projectAgents"], state["projectAgents"]);
+    let replacement = crate::sessions::create_session(&f.db, None, None, None, None, None).unwrap();
+    let command = f.command(
+        "agent.link",
+        json!({"agent":{"projectId":f.project,"sessionId":replacement.id}}),
+    );
+    assert_eq!(mutate(&f.db, &command).unwrap_err().code, "CONFLICT");
+}
+
+#[test]
+fn project_agent_tool_denial_is_session_owned_and_precedes_mode_or_grants() {
+    let f = Fixture::new();
+    f.execute(
+        "agent.link",
+        json!({"agent":{"projectId":f.project,"sessionId":f.session}}),
+    );
+    // No active turn/turnId and no model-supplied scope can bypass the mapping.
+    for name in ["Read", "Write", "Edit", "Bash", "Task", "plugin_mutation"] {
+        let call: crate::tools::ToolsExecuteParams = serde_json::from_value(json!({
+            "sessionId":f.session,"mode":"agent","toolCallId":"forged","toolName":name,
+            "args":{"path":"output.txt","command":"touch output.txt"}
+        }))
+        .unwrap();
+        let error = tool_scope::authorize_tool(&f.db, &call).err().unwrap();
+        assert_eq!(error.code, "WORKFLOW_RESOURCE_DENIED", "{name}");
+    }
+    let ordinary = crate::sessions::create_session(&f.db, None, None, None, None, None).unwrap();
+    let call: crate::tools::ToolsExecuteParams = serde_json::from_value(json!({
+        "sessionId":ordinary.id,"mode":"agent","toolCallId":"ordinary","toolName":"Read","args":{"path":"output.txt"}
+    })).unwrap();
+    assert!(tool_scope::authorize_tool(&f.db, &call).unwrap().is_none());
+}
+
+#[test]
+fn project_agent_additive_read_preserves_old_v1_snapshots() {
+    let f = Fixture::new();
+    let mut legacy = empty();
+    legacy.as_object_mut().unwrap().remove("projectAgents");
+    f.db.conn().execute("INSERT INTO project_workflow(id,format_version,revision,snapshot_json) VALUES(1,1,0,?1)", params![legacy.to_string()]).unwrap();
+    assert_eq!(
+        snapshot(&f.db, &json!({})).unwrap()["projectAgents"],
+        json!([])
+    );
+    assert!(!is_project_agent(&f.db, &f.session).unwrap());
+}
+
 struct Fixture {
     _dir: tempfile::TempDir,
     db: Database,

@@ -70,9 +70,11 @@ export {
 export function Composer({
   variant = "docked",
   prefill,
+  discussionOnly = false,
 }: {
   variant?: "home" | "docked";
   prefill?: ComposerPrefill | null;
+  discussionOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const sendPrompt = useAppStore((s) => s.sendPrompt);
@@ -100,13 +102,13 @@ export function Composer({
   const capabilitySession = activeSessionSummary ?? (activeSessionId?.startsWith("remote:") ? { id: activeSessionId } : undefined);
   const composerTransforms = useMemo(
     () =>
-      (sessionAllows(capabilitySession, "canUseLocalTools") ? plugins : [])
+      (!discussionOnly && sessionAllows(capabilitySession, "canUseLocalTools") ? plugins : [])
         .filter((plugin) => plugin.enabled && plugin.status === "ready")
         .flatMap((plugin) => plugin.composerTransforms ?? []),
-    [plugins, activeSessionSummary, activeSessionId],
+    [plugins, activeSessionSummary, activeSessionId, discussionOnly],
   );
   const remoteSession = isRemoteSession(capabilitySession);
-  const localToolsAllowed = sessionAllows(capabilitySession, "canUseLocalTools");
+  const localToolsAllowed = !discussionOnly && sessionAllows(capabilitySession, "canUseLocalTools");
   const attachmentsAllowed = sessionAllows(capabilitySession, "canAttach");
   const promptAllowed = sessionAllows(capabilitySession, "canPrompt");
   const nativeSession = activeSessionSummary?.source === "pi-native";
@@ -605,6 +607,7 @@ export function Composer({
           />
           <ComposerToolbar
             t={t}
+            discussionOnly={discussionOnly}
             mode={mode}
             planningLive={planningLive}
             providerId={provider?.id}

@@ -3,6 +3,7 @@ import type { HostRpc } from "@pi-desktop/host-runtime";
 import { ErrorCodes, type AppSettings, type ProjectGroupRecord, type ProjectWorkflowHostPort, type ProjectWorkflowRuntimePort,
   type ProviderPublic, type SessionDetail } from "@pi-desktop/shared";
 import { createProjectWorkflowExecution } from "../runtime/project-workflow-execution";
+import { assembleProjectAgentContext } from "../runtime/project-workflow-context";
 import { createProjectWorkflowRuntime, type WorkflowExecutionPort } from "../runtime/project-workflow-runtime";
 
 function fail(code: string, message: string): never {
@@ -58,7 +59,13 @@ export function createWorkflowSessionFactory(deps: Pick<ProjectWorkflowDesktopDe
     deps.onSessionsChanged();
     return session.id;
   };
-  return { createSession, assertExecutable: async (sessionId: string) => assertExecutable(await readSession(sessionId)) };
+  return { createSession, assertExecutable: async (sessionId: string) => {
+    const snapshot = await deps.getHost().call<import("@pi-desktop/shared").ProjectWorkflowSnapshot>("project.workflow.snapshot", {});
+    if (snapshot.projectAgents?.some((agent) => agent.sessionId === sessionId)) {
+      fail(ErrorCodes.INVALID_ARGUMENT, "Project Agent discussion cannot become an execution session");
+    }
+    await assertExecutable(await readSession(sessionId));
+  } };
 }
 
 /** One lifecycle owner: startup reconciliation precedes any workflow dispatch. */
@@ -70,9 +77,32 @@ export function createDesktopProjectWorkflow(deps: ProjectWorkflowDesktopDepende
   const execution = createProjectWorkflowExecution({ ...deps, createSession: sessions.createSession,
     assertExecutableSession: sessions.assertExecutable });
   const coordinator = createProjectWorkflowRuntime({ host: deps.host, execution });
+  let openTail: Promise<unknown> = Promise.resolve();
+  const openAgent: ProjectWorkflowRuntimePort["action"] = (input) => {
+    const opened = openTail.then(async () => {
+      if (input.kind !== "agent.open") fail(ErrorCodes.INVALID_ARGUMENT, "Invalid Project Agent action");
+      // Action results replace the renderer's global workflow projection, just
+      // like mutation results. Never return a project-filtered snapshot here.
+      const snapshot = await deps.host.snapshot();
+      const linked = snapshot.projectAgents?.find((agent) => agent.projectId === input.projectId);
+      if (linked) {
+        const { session } = await deps.getHost().call<{ session?: SessionDetail }>("session.get", { id: linked.sessionId });
+        if (session) return { snapshot, sessionId: session.id };
+      }
+      if (input.expectedRevision !== snapshot.revision) fail(ErrorCodes.CONFLICT, "The project changed; refresh before opening its Agent");
+      const result = await deps.host.mutate({ kind: "agent.create", projectId: input.projectId,
+        commandId: input.commandId, expectedRevision: snapshot.revision });
+      const sessionId = result.snapshot.projectAgents!.find((agent) => agent.projectId === input.projectId)!.sessionId;
+      deps.onSessionsChanged();
+      return { snapshot: result.snapshot, sessionId };
+    });
+    openTail = opened.catch(() => undefined);
+    return opened;
+  };
   const runtime: ProjectWorkflowRuntimePort = {
     async action(input) {
       if (!ready) fail(ErrorCodes.AGENT_UNAVAILABLE, "Project workflow is not ready");
+      if (input.kind === "agent.open") return openAgent(input);
       if (input.kind === "start") {
         const snapshot = await deps.host.snapshot({ projectId: input.projectId, workstreamId: input.workstreamId });
         const sessionId = input.sessionId || snapshot.workstreams[0]?.mainSessionId;
@@ -104,7 +134,16 @@ export function createDesktopProjectWorkflow(deps: ProjectWorkflowDesktopDepende
       if (!ready) { pendingSettlements.add(sessionId); return Promise.resolve(); }
       return coordinator.onTurnSettled(sessionId);
     },
-    contextForSession: (sessionId: string) => ready ? coordinator.contextForSession(sessionId) : Promise.resolve(undefined),
+    async isProjectAgentSession(sessionId: string) {
+      const snapshot = await deps.host.snapshot();
+      return snapshot.projectAgents?.some((agent) => agent.sessionId === sessionId) ?? false;
+    },
+    async contextForSession(sessionId: string) {
+      if (!ready) return undefined;
+      const snapshot = await deps.host.snapshot();
+      const agent = snapshot.projectAgents?.find((agent) => agent.sessionId === sessionId);
+      return agent ? assembleProjectAgentContext(snapshot, agent.projectId) : coordinator.contextForSession(sessionId);
+    },
     async dispose() { disposed = true; ready = false; pendingSettlements.clear(); await coordinator.dispose?.(); },
   };
 }

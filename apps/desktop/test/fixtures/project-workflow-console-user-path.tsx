@@ -220,7 +220,7 @@ window.piDesktop = {
         });
       }
       // Deliberately unchanged: the UI must not invent execution status from an accepted intent.
-      return ok({ snapshot: structuredClone(durable) });
+      return ok({ snapshot: structuredClone(durable), ...(input.kind === "agent.open" ? { sessionId: "project-agent" } : {}) });
     }
     if (
       channel === IPC.invoke.projectWorkflowSearch &&
@@ -373,6 +373,8 @@ function click(key: string, scope: ParentNode = document) {
 }
 function field(key: string, scope: ParentNode = document) {
   check(scope, "Missing field scope " + key);
+  const named = [...scope.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input,textarea,select")].find((input) => input.getAttribute("aria-label") === t(key));
+  if (named) return named;
   const label = [...scope.querySelectorAll("label")].find(
     (label) => label.firstElementChild?.textContent?.trim() === t(key),
   );
@@ -405,6 +407,10 @@ function submit(scope: ParentNode) {
 }
 const detail = () => document.querySelector<HTMLElement>('[data-workstream-id="work-1"]')!;
 async function selectPrimary() {
+  if (!document.querySelector(".workflow-workstream")) {
+    click("workflow.workstreams", document.querySelector(".workflow-tabs")!);
+    if (document.querySelector("[data-workstream-id]")) click("workflow.allWorkstreams");
+  }
   const button = [...document.querySelectorAll<HTMLButtonElement>(".workflow-workstream")].find(
     (button) => button.textContent?.includes(longTitle),
   );
@@ -468,7 +474,7 @@ Object.assign(window, {
         "Review exact candidate and preserve reading position",
       "Edit not persisted through IPC",
     );
-    await until(() => detail(), "Detail did not return");
+    await until(() => !document.querySelector('[data-workflow="workstream-editor"]'), "Saved editor did not close");
     // An unchanged field must not overwrite a newer background checkpoint.
     click("workflow.editWorkstream", detail());
     const concurrentEditor = document.querySelector('[data-workflow="workstream-editor"]')!;
@@ -529,6 +535,12 @@ Object.assign(window, {
     click("workflow.close", conflictingEditor);
     click("workflow.newWorkstream");
     const create = document.querySelector('[data-workflow="workstream-editor"]')!;
+    check(create.closest('[role="dialog"][aria-modal="true"]'), "Work editor was not a modal dialog");
+    field("workflow.title", create).focus();
+    flushSync(() => field("workflow.title", create).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+    check(document.activeElement === findButton("workflow.close", create), "Dialog focus escaped backwards");
+    flushSync(() => findButton("workflow.close", create).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })));
+    check(document.activeElement === field("workflow.title", create), "Dialog focus escaped forwards");
     fill("workflow.title", "Independent validation", create);
     fill("workflow.goal", "Validate after restart", create);
     fill("workflow.acceptance", "Reload restores state", create);
@@ -565,10 +577,7 @@ Object.assign(window, {
       "Start routed incorrectly",
     );
     check(
-      durable.workstreams[0].status === "blocked" &&
-        document
-          .querySelector(".workflow-workstream.is-selected")
-          ?.textContent?.includes(t("workflow.status.blocked")),
+      durable.workstreams[0].status === "blocked" && detail()?.textContent?.includes(t("workflow.status.blocked")),
       "UI optimistically invented execution",
     );
     check((await actionClick("workflow.pause")).kind === "pause", "Pause not explicit");
@@ -609,34 +618,35 @@ Object.assign(window, {
         "Side execution authority leaked",
       );
     }
+    click("workflow.overview");
     const intent = document.querySelector('[data-workflow="project-intent"]')!;
-    useAppStore.setState({ activeSessionId: "unrelated-chat" });
+    check(!intent.querySelector("select"), "Project Agent required a workstream");
     fill("workflow.intentText", "Review a new direction", intent);
-    check(
-      findButton("workflow.sendIntent", intent).disabled,
-      "Project intent did not require explicit target",
-    );
-    fill("workflow.chooseWorkstream", "work-1", intent);
+    check(!findButton("workflow.sendAgent", intent).disabled, "Project Agent submit unavailable");
+    const originals = useAppStore.getState();
+    const sent: { text: string; target: string }[] = [];
+    let rejectSend = true;
+    useAppStore.setState({
+      activeSessionId: "unrelated-chat",
+      refreshSessions: async () => {},
+      selectSession: async (id: string) => { useAppStore.setState({ activeSessionId: id, page: "chat" }); },
+      sendPrompt: async (text, _draft, target) => { sent.push({ text, target: target! }); return !rejectSend; },
+    });
     submit(intent);
-    await until(
-      () =>
-        actions.at(-1)?.kind === "side.create" &&
-        (actions.at(-1) as { task?: string }).task === "Review a new direction",
-      "Project intent missing",
-    );
-    const routed = actions.at(-1)!;
-    check(
-      routed.kind === "side.create" &&
-        routed.workstreamId === "work-1" &&
-        routed.sourceSessionId === "main-chat",
-      "Project intent used unrelated active chat",
-    );
-    await until(
-      () =>
-        !findButton("workflow.sendIntent", intent).disabled ||
-        !(field("workflow.intentText", intent) as HTMLTextAreaElement).value,
-      "Intent remained busy",
-    );
+    await until(() => sent.length === 1 && document.querySelector('[role="alert"]'), "Agent failure was not visible");
+    check(field("workflow.intentText", intent).value === "Review a new direction", "Failed send discarded project draft");
+    flushSync(() => root.render(null));
+    useAppStore.setState({ page: "project", projectConsoleId: "project-1", activeSessionId: null });
+    mount();
+    await until(() => document.querySelector('[data-workflow="project-intent"]'), "Project overview missing after remount");
+    const restoredIntent = document.querySelector('[data-workflow="project-intent"]')!;
+    check(field("workflow.intentText", restoredIntent).value === "Review a new direction", "Remount discarded project draft");
+    rejectSend = false;
+    submit(restoredIntent);
+    await until(() => sent.length === 2 && !field("workflow.intentText", restoredIntent).value, "Successful send did not clear draft");
+    check(sent.every((item) => item.target === "project-agent"), "Project prompt used unrelated active chat");
+    check(actions.at(-1)?.kind === "agent.open", "Project Agent used fake workstream action");
+    useAppStore.setState({ page: "project", projectConsoleId: "project-1", activeSessionId: null, refreshSessions: originals.refreshSessions, selectSession: originals.selectSession, sendPrompt: originals.sendPrompt });
     click("workflow.artifacts");
     await until(
       () => document.querySelector('[data-workflow-artifact="candidate-7"]'),
@@ -726,6 +736,7 @@ Object.assign(window, {
     holdNextAction = true;
     click("workflow.discuss", detail());
     await until(() => heldAction, "Same-project action was not held");
+    click("workflow.allWorkstreams");
     const otherWorkstream = [
       ...document.querySelectorAll<HTMLButtonElement>(".workflow-workstream"),
     ].find((button) => button.textContent?.includes("Independent validation"))!;
@@ -765,6 +776,7 @@ Object.assign(window, {
       "Late action stole navigation",
     );
     useAppStore.setState({ page: "project", projectConsoleId: "project-1", activeSessionId: null });
+    click("workflow.search", document.querySelector(".workflow-header")!);
     fill("workflow.search", "continuity");
     submit(document.querySelector(".workflow-search-form")!);
     await until(() => document.querySelector(".workflow-search-results"), "Search results missing");
@@ -861,6 +873,9 @@ Object.assign(window, {
   },
   async consoleScreenshot(theme: string, target = "top") {
     document.documentElement.dataset.theme = theme;
+    const searchToggle = findButton("workflow.search", document.querySelector(".workflow-header")!);
+    if (searchToggle.getAttribute("aria-expanded") === "true") flushSync(() => searchToggle.click());
+    if (target === "top") click("workflow.overview");
     if (target === "controls") {
       click("workflow.overview");
       await selectPrimary();

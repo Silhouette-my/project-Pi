@@ -16,6 +16,7 @@ import { Host } from "./e2e/host.mjs";
 const root = resolve(repositoryRoot());
 assertDesktopBuild(root);
 const sourceCommitAtRun = execFileSync("git", ["rev-parse", "--short=12", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+const sourceChangesAtRun = execFileSync("git", ["status", "--short"], { cwd: root, encoding: "utf8" }).trim();
 const builtCommitArg = process.argv.indexOf("--built-commit");
 const builtCommit = builtCommitArg >= 0 ? process.argv[builtCommitArg + 1] : undefined;
 if (builtCommitArg >= 0 && !builtCommit) throw new Error("--built-commit requires the commit identifier used for the built Electron JavaScript");
@@ -32,8 +33,29 @@ const hostBinary = join(root, "target/debug/pi-desktop-host-core");
 const electronBinary = "/Users/michaeltan/Desktop/Programming/Pi/PI-Desktop-worktrees/chatgpt-chat-mode/node_modules/.task-electron/dist/Electron.app/Contents/MacOS/Electron";
 const json = JSON.stringify, stamp = () => new Date().toISOString(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let sequence = 0, projectId, main, page, child, log = "", finalSnapshot;
-const coverage = [], layout = {};
-const model = createServer((req, res) => { res.writeHead(200, { "content-type": "application/json" }); res.end(json({ object: "list", data: [{ id: "ui-fixture", object: "model", owned_by: "local-fixture" }] })); });
+const coverage = [], layout = {}, modelRequests = [];
+const model = createServer(async (req, res) => {
+  if (req.method === "GET" && req.url === "/v1/models") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(json({ object: "list", data: [{ id: "ui-fixture", object: "model", owned_by: "local-fixture" }] }));
+    return;
+  }
+  if (req.method !== "POST" || req.url !== "/v1/chat/completions") {
+    res.writeHead(404); res.end(); return;
+  }
+  let raw = "";
+  for await (const chunk of req) raw += chunk;
+  const request = JSON.parse(raw);
+  modelRequests.push(request);
+  res.writeHead(200, { "content-type": "text/event-stream" });
+  const frame = (delta, finish_reason = null) => res.write(`data: ${json({
+    id: `project-agent-${modelRequests.length}`, object: "chat.completion.chunk", created: 1,
+    model: request.model, choices: [{ index: 0, delta, finish_reason }],
+  })}\n\n`);
+  frame({ role: "assistant", content: `PROJECT_AGENT_REPLY_${modelRequests.length}: We can discuss the project before creating work.` });
+  frame({}, "stop");
+  res.end("data: [DONE]\n\n");
+});
 await new Promise((done, reject) => { model.once("error", reject); model.listen(0, "127.0.0.1", done); });
 async function freePort() {
   const server = createNetServer(); await new Promise(done => server.listen(0, "127.0.0.1", done));
@@ -86,6 +108,7 @@ const mutate = async (kind, fields) => invoke("projectWorkflowMutate", { kind, c
 const clickText = async (text, selector = "button") => page.evaluate(`(() => { const el=[...document.querySelectorAll(${json(selector)})].find(x=>x.textContent?.trim().includes(${json(text)}) && !x.disabled); if(!el) return false; el.click(); return true })()`);
 const clickAria = async (label, selector = "button[aria-label]") => page.evaluate(`(() => { const el=[...document.querySelectorAll(${json(selector)})].find(x=>x.getAttribute('aria-label')===${json(label)} && !x.disabled); if(!el) return false; el.click(); return true })()`);
 const fillByLabel = async (label, value) => page.evaluate(`(() => { const labels=[...document.querySelectorAll('label')]; const label=labels.find(x=>x.textContent?.trim().startsWith(${json(label)})); const input=label?.querySelector('input,textarea,select') || (label?.htmlFor && document.getElementById(label.htmlFor)); if(!input) return false; const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value')?.set; setter?.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); return true })()`);
+const fillControl = async (selector, value) => page.evaluate(`(() => { const input=document.querySelector(${json(selector)}); if(!input) return false; Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value').set.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); return true })()`);
 const submitForm = async selector => page.evaluate(`(() => { const form=document.querySelector(${json(selector)}); if(!form) return false; form.requestSubmit(); return true })()`);
 const capture = async name => { const shot = await page.call("Page.captureScreenshot", { format: "png" }); await writeFile(join(output, name), Buffer.from(shot.data, "base64")); };
 try {
@@ -101,6 +124,45 @@ try {
   await startApp();
   setup = await main.evaluate(`globalThis.__PI_DESKTOP_PLAN_UI_PROBE({operation:'liveSetup',workspace:${json(join(root, "apps"))}})`);
   assert.equal(setup.ok, true, json(setup));
+  await invoke("settingsSet", { ...await invoke("settingsGet"), defaultProviderId: setup.providerId, defaultModelId: setup.modelId });
+  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "empty project in sidebar", 60000);
+  await clickText("apps");
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "empty project Agent composer");
+  assert.equal((await snapshot()).workstreams.length, 0);
+  assert.ok(await fillControl('[data-workflow="project-intent"] textarea', "PROJECT_AGENT_EMPTY_PROJECT: discuss before working"));
+  assert.ok(await submitForm('[data-workflow="project-intent"]'));
+  await until(() => page.evaluate(`document.body.innerText.includes('PROJECT_AGENT_REPLY_1')`), "actual Agent response rendered");
+  const projectAgentSession = (await snapshot()).projectAgents.find(agent => agent.projectId === projectId).sessionId;
+  assert.equal((await snapshot()).workstreams.length, 0, "discussion creates no hidden workstream");
+  assert.equal((await snapshot()).runs.length, 0, "discussion starts no workflow run");
+  assert.equal(modelRequests.length, 1);
+  assert.equal(modelRequests[0].tools?.length ?? 0, 0, "project Agent has no execution catalog");
+  assert.ok(await page.evaluate(`!!document.querySelector('.workflow-conversation-bar') && !document.querySelector('.composer-mode') && !document.querySelector('.composer-permission')`));
+  await capture("renderer-project-agent.png");
+  await page.evaluate(`document.querySelector('.workflow-conversation-bar button').click()`);
+  await until(() => page.evaluate(`!!document.querySelector('.workflow-agent-tab')`), "project return route");
+  await page.evaluate(`document.querySelector('.workflow-agent-tab').click()`);
+  await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar')`), "project Agent reopened");
+  assert.equal((await snapshot()).projectAgents[0].sessionId, projectAgentSession);
+  assert.equal(modelRequests.length, 1, "reopening never sends another prompt");
+  coverage.push("Empty project opens canonical Agent from the overview, renders an actual loopback-model reply in ChatSurface, preserves it on revisit, and creates no Workstream/Run or tool catalog");
+  await stopApp();
+  await startApp();
+  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "project restored after restart", 60000);
+  await clickText("apps");
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "project composer after restart");
+  await page.evaluate(`document.querySelector('.workflow-agent-tab').click()`);
+  await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar') && !!document.querySelector('.composer-input')`), "resumed Agent Composer");
+  assert.ok(await page.evaluate(`(() => { const input=document.querySelector('.composer-input'); if(!input) return false; input.focus(); input.textContent='PROJECT_AGENT_RESTART: continue the same discussion'; input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'PROJECT_AGENT_RESTART: continue the same discussion'})); return true })()`));
+  await until(() => page.evaluate(`!!document.querySelector('.composer-toolbar .send-btn:not(:disabled)')`), "real Composer send enabled");
+  await page.evaluate(`document.querySelector('.composer-toolbar .send-btn').click()`);
+  await until(() => page.evaluate(`document.body.innerText.includes('PROJECT_AGENT_REPLY_2')`), "resumed discussion response");
+  assert.equal((await snapshot()).projectAgents[0].sessionId, projectAgentSession);
+  assert.equal(modelRequests.length, 2);
+  assert.equal(modelRequests[1].tools?.length ?? 0, 0);
+  coverage.push("Restart keeps the same project Agent and transcript; the existing Composer sends the next message with its configured model and still no execution tools");
+  await page.evaluate(`document.querySelector('.workflow-conversation-bar button').click()`);
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "return before work creation");
   await main.evaluate(`(() => { const makeRequire=process.getBuiltinModule('module').createRequire; const req=makeRequire(${json(join(root, "apps/desktop/package.json"))}); const shell=req('electron').shell; globalThis.__workflowOpenedPaths=[]; shell.openPath=async path=>{ globalThis.__workflowOpenedPaths.push(path); return ''; }; })()`);
   const now = stamp(), workstreamId = "ui-workstream", candidateId = "ui-candidate", resourceId = "ui-resource";
   const workstream = { id: workstreamId, projectId, title: "Measured rollout", goal: "Ship the measured release", acceptance: [{ id: "ui-acceptance", title: "Candidate reviewed", status: "pending", evidenceIds: [] }], owner: { kind: "session", ref: setup.sessionId }, status: "draft", priority: 0, order: 0, dependencyIds: [], nextAction: "Review the candidate", blocker: { reason: "Candidate review is pending", owner: "Release lead", resumeWhen: "Approve candidate-r7" }, mainSessionId: setup.sessionId, revision: 0, decisionRevision: 0, createdAt: now, updatedAt: now };
@@ -132,6 +194,7 @@ try {
   coverage.push("Created a workstream with title, goal, acceptance, owner, and next action through rendered controls");
 
   // Search is submitted and selected through visible controls; inspect hit breadcrumbs and focus target.
+  assert.ok(await clickAria("搜索此项目"), "project search is available in its header");
   const searchInput = await page.evaluate(`!!document.querySelector('.workflow-search input[type=search]')`);
   assert.ok(searchInput, "project-scoped search control is rendered");
   await fillByLabel("搜索此项目", "Candidate build");
@@ -224,14 +287,7 @@ try {
 
   // Inspect the workstream owner, blocker, and current candidate on Overview at both themes.
   await clickText("概览");
-  await until(() => page.evaluate(`!!document.querySelector('.workflow-summary')`), "Overview view");
-  await clickText("Measured rollout", ".workflow-workstream-list button");
-  await until(() => page.evaluate(`!!document.querySelector('.workflow-detail .workflow-blocker') && !!document.querySelector('.workflow-candidate-summary')`), "workstream owner, blocker, and candidate details");
-  const overviewText = await page.evaluate(`document.querySelector('.workflow-detail')?.innerText`);
-  assert.match(overviewText, /Release lead/);
-  assert.match(overviewText, /Approve candidate-r7/);
-  assert.match(overviewText, /candidate-r7/);
-  coverage.push("Inspected selected workstream owner, blocker/resume condition, and current candidate in Overview");
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"]')`), "Overview view");
 
   // At the native supported minimum, capture both themes and the shared context surface.
   for (const [name, theme] of [["renderer-overview-light.png", "light"], ["renderer-overview-dark.png", "dark"]]) {
@@ -244,8 +300,15 @@ try {
   for (const [name, metrics] of Object.entries(layout)) {
     assert.equal(metrics.width, 800, `${name} uses native content width`);
     assert.ok(metrics.documentWidth <= 801 && metrics.consoleWidth <= 801, `${name} overflows supported width: ${json(metrics)}`);
-    assert.ok(metrics.headerActions && metrics.headerActions.top >= 0 && metrics.headerActions.bottom <= 600, `${name} clips header actions: ${json(metrics)}`);
+    assert.ok(metrics.headerActions && metrics.headerActions.top >= 46 && metrics.headerActions.bottom <= 600, `${name} overlaps native titlebar or clips header actions: ${json(metrics)}`);
   }
+  await clickText("Measured rollout", ".workflow-workstream-list button");
+  await until(() => page.evaluate(`!!document.querySelector('.workflow-detail .workflow-blocker') && !!document.querySelector('.workflow-candidate-summary')`), "workstream owner, blocker, and candidate details");
+  const overviewText = await page.evaluate(`document.querySelector('.workflow-detail')?.innerText`);
+  assert.match(overviewText, /Release lead/);
+  assert.match(overviewText, /Approve candidate-r7/);
+  assert.match(overviewText, /candidate-r7/);
+  coverage.push("Opened a work item from Overview and inspected its owner, blocker/resume condition, and current candidate in its separate detail view");
   await page.evaluate(`document.documentElement.dataset.theme='light'; document.querySelector('.workflow-detail')?.scrollIntoView({block:'start'})`);
   await until(() => page.evaluate(`(() => { const block=document.querySelector('.workflow-blocker')?.getBoundingClientRect(), candidate=document.querySelector('.workflow-candidate-summary')?.getBoundingClientRect(); return !!block && !!candidate && block.top >= 0 && block.bottom <= innerHeight && candidate.top >= 0 && candidate.bottom <= innerHeight })()`), "Overview blocker and candidate visible in viewport");
   const overviewDetail = await page.evaluate(`(() => { const rect=selector=>{const r=document.querySelector(selector)?.getBoundingClientRect(); return r?{top:r.top,bottom:r.bottom,left:r.left,right:r.right}:null}; return {text:document.querySelector('.workflow-detail')?.innerText,owner:rect('.workflow-detail .workflow-muted'),blocker:rect('.workflow-blocker'),candidate:rect('.workflow-candidate-summary'),width:innerWidth,height:innerHeight} })()`);
@@ -269,8 +332,15 @@ try {
   coverage.push("Captured actual native Electron renderer at 800x600 in light/dark Overview and Shared Context, plus an Overview-detail frame showing owner, blocker, and candidate; checked page bounds and visible header actions");
 
   await writeFile(join(output, "snapshot.json"), json(finalSnapshot, null, 2));
-  await writeFile(join(output, "result.json"), json({ ok: true, output, scratch, projectId, setupSessionId: setup.sessionId, metadata: { sourceCommitAtRun, ...(builtCommit ? { jsBuiltCommit: builtCommit } : {}), hostBinaryCommit: hostBuiltCommit, hostProtocolVersion, workflowAggregateSchemaVersion: finalSnapshot.schemaVersion }, nativeContentSize: nativeSize, coverage, overviewText, overviewDetail, layout, searchResult: searchBefore, openedPaths: [candidateOpenedPath, resourceOpenedPath], gaps: ["Workflow execution, real account, and deployment are out of scope"] }, null, 2));
+  await writeFile(join(output, "result.json"), json({ ok: true, output, scratch, projectId, setupSessionId: setup.sessionId, projectAgentSession, modelRequestCount: modelRequests.length, metadata: { sourceCommitAtRun, sourceChangesAtRun, ...(builtCommit ? { jsBuiltCommit: builtCommit } : {}), hostBinaryCommit: hostBuiltCommit, hostProtocolVersion, workflowAggregateSchemaVersion: finalSnapshot.schemaVersion }, nativeContentSize: nativeSize, coverage, overviewText, overviewDetail, layout, searchResult: searchBefore, openedPaths: [candidateOpenedPath, resourceOpenedPath], gaps: ["Workflow execution, real account, and deployment are out of scope"] }, null, 2));
   console.log(`PASS production workflow renderer ${output}`);
+  if (process.argv.includes("--review-hold")) {
+    await clickText("概览");
+    await main.evaluate(`(() => { const req=process.getBuiltinModule('module').createRequire(${json(join(root, "apps/desktop/package.json"))}); const win=req('electron').BrowserWindow.getAllWindows().find(item=>!item.isDestroyed() && item.webContents.getURL().includes('/out/renderer/index.html')); win.setContentSize(1040,760); win.show(); })()`);
+    console.log("READY_NATIVE_REVIEW: press Enter to close the isolated application");
+    await new Promise(done => process.stdin.once("data", done));
+    process.stdin.pause();
+  }
 } catch (error) {
   const diagnostics = [];
   if (page) {

@@ -9,8 +9,22 @@ export function WorkflowConversationBar() {
   const { snapshot } = useProjectWorkflow();
   const sessionId = useAppStore((state) => state.activeSessionId);
   const setPage = useAppStore((state) => state.setPage);
+  const projectAgent = snapshot?.projectAgents?.find((item) => item.sessionId === sessionId);
   const link = snapshot?.conversations.find((item) => item.sessionId === sessionId);
   const workstream = snapshot?.workstreams.find((item) => item.id === link?.workstreamId);
+  if (projectAgent) {
+    return (
+      <aside className="workflow-conversation-bar" aria-label={t("workflow.agentTitle")}>
+        <div>
+          <strong>{t("workflow.agentTitle")}</strong>
+          <span>{t("workflow.agentDiscussionHint")}</span>
+        </div>
+        <Button size="sm" onClick={() => setPage("project", { projectId: projectAgent.projectId })}>
+          {t("workflow.backToConsole")}
+        </Button>
+      </aside>
+    );
+  }
   if (!link || !workstream) return null;
   return (
     <aside className="workflow-conversation-bar" aria-label={t("workflow.controls")}>

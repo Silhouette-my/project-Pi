@@ -8,6 +8,38 @@
 
 ## 1. Goals
 
+### E2E-PROJECT-agent-entry-and-console-layout
+
+- **Preconditions:** Built task worktree, reused Electron/runtime dependencies,
+  temporary HOME, Host data and Chromium profile, loopback-only model fixture.
+  No installed profile or real provider is used.
+- **Steps:** Open an empty project from the sidebar, send from its overview
+  composer, read the reply in the existing ChatSurface, return and reopen the
+  project Agent. Restart the app and continue the same discussion. Create a
+  workstream through the shared dialog, open its detail, search and open a
+  candidate, submit revision-specific feedback, and inspect shared context.
+  Use sidebar folder controls and inspect conversation grouping. Inspect the
+  native minimum 800×600 window in light and dark appearances.
+- **Expected:** The Agent entry needs no workstream and reuses one durable
+  session. Opening alone does not send. Discussion creates no workflow run or
+  authorization and advertises no execution tools. Mode or Auto changes cannot
+  enable Host Write/Bash; direct requests are denied before effects. Existing
+  ordinary sessions preserve their permission behavior. Header actions stay
+  below the native titlebar, overview and work details are distinct, and
+  navigation shows each standalone conversation once without moving its folder.
+  Failed sends retain the overview draft; later navigation cannot send it to a
+  different session.
+- **Coverage:** `scripts/e2e-project-workflow-ui.mjs` exercises the production
+  process/renderer journey and captures native screenshots.
+  `project-agent-navigation.test.mjs`, Project Workflow UI component journeys,
+  desktop workflow composition tests, runtime discussion-catalog tests, and
+  Host project-agent/tools-execute tests cover routing, compatibility and
+  enforcement below the UI.
+- **Specs:** `02-architecture/project-workflow-state.md`;
+  ADR `project-agent-discussion-boundary`.
+- **Acceptance:** Project workflow UI increment; real-account and release
+  deployment acceptance remain separate.
+
 ### E2E-PROVIDER-chatgpt-chat-login-and-stream
 
 - **Preconditions:** Dedicated candidate worktree and built desktop. Automated

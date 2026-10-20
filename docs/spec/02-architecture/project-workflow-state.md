@@ -98,6 +98,38 @@ Other uncontained tools, background and delegated execution return
 `WORKFLOW_RESOURCE_DENIED` before effects. A path grant is not a process sandbox.
 Ordinary turns without a workflow binding retain their existing behavior.
 
+## Project Agent discussion
+
+`agent.open` opens the project's canonical discussion session without requiring
+a workstream. The optional `projectAgents` snapshot collection durably associates
+the existing project and session identities; old snapshots without that
+collection remain valid. Reopening or restarting reuses the live associated
+session. Opening the entry alone sends no prompt and creates no workstream, run,
+or execution authorization.
+
+The discussion uses the existing ChatSurface, transcript, model picker and
+prompt queue. Project instructions, memory and current workflow context remain
+available. The renderer labels this session as Project Agent, provides a return
+to the project, and hides execution-mode, permission and local-extension controls.
+These controls are presentation only: Host rejects tool execution for the
+persisted discussion identity before permission admission, independently of
+mode or permission grants. Runtime advertises no tools and disables trusted
+extensions and delegates for this session. A Project Agent session cannot be
+selected as the execution session of a workstream. Other sessions keep their
+existing permissions and behavior.
+
+The project overview exposes discussion before work creation. Work details,
+authorization controls, context and artifacts remain real Host projections,
+not synthetic dashboard state. Header actions are below the native titlebar;
+project instructions, memory and reload are grouped in the project menu.
+Standalone conversation groups are mutually exclusive in navigation without
+changing their durable folder membership.
+
+The overview keeps an unsent draft per project. Submitting opens the canonical
+session and targets the existing send path explicitly; a later user navigation
+cannot redirect that prompt to a different session. Failed submissions retain
+the project draft.
+
 ## Opening a recorded reference
 
 `openReference` opens a recorded artifact or resource without requiring an
@@ -111,3 +143,4 @@ A workflow record is a reference, not a grant of filesystem or network access.
 - [Project Workflow MVP product contract](../../project-workflow-mvp/PRODUCT.md)
 - [Project Workflow shared interface handoff](../../project-workflow-mvp/CONTRACT.md)
 - [ADR: Durable project workflow state](../../adr/project-workflow-durable-state.md)
+- [ADR: Project Agent discussion boundary](../../adr/project-agent-discussion-boundary.md)

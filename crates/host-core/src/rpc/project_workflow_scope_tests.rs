@@ -3,6 +3,67 @@ use crate::project_workflow;
 use rusqlite::params;
 use std::fs;
 
+#[tokio::test]
+async fn project_agent_tools_execute_denies_before_auto_permissions_and_effects() {
+    let f = Fixture::new();
+    let session = {
+        let st = f.state.lock().await;
+        let session = sessions::create_session(
+            &st.db,
+            None,
+            Some("plan".into()),
+            None,
+            None,
+            Some(f.root.to_string_lossy().into_owned()),
+        )
+        .unwrap();
+        mutate(
+            &st.db,
+            "agent.link",
+            json!({"agent":{"projectId":f.project,"sessionId":session.id}}),
+        );
+        // A subsequent mode/permission change does not change discussion authority.
+        sessions::configure_session_with_thinking(
+            &st.db,
+            &session.id,
+            "agent",
+            None,
+            None,
+            None,
+            Some("auto"),
+        )
+        .unwrap();
+        session.id
+    };
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    for (name, args) in [
+        (
+            "Write",
+            json!({"path":"must-not-exist","content":"written"}),
+        ),
+        ("Bash", json!({"command":"touch must-not-exist"})),
+    ] {
+        let result = handle_request(
+            f.state.clone(),
+            "tools.execute",
+            json!({
+                "sessionId":session,"turnId":"forged","toolCallId":name,"toolName":name,
+                "args":args,"mode":"agent","permissionScope":"auto"
+            }),
+            tx.clone(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result["ok"], false, "{result}");
+        assert_eq!(result["errorCode"], "WORKFLOW_RESOURCE_DENIED", "{result}");
+    }
+    assert!(!f.root.join("must-not-exist").exists());
+    assert!(
+        rx.try_recv().is_err(),
+        "discussion denial must precede the approval path"
+    );
+}
+
 struct Fixture {
     _dir: tempfile::TempDir,
     root: PathBuf,

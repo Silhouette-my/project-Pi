@@ -45,7 +45,10 @@ export function navigationSessions(
   sessions: SessionSummary[],
   folderId?: string,
 ) {
-  const linked = new Set(snapshot.conversations.map((item) => item.sessionId));
+  const linked = new Set([
+    ...snapshot.conversations.map((item) => item.sessionId),
+    ...(snapshot.projectAgents ?? []).map((item) => item.sessionId),
+  ]);
   const navigation = new Map(snapshot.navigation.map((item) => [item.sessionId, item]));
   return sessions
     .filter(
@@ -60,6 +63,26 @@ export function navigationSessions(
         a.createdAt.localeCompare(b.createdAt) ||
         a.id.localeCompare(b.id),
     );
+}
+
+/** Highlight a chat once; Favorites wins over Recent without changing its folder. */
+export function navigationHighlights(snapshot: ProjectWorkflowSnapshot, sessions: SessionSummary[]) {
+  const associated = new Set([
+    ...snapshot.conversations.map((item) => item.sessionId),
+    ...(snapshot.projectAgents ?? []).map((item) => item.sessionId),
+  ]);
+  const eligible = sessions.filter((item) => !item.projectPath && !associated.has(item.id));
+  const byId = new Map(eligible.map((item) => [item.id, item]));
+  const favorites = snapshot.navigation
+    .filter((item) => item.favorite && byId.has(item.sessionId))
+    .sort((left, right) => left.order - right.order)
+    .map((item) => byId.get(item.sessionId)!);
+  const recent = snapshot.navigation
+    .filter((item) => item.lastAccessedAt && !item.favorite && byId.has(item.sessionId))
+    .sort((left, right) => right.lastAccessedAt!.localeCompare(left.lastAccessedAt!))
+    .slice(0, 5)
+    .map((item) => byId.get(item.sessionId)!);
+  return { favorites, recent, promotedIds: new Set([...favorites, ...recent].map((item) => item.id)) };
 }
 
 /** Two folder levels keep organizational trees shallow without changing execution context. */

@@ -110,6 +110,8 @@ function testRuntimeIdentity(sessionId: string) {
 
 type RuntimeParams = {
   sessionId: string;
+  /** Trusted Main projection of the immutable Host-owned project Agent link. */
+  discussionOnly?: boolean;
   mode?: Mode;
   /** Durable host turn ID for the prompt currently being executed. */
   turnId?: string;
@@ -258,6 +260,7 @@ async function runtimeFor(
     projectInstructions: params.projectInstructions,
     customSystemPrompt: params.customSystemPrompt,
     projectMemory: params.projectMemory,
+    discussionOnly: params.discussionOnly,
     projectPath: params.projectPath,
     remoteWorkspace: params.remoteWorkspace,
     workspaceRoot: params.workspaceRoot,
@@ -337,6 +340,7 @@ async function runtimeFor(
     customSystemPrompt: params.customSystemPrompt,
     projectInstructions: params.projectInstructions,
     projectMemory: params.projectMemory,
+    discussionOnly: params.discussionOnly,
     scratchDir:
       typeof params.scratchDir === "string" && params.scratchDir
         ? params.scratchDir

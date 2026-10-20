@@ -14,12 +14,14 @@ import {
   IconPencil,
   IconStar,
   IconTrash,
+  IconChat,
 } from "../../components/icons";
 import { api } from "../../lib/api";
 import { sessionArchived } from "../../lib/sidebar-session-groups";
 import { useAppStore } from "../../stores/app-store";
 import { useProjectWorkflow } from "./useProjectWorkflow";
-import { folderParents, navigationSessions, orderedFolders } from "./navigation-model";
+import { folderParents, navigationHighlights, navigationSessions, orderedFolders } from "./navigation-model";
+import { useProjectAgent } from "./useProjectAgent";
 import "./navigation-styles.css";
 
 type Props = {
@@ -229,16 +231,7 @@ export function WorkflowNavigation({ sessions, renderSessions }: Props) {
       </section>
     );
   }
-  const sessionIds = new Set(sessions.map((session) => session.id));
-  const favorites = snapshot.navigation
-    .filter((item) => item.favorite && sessionIds.has(item.sessionId))
-    .sort((a, b) => a.order - b.order)
-    .flatMap((item) => sessions.filter((session) => session.id === item.sessionId));
-  const recent = snapshot.navigation
-    .filter((item) => item.lastAccessedAt && sessionIds.has(item.sessionId))
-    .sort((a, b) => b.lastAccessedAt!.localeCompare(a.lastAccessedAt!))
-    .slice(0, 5)
-    .flatMap((item) => sessions.filter((session) => session.id === item.sessionId));
+  const { favorites, recent, promotedIds } = navigationHighlights(snapshot, sessions);
   return (
     <section className="workflow-navigation" aria-label={t("workflowNav.chats")}>
       <div className="sidebar-list-toolbar">
@@ -382,7 +375,7 @@ export function WorkflowNavigation({ sessions, renderSessions }: Props) {
       {orderedFolders(snapshot.folders).map(folderView)}
       <section>
         <div className="workflow-navigation-subheading">{t("workflowNav.unfiled")}</div>
-        {renderChats(navigationSessions(snapshot, sessions))}
+        {renderChats(navigationSessions(snapshot, sessions).filter((item) => !promotedIds.has(item.id)))}
       </section>
     </section>
   );
@@ -423,6 +416,10 @@ export function WorkflowProjectConversations({
   const selectSession = useAppStore((state) => state.selectSession);
   const allSessions = useAppStore((state) => state.sessions);
   const sessionMeta = useAppStore((state) => state.sessionMeta);
+  const page = useAppStore((state) => state.page);
+  const consoleId = useAppStore((state) => state.projectConsoleId);
+  const activeSessionId = useAppStore((state) => state.activeSessionId);
+  const projectAgent = useProjectAgent(projectId);
   if (!snapshot) return null;
   const toggle = (id: string) =>
     mutate({
@@ -432,12 +429,18 @@ export function WorkflowProjectConversations({
         : [...snapshot.expandedIds, id],
     });
   const associatedIds = new Set(snapshot.conversations.map((item) => item.sessionId));
+  for (const agent of snapshot.projectAgents ?? []) associatedIds.add(agent.sessionId);
   for (const workstream of snapshot.workstreams)
     if (workstream.mainSessionId) associatedIds.add(workstream.mainSessionId);
   const legacy = sessions.filter((item) => !associatedIds.has(item.id));
   const legacyId = `project:${projectId}:legacy`;
   return (
     <div className="workflow-navigation-projects">
+      <div className="workflow-navigation-project-entry">
+        <Button variant="ghost" className="workflow-navigation-label" aria-current={page === "project" && consoleId === projectId ? "page" : undefined} onClick={() => setPage("project", { projectId })}><IconFolder size={14} /><span>{t("workflow.projectHome")}</span></Button>
+        <Button variant="ghost" className="workflow-navigation-label" disabled={projectAgent.busy} aria-current={page === "chat" && snapshot.projectAgents?.some((item) => item.projectId === projectId && item.sessionId === activeSessionId) ? "page" : undefined} onClick={() => void projectAgent.open().catch(() => {})}><IconChat size={14} /><span>{t("workflow.agentTitle")}</span></Button>
+        {projectAgent.error ? <p role="alert" className="workflow-navigation-error">{projectAgent.error}</p> : null}
+      </div>
       {snapshot.workstreams
         .filter((item) => item.projectId === projectId)
         .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))

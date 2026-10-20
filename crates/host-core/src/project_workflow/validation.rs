@@ -6,6 +6,7 @@ use serde_json::Value;
 fn specification(name: &str) -> Option<&'static str> {
     Some(match name {
         "source" => "kind:user|session|message|file|run ref:id revision?:text",
+        "projectAgent" => "projectId:id sessionId:id",
         "acceptance" => "id:id title:id status:pending|satisfied|reopened evidenceIds:ids",
         "owner" => "kind:user|session|agent ref:id",
         "blocker" => "reason:text owner:id resumeWhen:text",
@@ -115,6 +116,8 @@ pub(super) fn command(value: &Value) -> Result<()> {
         .as_str()
         .ok_or_else(|| Error::invalid("kind required"))?;
     let fields = match kind {
+        "agent.create" => "projectId:id",
+        "agent.link" => "agent:projectAgent",
         "folder.create" | "folder.update" => "folder:folder",
         "folder.remove" => "folderId:id",
         "navigation.move" => "sessionIds:ids folderId?:id",

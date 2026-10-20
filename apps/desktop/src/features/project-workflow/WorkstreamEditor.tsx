@@ -110,7 +110,7 @@ export function WorkstreamEditor({
         void save();
       }}
     >
-      <h3>{t(workstream ? "workflow.editWorkstream" : "workflow.newWorkstream")}</h3>
+      <h3 id="workflow-workstream-editor-title">{t(workstream ? "workflow.editWorkstream" : "workflow.newWorkstream")}</h3>
       {conflict && (
         <div role="alert">
           <p>{t("workflow.conflict")}</p>

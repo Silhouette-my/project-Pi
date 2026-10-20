@@ -195,6 +195,11 @@ pub(crate) fn authorize_tool(
     db: &Database,
     call: &ToolsExecuteParams,
 ) -> Result<Option<ToolScope>> {
+    // Session identity, not mode, renderer state, turn arguments or permission
+    // grants, owns this boundary. Even direct/missing-turn calls cannot execute.
+    if is_project_agent(db, &call.session_id)? {
+        return Err(denied("Project Agent discussion cannot execute tools; create explicitly authorized work instead"));
+    }
     let current: Option<(String,Option<String>,Option<String>)> = db.conn().query_row(
         "SELECT t.id,b.run_id,b.scope_json FROM turns t LEFT JOIN workflow_turn_bindings b ON b.turn_id=t.id WHERE t.session_id=?1 AND t.status='running'",
         params![call.session_id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
