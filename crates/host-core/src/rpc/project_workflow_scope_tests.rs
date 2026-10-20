@@ -318,7 +318,10 @@ async fn workflow_shell_cancel_pending_and_reject_detached_effects() {
     )
     .await
     .unwrap();
-    assert_eq!(task.await.unwrap()["errorCode"], "TOOL_ABORTED");
+    let result = task.await.unwrap();
+    assert_eq!(result["errorCode"], "TOOL_ABORTED");
+    assert_eq!(result["denied"], false);
+    assert_eq!(result["approvalScope"], "workflow-shell");
     assert!(!f.root.join("forbidden.txt").exists());
     for field in ["runInBackground", "delegationId"] {
         let mut p = json!({"sessionId":f.session,"turnId":turn,"toolCallId":field,"toolName":"Bash","mode":"agent","args":{"command":"printf no > forbidden.txt"}});
@@ -337,6 +340,39 @@ async fn workflow_shell_cancel_pending_and_reject_detached_effects() {
         .unwrap();
         assert_eq!(result["errorCode"], "WORKFLOW_RESOURCE_DENIED");
     }
+}
+
+#[tokio::test]
+async fn workflow_shell_started_abort_has_no_pre_runner_approval_marker() {
+    let f = Fixture::new();
+    let turn = f.begin(true).await;
+    let (task, request) = f
+        .pending_shell(
+            &turn,
+            "started-abort",
+            "printf started > started.txt; sleep 5; printf late > late.txt",
+        )
+        .await;
+    f.resolve(&request, "allow-once").await;
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        while !f.root.join("started.txt").exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    handle_request(
+        f.state.clone(),
+        "tools.abort",
+        json!({"sessionId":f.session,"toolCallId":"started-abort"}),
+        mpsc::unbounded_channel().0,
+    )
+    .await
+    .unwrap();
+    let result = task.await.unwrap();
+    assert_eq!(result["errorCode"], "TOOL_ABORTED");
+    assert!(result.get("approvalScope").is_none());
+    assert!(!f.root.join("late.txt").exists());
 }
 
 #[tokio::test]
