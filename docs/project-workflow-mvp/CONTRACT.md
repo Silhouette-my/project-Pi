@@ -39,6 +39,12 @@ session and message IDs retain their existing meaning.
   extra host/tool permissions. `start` names that authorization. Main validates
   renderer commands using `isProjectWorkflowUserCommand`; runtime-only transitions,
   run observations and deliveries are available only through the trusted host port.
+- Authorization actions are exact user-defined strings; the initial UI defaults
+  are `implement`, `check`, `document`. Resources are exact user-approved path/URI
+  identifiers, without wildcard or prefix expansion. A proposed next checkpoint
+  must name an allowed action and a subset of these resources. `maxRuns` counts
+  main and side Work runs under the same authorization. Existing tool permissions
+  remain the independent ceiling.
 - `run.observe` completion does not complete a workstream. `evidence.add` records
   evidence and its acceptance association, but does not automatically satisfy it.
   Submit an explicit acceptance update before `workstream.transition: completed`;
