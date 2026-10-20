@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import { repositoryRoot, resolveElectronBinary } from "../../../scripts/e2e/boot.mjs";
@@ -127,6 +127,12 @@ test(
       );
       const env = { ...process.env };
       delete env.ELECTRON_RUN_AS_NODE;
+      for (const [key, directory] of Object.entries({
+        HOME: "home", XDG_CONFIG_HOME: "config", XDG_CACHE_HOME: "cache", XDG_DATA_HOME: "data",
+      })) {
+        env[key] = join(temp, directory);
+        await mkdir(env[key], { recursive: true });
+      }
       const child = spawn(
         process.env.PI_WORKFLOW_TEST_ELECTRON ?? resolveElectronBinary(root).electronBinary,
         [join(temp, "main.cjs")],
