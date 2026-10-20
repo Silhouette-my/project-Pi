@@ -37,6 +37,12 @@ Auto.
 
 No `allow-always` in MVP.
 
+For a Host-derived `approvalScope: "workflow-shell"` request, show only Allow
+once and Deny. Show the complete command and a warning that its effects may
+exceed the workflow's writable paths. Each command requires a separate decision;
+Auto and existing session grants do not suppress the card. The Host rejects
+Allow for session even if an older client sends it.
+
 ## 4. Permission card states
 
 ```text

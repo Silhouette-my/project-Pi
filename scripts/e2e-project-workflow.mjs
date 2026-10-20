@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Real Electron/Main/AgentHost/Rust workflow acceptance; only the loopback model is synthetic.
- * Usage: node scripts/e2e-project-workflow.mjs [--output /absolute/evidence-directory]
+ * Usage: node scripts/e2e-project-workflow.mjs --built-commit <build-source-commit> [--output /absolute/evidence-directory]
  * Requires the current worktree's built Desktop and Rust Host. Never deletes evidence.
  */
 import assert from "node:assert/strict";
@@ -16,6 +16,9 @@ import { Host } from "./e2e/host.mjs";
 const root = resolve(repositoryRoot());
 assertDesktopBuild(root);
 const outputFlag = process.argv.indexOf("--output");
+const builtFlag = process.argv.indexOf("--built-commit");
+assert.ok(builtFlag >= 0 && process.argv[builtFlag + 1], "--built-commit must name the exact source commit used for the existing build");
+const builtCommit = process.argv[builtFlag + 1];
 const output = outputFlag < 0 ? await mkdtemp(join(tmpdir(), "pi-workflow-e2e-")) : resolve(process.argv[outputFlag + 1]);
 await mkdir(output, { recursive: true });
 const scratch = await mkdtemp(join(output, "state-"));
@@ -24,6 +27,11 @@ for (const directory of [home, data, workspace, join(workspace, "main"), join(wo
 const canonicalWorkspace = await realpath(workspace);
 const mainResource = join(canonicalWorkspace, "main"), sideResource = join(canonicalWorkspace, "side");
 const sidePath = join(sideResource, "measurement.json"), candidatePath = join(mainResource, "candidate.txt");
+const shellResource = join(canonicalWorkspace, "work-shell");
+const shellBuildCommand = `printf 'build\\n' >> ${json(join(shellResource, "build.log"))}; printf 'candidate-v1' > ${json(join(shellResource, "candidate.txt"))}`;
+const shellCheckCommand = `if grep -q 'candidate-v2' ${json(join(shellResource, "candidate.txt"))}; then printf 'check-passed\\n'; else printf 'check-failed\\n'; fi`;
+const shellDeniedCommand = `printf 'unsafe' > ${json(join(canonicalWorkspace, "unsafe-bash.txt"))}`;
+const pendingCommand = key => `printf '${key}' > ${json(join(canonicalWorkspace, `pending-${key}.txt`))}`;
 const hostBinary = join(root, "target/debug/pi-desktop-host-core");
 const requests = [], checkpoints = [], coverage = [];
 const held = new Map(), runRequests = new Map();
@@ -100,10 +108,29 @@ const model = createServer(async (req, res) => {
         reply(res, body.model, null, { id: `discover-${id}`, name: "ToolSearch", args: { query: name } });
       } else reply(res, body.model, null, { id, name, args });
     };
-    if (prompt.includes("DENY_OUTSIDE") || prompt.includes("DENY_BASH")) {
+    if (prompt.includes("SHELL_PENDING_PAUSE") || prompt.includes("SHELL_PENDING_CANCEL")) {
+      const key = prompt.includes("SHELL_PENDING_PAUSE") ? "pause" : "cancel";
+      assert.equal(runRequests.get(runId), 1, "a revoked pending shell approval never retries the model");
+      reply(res, body.model, null, { id: `pending-shell-${key}`, name: "Bash", args: { command: pendingCommand(key) } });
+    } else if (prompt.includes("SHELL_PIPELINE")) {
+      if (prompt.includes("SHELL_DOCUMENT_STEP")) {
+        if (!toolResults.some(result => result.tool_call_id === "shell-document")) invokeTool("shell-document", "Write", { path: join(shellResource, "report.md"), content: "Build executed once. Check observed candidate-v1 failure. Typed fix produced candidate-v2. User acceptance pending." });
+        else reply(res, body.model, checkpoint("Documented the actual build/check/fix sequence; user review needed"));
+      } else if (prompt.includes("SHELL_FIX_STEP")) {
+        if (!toolResults.some(result => result.tool_call_id === "shell-fix")) invokeTool("shell-fix", "Write", { path: join(shellResource, "candidate.txt"), content: "candidate-v2" });
+        else reply(res, body.model, checkpoint("Fixed the observed candidate-v1 check failure", { next: { action: "document", resources: [shellResource], prompt: "SHELL_DOCUMENT_STEP: Document the check failure and actual fix." } }));
+      } else if (prompt.includes("SHELL_CHECK_STEP")) {
+        if (!toolResults.some(result => result.tool_call_id === "shell-check")) reply(res, body.model, null, { id: "shell-check", name: "Bash", args: { command: shellCheckCommand } });
+        else {
+          assert.match(json(toolResults.find(result => result.tool_call_id === "shell-check")), /check-failed/, "real shell check observes the unfixed candidate");
+          reply(res, body.model, checkpoint("Actual check found candidate-v1; bounded fix required", { next: { action: "implement", resources: [shellResource], prompt: "SHELL_FIX_STEP: Fix the actual failed candidate using typed Write." } }));
+        }
+      } else if (!toolResults.some(result => result.tool_call_id === "shell-build")) reply(res, body.model, null, { id: "shell-build", name: "Bash", args: { command: shellBuildCommand } });
+      else reply(res, body.model, checkpoint("Actual shell build produced candidate-v1", { next: { action: "check", resources: [shellResource], prompt: "SHELL_CHECK_STEP: Check the actual built candidate." } }));
+    } else if (prompt.includes("DENY_OUTSIDE") || prompt.includes("DENY_BASH")) {
       assert.equal(runRequests.get(runId), 1, "a scope denial terminates the bounded turn without a model retry");
       const bash = prompt.includes("DENY_BASH");
-      reply(res, body.model, null, { id: bash ? "denied-bash" : "denied-outside", name: bash ? "Bash" : "Write", args: bash ? { command: `printf 'unsafe' > ${json(join(canonicalWorkspace, "unsafe-bash.txt"))}` } : { path: join(canonicalWorkspace, "outside-grant.txt"), content: "not-authorized" } });
+      reply(res, body.model, null, { id: bash ? "denied-bash" : "denied-outside", name: bash ? "Bash" : "Write", args: bash ? { command: shellDeniedCommand } : { path: join(canonicalWorkspace, "outside-grant.txt"), content: "not-authorized" } });
     } else if (prompt.includes("ADOPT_MAIN")) {
       if (prompt.includes('"statement": "NEW_DECISION_MARKER:')) {
         reply(res, body.model, checkpoint("Adopted context reached authorized continuation at a safe boundary"));
@@ -199,6 +226,7 @@ async function startApp() {
   main = await connect(ports[1], "node"); page = await connect(ports[0], "page");
   await until(() => page.evaluate("!!window.piDesktop && !!window.__PI_DESKTOP__"), "renderer and public preload");
   await until(() => main.evaluate("typeof globalThis.__PI_DESKTOP_PLAN_UI_PROBE === 'function'"), "main setup probe");
+  await page.evaluate("window.__workflowPermissionEvents = []; window.piDesktop.on(window.piDesktop.channels.event.agentMessage, envelope => { if (envelope.event?.type === 'tool_permission_request') window.__workflowPermissionEvents.push(envelope); });");
 }
 const invoke = async (key, ...args) => {
   const result = await page.evaluate(`piDesktop.invoke(piDesktop.channels.invoke[${json(key)}],...${json(args)})`);
@@ -210,6 +238,26 @@ const mutate = async (kind, fields) => invoke("projectWorkflowMutate", { kind, c
 const action = async (kind, fields = {}, workstreamId = "work-main") => invoke("projectWorkflowAction", { kind, commandId: `e2e-action-${++sequence}`, expectedRevision: (await snapshot()).revision, projectId, workstreamId, ...fields });
 const workstream = (id, sessionId, goal) => ({ id, projectId, title: id, goal, acceptance: [{ id: "acceptance-1", title: "Measured candidate", status: "pending", evidenceIds: [] }], owner: { kind: "session", ref: sessionId }, status: "ready", priority: 0, order: 0, dependencyIds: [], nextAction: goal, revision: 0, decisionRevision: 0, createdAt: stamp(), updatedAt: stamp() });
 const grant = (id, workstreamId, resources) => mutate("authorization.grant", { authorization: { id, projectId, workstreamId, actions: ["implement", "check", "document"], resources, source: { kind: "user", ref: "explicit-isolated-e2e-authorization" }, permissionCeiling: "auto", maxRuns: 8, stopConditions: [], revoked: false } });
+const seenApprovalIds = new Set();
+async function shellApproval(sessionId, command, label) {
+  const permission = await until(() => page.evaluate(`window.__workflowPermissionEvents.filter(envelope => envelope.sessionId === ${json(sessionId)}).map(envelope => envelope.event.request).find(request => request.argsPreview?.command === ${json(command)} && !${json([...seenApprovalIds])}.includes(request.requestId))`), `${label} real permissions.request`);
+  assert.equal(permission.approvalScope, "workflow-shell");
+  assert.equal(permission.argsPreview.command, command, "Host preserves the full exact command for review");
+  seenApprovalIds.add(permission.requestId);
+  await page.evaluate(`window.__PI_DESKTOP__.setPage('chat'); window.__PI_DESKTOP__.selectSession(${json(sessionId)})`);
+  const card = await until(() => page.evaluate(`(() => { const card = document.querySelector('.permission-card'); if (!card || !card.querySelector('.permission-card-args')?.textContent.includes(${json(command)})) return null; return { text: card.textContent, command: card.querySelector('.permission-card-args')?.textContent, warning: card.querySelector('[role="note"]')?.textContent, buttons: [...card.querySelectorAll('.permission-card-actions button')].map(button => button.textContent) }; })()`), `${label} actual permission card`);
+  assert.ok(card.command.includes(command), "the actual card renders the entire exact command");
+  assert.ok(card.warning && /separate approval|单独批准|個別核准/.test(card.warning), `independent Shell approval warning is visible: ${json(card)}`);
+  assert.equal(card.buttons.length, 2, "workflow Shell offers deny and allow-once only, never a session grant");
+  assert.ok(card.buttons.every(text => !/session|会话|工作階段/i.test(text)));
+  await writeFile(join(output, `${label}-approval.json`), json({ permission, card }, null, 2));
+  const screenshot = await page.call("Page.captureScreenshot", { format: "png" });
+  await writeFile(join(output, `${label}-approval.png`), Buffer.from(screenshot.data, "base64"));
+  return permission;
+}
+async function clickShellDecision(allow) {
+  await page.evaluate(`document.querySelectorAll('.permission-card-actions button')[${allow ? 1 : 0}].click()`);
+}
 let lastSnapshot;
 try {
   const seed = new Host(hostBinary, data, { env: { HOME: home }, quiet: true });
@@ -275,15 +323,37 @@ try {
   for (const [id, marker, forbiddenFile] of [["deny-outside", "DENY_OUTSIDE", "outside-grant.txt"], ["deny-bash", "DENY_BASH", "unsafe-bash.txt"]]) {
     const denied = await createWork(id, `${marker}: Attempt only the deliberately forbidden operation; Host must terminate it.`);
     const started = await denied.start();
+    if (marker === "DENY_BASH") {
+      await shellApproval(denied.sessionId, shellDeniedCommand, "shell-denied");
+      assert.equal(await absent(join(canonicalWorkspace, forbiddenFile)), true, "pending Shell approval has no effect before a user decision");
+      await clickShellDecision(false);
+    }
     const state = await until(async () => { const state = await snapshot(); return runsFor(state, id).some(run => !active(run) && run.completionKey) ? state : null; }, `${marker} boundary terminal receipt`);
     const run = runsFor(state, id)[0];
     assert.ok(["failed", "interrupted", "cancelled"].includes(run.state), `scope denial must be a failed/stopped turn, not successful completion: ${json(run)}`);
     assert.equal(runRequests.get(started.runId), 1, "denial makes one model request and no retry");
     assert.equal(await absent(join(canonicalWorkspace, forbiddenFile)), true, "denied mutation has no filesystem effect");
     const detail = await invoke("sessionGet", { id: denied.sessionId });
-    assert.match(json(detail.session.messages), /WORKFLOW_RESOURCE_DENIED/, "actual Host boundary error is visible in the transcript");
+    if (marker === "DENY_OUTSIDE") assert.match(json(detail.session.messages), /WORKFLOW_RESOURCE_DENIED/, "actual Host boundary error is visible in the transcript");
+    else assert.ok(detail.session.messages.some(message => message.toolName === "Bash" && (message.toolStatus === "denied" || message.toolResult?.isError)), "the declined actual Shell command is recorded as denied/error");
   }
-  coverage.push("Actual Host denies out-of-grant Write and unsafe Bash in auto-permission sessions; no file effect, one model request and terminal boundary stop");
+  coverage.push("Actual Host contains out-of-grant Write; auto-session Shell requires a real independent permission card and explicit denial; no file effect, one model request and terminal boundary stop");
+
+  const shell = await createWork("work-shell", "SHELL_PIPELINE: Execute the local build and check only after independent approvals, fix the observed failure and document.");
+  await shell.start();
+  const firstShellApproval = await shellApproval(shell.sessionId, shellBuildCommand, "shell-build");
+  assert.equal(await absent(join(shellResource, "build.log")), true, "the first pending command has not executed");
+  await clickShellDecision(true);
+  const secondShellApproval = await shellApproval(shell.sessionId, shellCheckCommand, "shell-check");
+  assert.notEqual(secondShellApproval.requestId, firstShellApproval.requestId, "allow-once for build never becomes approval for the check command");
+  assert.equal(await readFile(join(shellResource, "build.log"), "utf8"), "build\n", "one approval runs the build exactly once");
+  await clickShellDecision(true);
+  const shellFinished = await until(async () => { const state = await snapshot(); return state.workstreams.find(work => work.id === "work-shell").status === "awaiting_user" && runsFor(state, "work-shell").every(run => run.state === "completed" && run.completionKey) ? state : null; }, "actual approved build → failed check → typed fix → document");
+  assert.equal(runsFor(shellFinished, "work-shell").length, 4);
+  assert.equal(await readFile(join(shellResource, "candidate.txt"), "utf8"), "candidate-v2");
+  assert.match(await readFile(join(shellResource, "report.md"), "utf8"), /Check observed candidate-v1 failure/);
+  assert.equal(await readFile(join(shellResource, "build.log"), "utf8"), "build\n");
+  coverage.push("Real Shell build/check each need a distinct exact-command approval card; warnings and no session-grant button; allow-once executes once; observed check failure leads to typed fix and documentation");
 
   const adopting = await createWork("work-adopt", "ADOPT_MAIN: Continue under existing bounded authorization when an explicitly adopted decision changes.");
   const old = await adopting.start();
@@ -311,15 +381,19 @@ try {
   const survivorRun = await survivor.start();
   await until(() => held.has("survivor"), "unrelated survivor real request");
   for (const control of ["pause", "cancel"]) {
-    const target = await createWork(`work-${control}`, `HOLD_${control.toUpperCase()}: Hold only this independently scoped work.`);
-    await target.start(); await until(() => held.has(control), `${control} target real request`);
+    const target = await createWork(`work-${control}`, `SHELL_PENDING_${control.toUpperCase()}: Revoke only this pending Shell request before it executes.`);
+    await target.start();
+    await shellApproval(target.sessionId, pendingCommand(control), `shell-pending-${control}`);
+    assert.equal(await absent(join(canonicalWorkspace, `pending-${control}.txt`)), true);
     await action(control, {}, `work-${control}`);
     const controlled = await until(async () => { const state = await snapshot(); return state.workstreams.find(work => work.id === `work-${control}`).status === (control === "pause" ? "paused" : "cancelled") && runsFor(state, `work-${control}`).every(run => !active(run) && run.completionKey) ? state : null; }, `${control} affects only selected workstream`);
     assert.ok(controlled.runs.some(run => run.id === survivorRun.runId && active(run)), "unrelated work survives scoped pause/cancel");
+    assert.equal(await absent(join(canonicalWorkspace, `pending-${control}.txt`)), true, `${control} revokes the pending Shell command with no execution`);
+    await until(() => page.evaluate("!document.querySelector('.permission-card')"), `${control} clears the revoked actual permission card`);
   }
   held.get("survivor")();
   await until(async () => runsFor(await snapshot(), "work-survivor").every(run => run.state === "completed" && run.completionKey), "unrelated survivor completes normally");
-  coverage.push("Actual scoped pause and cancel stop only their real turns; unrelated Work survives and completes");
+  coverage.push("Scoped pause/cancel revoke actual pending Shell approvals without execution; unrelated Work survives and completes");
 
   // Feedback is retained after the user explicitly closes the old execution grant.
   // This tests candidate identity without accidentally authorizing correction work.
@@ -341,7 +415,7 @@ try {
   coverage.push("Actual app/profile restart preserves candidate/evidence/feedback and does not replay completed work");
   const shot = await page.call("Page.captureScreenshot", { format: "png" });
   await writeFile(join(output, "production-renderer.png"), Buffer.from(shot.data, "base64"));
-  await writeFile(join(output, "result.json"), json({ ok: true, output, scratch, projectId, coverage, gaps: ["B Project Console DOM/visual interactions are a separate final integration check", "Ambiguous crash recovery is covered by lower-level tests, not this completed-run restart", "No live account or deployment"], modelRequests: requests.length }, null, 2));
+  await writeFile(join(output, "result.json"), json({ ok: true, builtCommit, output, scratch, projectId, coverage, gaps: ["B Project Console DOM/visual interactions are a separate final integration check", "Ambiguous crash recovery is covered by lower-level tests, not this completed-run restart", "No live account or deployment"], modelRequests: requests.length }, null, 2));
   console.log(`PASS production workflow ${output}`);
 } catch (error) {
   const diagnostics = [];
@@ -355,7 +429,7 @@ try {
       await writeFile(join(output, "failure-renderer.png"), Buffer.from(shot.data, "base64"));
     } catch (diagnosticError) { diagnostics.push(diagnosticError.message); }
   }
-  await writeFile(join(output, "failure.json"), json({ message: error.message, stack: error.stack, scratch, projectId, coverage, diagnostics }, null, 2));
+  await writeFile(join(output, "failure.json"), json({ message: error.message, stack: error.stack, builtCommit, scratch, projectId, coverage, diagnostics }, null, 2));
   console.error(`FAIL production workflow; evidence retained: ${output}`); throw error;
 } finally {
   await writeFile(join(output, "electron.log"), log);

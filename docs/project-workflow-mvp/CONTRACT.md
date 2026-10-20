@@ -71,6 +71,16 @@ session and message IDs retain their existing meaning.
   user message identity. Tool execution resolves the Host-owned binding, not a
   model-supplied resource list; out-of-scope tools return
   `WORKFLOW_RESOURCE_DENIED` before effects.
+- Foreground workflow Bash requires a separate user decision on every exact
+  invocation. Host emits the existing permission request with optional
+  `ToolPermissionRequest.approvalScope: "workflow-shell"` and complete arguments.
+  Auto mode and session grants do not bypass this request; only `allow-once`
+  admits execution. `allow-session` is rejected without a reusable grant.
+  Approval waits retain the original call, not a replayable command token.
+  The Host revalidates the actual turn and workflow authority before starting
+  the command. Shell effects may exceed selected writable paths; the card states
+  this explicitly. File-tool scope remains unchanged; background/delegated Shell
+  and other unsupported tools remain denied.
 
 C0 declares the actual API/ports and adds validation tests, without fake Host or
 runtime implementations. A owns subsequent host wiring. C must report the exported
