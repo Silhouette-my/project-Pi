@@ -61,6 +61,7 @@ export const IPC = {
     projectWorkflowMutate: "pi-desktop/projectWorkflow/mutate",
     projectWorkflowAction: "pi-desktop/projectWorkflow/action",
     projectWorkflowSearch: "pi-desktop/projectWorkflow/search",
+    projectWorkflowOpenReference: "pi-desktop/projectWorkflow/openReference",
     storageGet: "pi-desktop/storage/get",
     storageChoose: "pi-desktop/storage/choose",
     storageMigrate: "pi-desktop/storage/migrate",

@@ -24,6 +24,7 @@ import {
   type CloseBehavior,
   type KeybindingOverrides,
   type PlanExecutionFinishStatus,
+  type ProjectWorkflowRuntimePort,
 } from "@pi-desktop/shared";
 import { AgentExtensionBridge } from "./agent-extensions";
 import {
@@ -74,6 +75,7 @@ import { createDesktopServices } from "./services/desktop-services";
 import { createPluginServices } from "./services/plugin-services";
 import { wirePluginThemeRuntimeServices } from "./plugin-theme-services";
 import { createSessionCollaborationService } from "./services/session-collaboration";
+import { createProjectWorkflowHostPort } from "./services/project-workflow-host";
 import {
   createApplicationLifecycle,
 } from "./bootstrap/app-lifecycle";
@@ -672,6 +674,12 @@ const planUiProbe = createPlanUiProbe({
 });
 
 let emitAgentEvent: (envelope: AgentEventEnvelope) => void = () => undefined;
+const projectWorkflow: { runtime: ProjectWorkflowRuntimePort | null } = { runtime: null };
+const projectWorkflowHost = createProjectWorkflowHostPort(getHost, (event) => {
+  sendToRenderer(IPC.event.projectWorkflowChanged, event);
+  Promise.resolve().then(() => projectWorkflow.runtime?.onHostChanged?.(event)).catch((error) =>
+    logger.app("runtime", "error", "Workflow update failed", { data: { error: describeError(error) } }));
+});
 
 const sessionCollaboration = createSessionCollaborationService({
   getHost,
@@ -875,6 +883,8 @@ function registerIpc() {
     getHost,
     getSidecar,
     getAgentHostBridge: () => mainState.agentHostBridge,
+    projectWorkflowHost,
+    getProjectWorkflowRuntime: () => projectWorkflow.runtime,
     getBackendRouter: () => startupState.backendRouter,
     getNotificationViewingSessionId: () => mainState.notificationViewingSessionId,
     setNotificationViewingSessionId: (sessionId: string | null) => {

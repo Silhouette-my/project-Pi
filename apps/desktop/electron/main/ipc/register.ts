@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { dialog, shell, type BrowserWindow, type IpcMain, type IpcMainInvokeEvent } from "electron";
-import { err, ErrorCodes, IPC, ok, type LifecycleDialogChoice, type Result } from "@pi-desktop/shared";
+import { err, ErrorCodes, IPC, ok, type LifecycleDialogChoice, type Result, type ProjectWorkflowHostPort, type ProjectWorkflowRuntimePort } from "@pi-desktop/shared";
 import type { AgentHostBridge } from "../agent-host-bridge";
 import type { AgentSidecar } from "../agent-sidecar";
 import type { HostProcess } from "../host-process";
@@ -44,6 +44,7 @@ import type { createTraySessions } from "../tray-sessions";
 import type { createTaskbarUnreadBadge } from "../taskbar-unread-badge";
 import { getChatGptChatView } from "../chatgpt-chat-view";
 import { createChatGptDiagnosticLogger } from "../chatgpt-chat-diagnostics";
+import { registerProjectWorkflowIpc } from "./project-workflow-ipc";
 
 export type RegisterIpcDependencies = {
   isQuitting: () => boolean;
@@ -54,6 +55,8 @@ export type RegisterIpcDependencies = {
   taskbarUnreadBadge: ReturnType<typeof createTaskbarUnreadBadge>;
   getSidecar: () => AgentSidecar | null;
   getAgentHostBridge: () => AgentHostBridge | null;
+  projectWorkflowHost: ProjectWorkflowHostPort;
+  getProjectWorkflowRuntime: () => ProjectWorkflowRuntimePort | null;
   /**
    * Resolves the remote backend router once it exists. Renderer IPC calls whose
    * session is owned by a paired remote host are forwarded through it; every
@@ -274,6 +277,8 @@ export function registerIpcHandlers(dependencies: RegisterIpcDependencies) {
     updater,
   });
   registerStorageIpc({ registrar, getMainWindow, restart: dependencies.restartForStorage });
+  registerProjectWorkflowIpc({ registrar, getHost, host: dependencies.projectWorkflowHost, getRuntime: dependencies.getProjectWorkflowRuntime,
+    openPath: (path) => shell.openPath(stripWinLongPrefix(path)), openExternal: (url) => shell.openExternal(url) });
   registerNotificationIpc({
     registrar,
     getHost,
