@@ -55,6 +55,12 @@ session and message IDs retain their existing meaning.
 - `discuss` includes an explicit `pause` choice. Side creation includes independent
   purpose/visibility/readContext and optional source message; only Work may execute
   under a supplied authorization. No side transcript is an authorization source.
+- `start.sessionId` explicitly selects an existing executable Agent session and
+  becomes the persisted `mainSessionId`. Without it, runtime uses the existing main
+  session or creates one under the current explicit Agent defaults. Consumer Chat
+  providers remain discussion-only: Main rejects them for Work rather than silently
+  changing provider. Ask/Explore creation preserves the source provider and inherits
+  its permission source, with Plan mode and an Ask ceiling for read/discussion.
 
 C0 declares the actual API/ports and adds validation tests, without fake Host or
 runtime implementations. A owns subsequent host wiring. C must report the exported

@@ -51,6 +51,7 @@ export type ShutdownDependencies = {
   disposePowerSaveBlockers: () => void;
   liveCallService?: Pick<LiveCallService, "endForLifecycle">;
   disposeSystemProxyRelay?: () => Promise<void>;
+  disposeProjectWorkflow?: () => Promise<void>;
 };
 
 /** Register the last-window and before-quit resource lifecycle handlers. */
@@ -76,6 +77,7 @@ export function registerShutdownHandlers({
   disposePowerSaveBlockers,
   liveCallService,
   disposeSystemProxyRelay,
+  disposeProjectWorkflow,
 }: ShutdownDependencies): void {
   let quitConfirmationPending = false;
   app.on("window-all-closed", () => {
@@ -152,6 +154,7 @@ export function registerShutdownHandlers({
       state.toggleWindowAccelerator = null;
     }
     state.shutdownPromise = (async () => {
+      await disposeProjectWorkflow?.();
       await liveCallService?.endForLifecycle("app-quit");
       // Close every paired remote host before the local host-core so any
       // in-flight remote turn's abort still goes over a live socket. Bounded
