@@ -191,7 +191,7 @@ export function registerAgentIpc({
           errorCode: "NATIVE_PI_UNSUPPORTED",
         });
       }
-      if (req.sessionMessageId || req.truncateFromMessageId || req.truncateBefore !== undefined || req.attachments?.length) {
+      if (req.workflowRunId !== undefined || req.sessionMessageId || req.truncateFromMessageId || req.truncateBefore !== undefined || req.attachments?.length) {
         throw Object.assign(new Error("Native Pi continuation currently supports text prompts only"), {
           errorCode: ErrorCodes.INVALID_ARGUMENT,
         });
@@ -332,6 +332,7 @@ export function registerAgentIpc({
       providerId: launch.providerId,
       modelId: launch.modelId,
       ...(sessionMessage ? { sessionMessageId: sessionMessage.origin.messageId } : {}),
+      ...(req.workflowRunId !== undefined ? { workflowRunId: req.workflowRunId } : {}),
     });
     const durableTurnId = String(turn?.turnId ?? "").trim();
     if (!durableTurnId) {
@@ -454,12 +455,14 @@ export function registerAgentIpc({
       | undefined;
     // The renderer already shows this row under its own id (D288); persisting
     // and echoing under the same id lets the echo replace it in place.
-    const userMessage = {
-      id: durableUserMessageId(
+    // beginTurn has already validated the workflow identity. Ordinary chat
+    // still accepts only a fresh renderer UUID, never a workflow-shaped ID.
+    const userMessageId = req.workflowRunId !== undefined ? `workflow-run:${req.workflowRunId}` : durableUserMessageId(
         req.messageId,
         Array.isArray(session.messages) ? session.messages : [],
-      ),
-
+      );
+    const userMessage = {
+      id: userMessageId,
       role: "user" as const,
       content: promptContent,
       ...(sessionMessage ? { sessionMessage: sessionMessage.origin } : {}),
@@ -550,6 +553,7 @@ export function registerAgentIpc({
             })),
           ],
           userMessageId: userMessage.id,
+          ...(req.workflowRunId !== undefined ? { workflowRunId: req.workflowRunId } : {}),
           // Per-turn permission ceiling override (R1 leftover; spec §7.3). The
           // sidecar records it on the turn context; enforcement of a NARROWER
           // ceiling still routes through the session's stored mode until
