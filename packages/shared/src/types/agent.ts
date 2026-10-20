@@ -163,6 +163,8 @@ export type ToolPermissionRequest = {
   argsPreview: unknown;
   risk: Risk;
   reason: string;
+  /** Host-derived Shell request requiring a separate, one-use user decision. */
+  approvalScope?: "workflow-shell";
   /** Subagent that asked, when the call came from a delegate (ADR 0062). */
   agentName?: string;
   /** `Task` call that spawned the asking delegate. */
