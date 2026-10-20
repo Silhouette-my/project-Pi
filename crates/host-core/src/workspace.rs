@@ -116,7 +116,7 @@ fn normalize_lexical(path: &Path) -> PathBuf {
 
 /// Compare path components using the platform's filesystem semantics.
 /// Windows paths are case-insensitive even though `Path` comparisons are not.
-fn path_is_within(root: &Path, candidate: &Path) -> bool {
+pub(crate) fn path_is_within(root: &Path, candidate: &Path) -> bool {
     let root_components: Vec<_> = root.components().collect();
     let candidate_components: Vec<_> = candidate.components().collect();
     root_components.len() <= candidate_components.len()

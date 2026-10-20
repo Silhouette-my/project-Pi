@@ -155,6 +155,7 @@ CREATE TABLE turn_queue (
   content          TEXT NOT NULL,
   attachments_json TEXT,
   session_message_id TEXT,
+  workflow_run_id   TEXT,
   user_message_id TEXT,
   permission_mode  TEXT NOT NULL,
   position         INTEGER NOT NULL,

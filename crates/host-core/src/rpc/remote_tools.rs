@@ -349,6 +349,7 @@ pub(super) async fn handle(
             None
         },
         allow_external_paths: false,
+        canonical_path_limit: None,
         hashline: Some(tools::HashlineContext {
             session_id: &p.session_id,
             store: &hashline,

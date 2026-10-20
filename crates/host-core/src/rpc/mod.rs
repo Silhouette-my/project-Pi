@@ -1,6 +1,8 @@
 mod config_sync_rpc;
 mod plugin_reviews_rpc;
 mod project_workflow_rpc;
+#[cfg(test)]
+mod project_workflow_scope_tests;
 mod remote_tools;
 mod scheduled_rpc;
 mod scheduled_tools;
@@ -3224,6 +3226,20 @@ async fn handle_request(
             let st = state.lock().await;
             let provider = params.get("providerId").and_then(Value::as_str);
             let model = params.get("modelId").and_then(Value::as_str);
+            let workflow_run = params
+                .get("workflowRunId")
+                .map(|value| {
+                    value.as_str().ok_or_else(|| {
+                        rpc_err(1002, "workflowRunId must be a string", "INVALID_ARGUMENT")
+                    })
+                })
+                .transpose()?;
+            let workflow_scope = workflow_run
+                .map(|run| {
+                    crate::project_workflow::tool_scope::prepare_binding(&st.db, session_id, run)
+                        .map_err(|e| rpc_err(1002, e.message, e.code))
+                })
+                .transpose()?;
             let turn_id = match params.get("sessionMessageId").and_then(Value::as_str) {
                 Some(message_id) => crate::session_collaboration::begin_turn(
                     &st.db, session_id, message_id, provider, model,
@@ -3231,6 +3247,23 @@ async fn handle_request(
                 None => sessions::begin_turn(&st.db, session_id, provider, model),
             }
             .map_err(session_collaboration_rpc_err)?;
+            if let (Some(run), Some(scope)) = (workflow_run, workflow_scope) {
+                if let Err(error) =
+                    crate::project_workflow::tool_scope::bind(&st.db, &turn_id, run, &scope)
+                {
+                    sessions::end_turn_settling(
+                        &st.db,
+                        &turn_id,
+                        "error",
+                        Some(error.code),
+                        None,
+                        false,
+                        false,
+                    )
+                    .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?;
+                    return Err(rpc_err(1002, error.message, error.code));
+                }
+            }
             Ok(json!({ "turnId": turn_id }))
         }
         "session.recordUsage" => {
@@ -3874,8 +3907,23 @@ async fn handle_request(
         }
         "tools.execute" => {
             let call_started = std::time::Instant::now();
-            let p: ToolsExecuteParams = serde_json::from_value(params.clone())
+            let mut p: ToolsExecuteParams = serde_json::from_value(params.clone())
                 .map_err(|e| rpc_err(1002, e.to_string(), "INVALID_PARAMS"))?;
+            let mut workflow_canonical_path = None;
+            {
+                let st = state.lock().await;
+                match crate::project_workflow::tool_scope::authorize_tool(&st.db, &p) {
+                    Ok(Some((turn, path))) => {
+                        workflow_canonical_path = Some(path.clone());
+                        p.args["path"] = json!(path.to_string_lossy());
+                        p.turn_id = Some(turn);
+                    }
+                    Ok(None) => (),
+                    Err(error) => {
+                        return Ok(crate::project_workflow::tool_scope::denial(&p, error))
+                    }
+                }
+            }
             let execution_timeout_ms = tools::effective_timeout_ms(&p.tool_name, p.timeout_ms);
 
             let remote_workspace = {
@@ -4316,6 +4364,22 @@ async fn handle_request(
                     }
                 };
 
+                // Approval/admission may have awaited a user decision. Recheck
+                // live authority and real paths immediately before execution.
+                {
+                    let st = state.lock().await;
+                    match crate::project_workflow::tool_scope::authorize_tool(&st.db, &p) {
+                        Ok(Some((turn, path))) => {
+                            workflow_canonical_path = Some(path.clone());
+                            p.args["path"] = json!(path.to_string_lossy());
+                            p.turn_id = Some(turn);
+                        }
+                        Ok(None) => (),
+                        Err(error) => {
+                            return Ok(crate::project_workflow::tool_scope::denial(&p, error))
+                        }
+                    }
+                }
                 let ws_path = workspace_path.map(PathBuf::from);
                 let (data_dir, hashline_store, worktree_env) = {
                     let st = state.lock().await;
@@ -4450,6 +4514,7 @@ async fn handle_request(
                             timeout_ms: execution_timeout_ms,
                             bash_options,
                             allow_external_paths: external_path_permission,
+                            canonical_path_limit: workflow_canonical_path.as_deref(),
                             hashline: Some(hashline_ctx),
                         },
                     )
@@ -7400,6 +7465,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: false,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -7420,6 +7486,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: false,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )

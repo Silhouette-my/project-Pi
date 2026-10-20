@@ -33,6 +33,7 @@ fn tool_options(
         timeout_ms: None,
         bash_options: bash,
         allow_external_paths: false,
+        canonical_path_limit: None,
         hashline: None,
     }
 }

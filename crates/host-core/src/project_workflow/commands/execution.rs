@@ -121,7 +121,8 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                     ));
                 }
             }
-            insert(value, "runs", row.clone())
+            insert(value, "runs", row.clone())?;
+            super::super::tool_scope::capture_dispatch(db, row)
         }
         "run.observe" => {
             work_index(db, value, command)?;

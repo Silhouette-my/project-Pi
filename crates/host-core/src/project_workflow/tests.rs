@@ -333,7 +333,7 @@ fn workflow_populated_v24_migration_preserves_canonical_state_and_restart() {
         db.conn()
             .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        25
+        crate::db::SCHEMA_VERSION
     );
     assert_eq!(
         db.kv_get("test", "preserved").unwrap(),

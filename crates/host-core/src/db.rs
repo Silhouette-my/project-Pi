@@ -7,7 +7,7 @@ pub(crate) use serde_json::Value;
 pub(crate) use std::path::{Path, PathBuf};
 
 /// Current SQLite schema version.
-pub const SCHEMA_VERSION: i64 = 25;
+pub const SCHEMA_VERSION: i64 = 26;
 
 /// Absolute approval deadline for a newly submitted Plan or Goal proposal.
 pub const PLAN_APPROVAL_TIMEOUT_MS: i64 = 30 * 60 * 1000;
@@ -24,6 +24,7 @@ mod repositories;
 mod schema;
 mod session_collaboration_migration;
 mod session_title_source_migration;
+mod workflow_boundary_migration;
 mod worktree_migration;
 pub(crate) use migrations::{
     archive_legacy_db, create_migration_backup, migrate_and_validate_top_level_mode,
@@ -46,6 +47,7 @@ pub(crate) use repositories::{
 };
 pub(crate) use schema::{PLAN_APPROVALS_SCHEMA, SCHEMA_LATEST, SESSION_TODO_DDL};
 pub(crate) use session_title_source_migration::migrate_v22_to_v23;
+pub(crate) use workflow_boundary_migration::{migrate_v25_to_v26, WORKFLOW_BOUNDARY_DDL};
 pub(crate) use worktree_migration::{migrate_v23_to_v24, WORKTREE_DDL};
 
 pub fn now_ms() -> i64 {

@@ -3,6 +3,7 @@ mod commands;
 mod search;
 #[cfg(test)]
 mod tests;
+pub(crate) mod tool_scope;
 mod validation;
 
 use crate::db::{now_ms, Database};

@@ -38,6 +38,11 @@ lose the distinction between execution and product evidence.
 6. Opening a recorded reference does not grant access: local references must
    resolve within a registered project-group root and HTTP(S) must pass the
    existing host URL gate. The operation returns the recorded revision.
+7. Schema v26 binds trusted workflow run identity and immutable output scope to
+   the actual Host turn. Tool execution revalidates that binding before effects,
+   in addition to existing permissions. Read-only canonical and delivered inputs
+   do not widen output scope. Uncontained tools are denied rather than treating
+   model-declared resources as a process sandbox; ordinary turns are unchanged.
 
 ## Consequences
 
