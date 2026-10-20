@@ -78,12 +78,19 @@ type FinishTurnOptions = { turnId: string; recoverInflight?: boolean };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Keep the renderer-chosen id when it is a UUID the session does not hold (D288). */
+/**
+ * Keep a client-chosen UUID (D288) or trusted workflow assignment identity
+ * when it is not already present in the session. Workflow ids deliberately
+ * carry their namespace so recovery can find the exact persisted prompt row.
+ */
 export function durableUserMessageId(
   requested: unknown,
   existing: ReadonlyArray<{ id?: unknown }>,
+  workflowRunId?: string,
 ): string {
-  if (typeof requested === "string" && UUID_PATTERN.test(requested) && !existing.some((message) => message?.id === requested)) {
+  const workflowIdentity = typeof requested === "string" && workflowRunId !== undefined
+    && requested === `workflow-run:${workflowRunId}`;
+  if (typeof requested === "string" && (UUID_PATTERN.test(requested) || workflowIdentity) && !existing.some((message) => message?.id === requested)) {
     return requested;
   }
   return randomUUID();
@@ -150,9 +157,10 @@ export class RuntimeService implements RuntimePort {
         sessionId: string;
         toolCallId: string;
         toolName: string;
-        argsPreview: string;
+        argsPreview: unknown;
         risk: Risk;
         reason: string;
+        approvalScope?: "workflow-shell";
       };
       // A delegate's call is already tracked by the time the host asks: the
       // sidecar forwards tool_start before it executes the tool.
@@ -180,6 +188,7 @@ export class RuntimeService implements RuntimePort {
             argsPreview: permission.argsPreview,
             risk: permission.risk,
             reason: permission.reason,
+            ...(permission.approvalScope ? { approvalScope: permission.approvalScope } : {}),
             ...(asking?.agentName ? { agentName: asking.agentName } : {}),
             ...(asking?.parentToolCallId ? { parentToolCallId: asking.parentToolCallId } : {}),
             ...(asking?.nestedParentToolCallId ? { nestedParentToolCallId: asking.nestedParentToolCallId } : {}),
@@ -313,7 +322,7 @@ export class RuntimeService implements RuntimePort {
     const launch = await this.options.launch.resolve(sessionId, session, settings ?? {});
     sidecar.setProjectInstructionRoot(sessionId, launch.projectPath);
 
-    const turnId = await this.beginTurn(sessionId, launch.providerId, launch.modelId, sessionMessage?.origin.messageId);
+    const turnId = await this.beginTurn(sessionId, launch.providerId, launch.modelId, sessionMessage?.origin.messageId, request.workflowRunId);
 
     let content = sessionMessage?.content ?? request.content;
     let command: string | undefined;
@@ -330,7 +339,7 @@ export class RuntimeService implements RuntimePort {
     }
     const existing = Array.isArray(session.messages) ? (session.messages as Array<{ id?: unknown }>) : [];
     const userMessage: UiMessage = {
-      id: durableUserMessageId(request.userMessageId, existing),
+      id: durableUserMessageId(request.userMessageId, existing, request.workflowRunId),
       role: "user",
       content,
       ...(sessionMessage ? { sessionMessage: sessionMessage.origin } : {}),
@@ -360,6 +369,7 @@ export class RuntimeService implements RuntimePort {
         ...(sessionMessage ? { sessionMessage: sessionMessage.origin } : {}),
         attachments: [],
         userMessageId: userMessage.id,
+        ...(request.workflowRunId ? { workflowRunId: request.workflowRunId } : {}),
         // Per-turn permission ceiling override (R1 leftover; spec §7.3). Only
         // forwarded when the effective mode differs from the session's stored
         // mode — a widening request has already been refused upstream so any
@@ -522,12 +532,13 @@ export class RuntimeService implements RuntimePort {
   }
 
   /** Open a durable turn row and take ownership of the session for it. */
-  async beginTurn(sessionId: string, providerId: string, modelId: string, sessionMessageId?: string): Promise<string> {
+  async beginTurn(sessionId: string, providerId: string, modelId: string, sessionMessageId?: string, workflowRunId?: string): Promise<string> {
     const turn = await this.requireHost().call<{ turnId?: string }>("session.beginTurn", {
       sessionId,
       providerId,
       modelId,
       ...(sessionMessageId ? { sessionMessageId } : {}),
+      ...(workflowRunId ? { workflowRunId } : {}),
     });
     const turnId = String(turn?.turnId ?? "").trim();
     if (!turnId) throw new Error("session.beginTurn returned no turn");

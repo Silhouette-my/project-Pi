@@ -41,6 +41,11 @@ export type VendorAuthResolver = (input: {
   providerId: string;
 }) => Promise<unknown>;
 
+export type ChatGptConversationTransport = {
+  open(params: { requestId: string; body: Record<string, unknown> }): Promise<unknown>;
+  cancel(params: { requestId: string }): Promise<unknown>;
+};
+
 // The sidecar runs model-directed code paths; it must not be able to pull
 // secrets or mutate configuration through the parent proxy. Tight allowlist
 // of host methods the agent loop legitimately needs.
@@ -63,6 +68,8 @@ const HOST_PROXY_ALLOWED = new Set([
   "plans.abort",
   "project.instructions.resolve",
   "provider.resolveAuth",
+  "chatgpt.conversation.open",
+  "chatgpt.conversation.cancel",
   "provider.resolveSubagentModel",
   "app.health",
   // Trusted extensions (D387): answered by the embedding host, plus the
@@ -152,6 +159,7 @@ export class AgentSidecar {
   // record immediately before starting a runtime turn.
   private projectInstructionRoots = new Map<string, string>();
   private vendorAuthResolver: VendorAuthResolver | null = null;
+  private chatGptConversationTransport: ChatGptConversationTransport | null = null;
   private trustedExtensionBridge: TrustedExtensionSidecarBridge | null = null;
   // Vendor-account rows this session was launched with. The sidecar can only
   // ask for auth it is already using, and a session that never bound an OAuth
@@ -329,6 +337,14 @@ export class AgentSidecar {
     this.vendorAuthResolver = resolver;
   }
 
+  setChatGptConversationTransport(transport: ChatGptConversationTransport): void {
+    this.chatGptConversationTransport = transport;
+  }
+
+  notifyHost(method: string, params: unknown): void {
+    this.writeToChild(JSON.stringify({ jsonrpc: "2.0", method: "host.notification", params: { method, params } }) + "\n");
+  }
+
   setTrustedExtensionBridge(bridge: TrustedExtensionSidecarBridge): void {
     this.trustedExtensionBridge = bridge;
   }
@@ -467,6 +483,17 @@ export class AgentSidecar {
           );
         }
         const params = (msg.params?.params ?? {}) as Record<string, unknown>;
+        if (method === "chatgpt.conversation.open" || method === "chatgpt.conversation.cancel") {
+          const transport = this.chatGptConversationTransport;
+          if (!transport) throw new Error("ChatGPT conversation transport unavailable");
+          if (typeof params.requestId !== "string" || !params.requestId) throw new Error("invalid ChatGPT request ID");
+          if (method.endsWith(".open") && (!params.body || typeof params.body !== "object" || Array.isArray(params.body))) throw new Error("invalid ChatGPT request body");
+          const result = method.endsWith(".open")
+            ? await transport.open({ requestId: params.requestId, body: params.body as Record<string, unknown> })
+            : await transport.cancel({ requestId: params.requestId });
+          this.writeToChild(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\n");
+          return;
+        }
         const requestedToolName = String(params.toolName ?? "");
         const planLocalTool =
           requestedToolName === "Skill" ||

@@ -1,4 +1,5 @@
 import { projectPlanHistory } from "./plan-history";
+import { createProjectWorkflowApi } from "./project-workflow-api";
 import { guardRemoteInvocation } from "./remote-ipc-safety";
 import { isRemoteSession, safeSessionSummary } from "./remote-session-safety";
 import type {
@@ -153,6 +154,7 @@ import type {
   TrustedExtensionUiPromptResponse,
   SessionTodoSnapshot,
   StorageInfo,
+  ChatGptChatStatus,
 } from "@pi-desktop/shared";
 import {
   defaultCommandShellForPlatform,
@@ -642,6 +644,13 @@ function normalizePlansChangedEvent(value: unknown): PlanningStateEvent {
 }
 
 export const api = {
+  projectWorkflow: createProjectWorkflowApi(invoke, (channel, listener) => {
+    if (!window.piDesktop) throw new Error("piDesktop preload bridge unavailable");
+    return window.piDesktop.on(channel, listener);
+  }),
+  chatgptChatStatus: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatStatus),
+  chatgptChatLogin: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatLogin),
+  chatgptChatLogout: () => invoke(IPC.invoke.chatgptChatLogout),
   getVersion: () => invoke<AppVersionInfo>(IPC.invoke.appGetVersion),
   health: () => invoke<HostHealth>(IPC.invoke.appHealth),
   getOnboarding: () => invoke<OnboardingState>(IPC.invoke.appGetOnboarding),

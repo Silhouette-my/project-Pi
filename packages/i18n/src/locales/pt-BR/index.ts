@@ -1,6 +1,8 @@
 import { en, type EnglishCatalog } from "../en/index.js";
+import { workflowCatalog } from "./workflow.js";
 
 export const ptBR = {
+  ...workflowCatalog,
   worktree: {
     menu: { group: "Git" },
     newIsolatedSession: "Nova sessão isolada",
@@ -1491,6 +1493,16 @@ export const ptBR = {
     noApiKeyHint: "Ative somente se o endpoint aceitar solicitações sem autenticação.",
     apiStyle: "Formato API",
     apiStyleChatCompletions: "OpenAI Chat Completions",
+    apiStyleChatGPTConversation: "ChatGPT (chat por assinatura)",
+    chatgptChatCheckingStatus: "Verificando o login do ChatGPT…",
+    chatgptChatLoggedIn: "Conta do ChatGPT conectada",
+    chatgptChatLoggedOut: "Conta do ChatGPT desconectada",
+    chatgptChatLogin: "Entrar no ChatGPT",
+    chatgptChatLogout: "Sair",
+    chatgptChatWorking: "Abrindo o ChatGPT…",
+    chatgptChatEndpointFixed: "O ChatGPT usa um endereço de serviço fixo.",
+    chatgptChatChallenge: "Conclua o login na janela do ChatGPT.",
+    chatgptChatError: "Não foi possível confirmar o login do ChatGPT. Verifique a janela do ChatGPT e tente novamente.",
     apiStyleOpenCodeGo: "OpenCode Go",
     service: "Serviço",
     searchService: "Filtrar serviços",
@@ -1940,6 +1952,7 @@ export const ptBR = {
     allowPrompt: "Permitir a execução de <highlight>{{tool}}</highlight>?",
     allowOnce: "Permitir uma vez",
     allowSession: "Permitir nesta conversa",
+    workflowShellWarning: "Cada comando de shell exige aprovação separada e pode acessar caminhos fora dos arquivos e pastas graváveis pelo fluxo de trabalho.",
     deny: "Negar",
     risk: {
       high: "Alto risco",

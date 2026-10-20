@@ -50,6 +50,49 @@ Settings / UI
 
 ## 4. 提供商类型
 
+### ChatGPT 订阅聊天
+
+在设置 → 模型 → 添加服务 → 自定义中选择 ChatGPT 订阅聊天，点击登录按钮，
+在临时窗口完成登录。回复显示在原生对话界面。此类型使用独立持久浏览器会话，
+不使用 API key 或 Codex OAuth。登录后自动刷新消费者 `/backend-api/models` 目录，
+模型名称来自 `title`，请求 ID 原样使用 `slug`，账号默认模型排在首位。无静态
+`gpt-6` 或 Codex 目录兜底；选择模型后仍需明确点击保存服务。
+退出登录会清除该分区并取消请求，所有 ChatGPT Chat 服务行共用此登录状态。
+
+登录判定验证 `/api/auth/session` 的已认证 JSON，而非仅检查 HTTP 200。
+界面展示检查、验证、未登录和错误状态；初始加载限30秒，登录窗口限3分钟，
+连续3次探测错误结束等待。`provider.chatgpt.auth.status` 仅记录端点、状态码、
+内容类型和原因，以及一次观察性的 cookie-only `/backend-api/me` 检查，
+不记录响应正文或账号身份。
+
+测试连接使用同一已认证浏览器会话读取消费端模型目录，验证认证与目录可达性，
+不发送生成请求。观察性 `/me` 检查的401不能推翻已验证的会话。登录文档诊断
+移除 URL 查询参数、片段和凭据，并区分导航失败、HTTP 响应、渲染退出及被拒弹窗。
+
+适配器仍在 agent sidecar 中执行，Electron Main 拥有 sandboxed 离屏 view。
+cookie、Sentinel 和会话 Bearer 凭据留在页面内；有 token 时页内附加 Bearer，
+同时携带 cookie。RPC 只传请求和 SSE。
+请求准备按需加载同源官方 Sentinel SDK，并直接获取聊天 token；加载与 token
+生成均有等待上限，不等待独立的语音初始化流程。离屏传输视图使用非零尺寸，
+关闭后台节流，让授权 iframe 在无可见宿主窗口时也能运行，包括保留登录后
+重启直接发送。登录使用同一持久分区中的独立交互视图，临时窗口关闭时销毁；
+后续状态检查或发送重建离屏视图并验证共享会话，不复制凭据。续聊按本地会话及
+provider 隔离，使用远端 conversation/parent ID。重启、中断或历史变化后，
+新建远端会话并重放文本历史。v1 拒绝图片及本地工具结果历史，不静默丢弃。
+账号侧 connector 仍由服务端执行，其活动显示在对话中；失败不自动重试。
+HTTP 429 以账号限流错误呈现并附带服务端给出的重试等待时间，传输层不自动重发。
+流同时监测实际执行的模型：当流中的 server STE metadata 给出的执行模型与请求不同，
+或发生了自动 reasoning 切换时，assistant 消息附带 `chatgpt.model_route` 诊断，
+但不因此失败轮次。
+
+Pro 仅在账号目录实际返回时可选，不能由显示名称推导 slug 或额外参数。
+桌面思考等级映射为账号 effort 枚举（`low`、`medium`、`high`、`extra_high`），
+"off" 不显式指定。未指定时优先采用目录 `thinking_efforts` 中该模型 advertised 的
+`instant`，否则用 `default_thinking_effort`；两者皆无则省略由服务默认。
+显式 effort 不在 advertised 列表内时回退账号默认；目录不可用则原样发送。
+新页面首次使用前刷新目录以恢复这些账号约束。
+实际 Pro 权限及生成仍需账号侧人工验收。
+
 | 类型 | 描述 | 例子 |
 |---|---|---|
 | `native` | 通过 pi-ai 进行一流供应商集成 | openai、anthropic、google、bedrock、mistral 等 |

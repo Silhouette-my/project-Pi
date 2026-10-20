@@ -44,6 +44,7 @@ import {
 import { genericModelConfig } from "./model-capabilities.js";
 import { sessionAffinityCompat } from "./session-affinity.js";
 import type { ModelConfig } from "./thinking-level.js";
+import { createChatGptConversationStreams } from "./chatgpt-conversation.js";
 
 export type RuntimeProviderConfig = {
   id: string;
@@ -75,6 +76,8 @@ export type RuntimeProviderConfig = {
    * moment it signs a request.
    */
   resolveAuth?: () => Promise<ModelAuth>;
+  /** Session-owned browser transport, injected by the sidecar (never serialized). */
+  chatGptStreams?: ProviderStreams;
 };
 
 export const DEFAULT_CONTEXT_WINDOW = 128_000;
@@ -159,6 +162,16 @@ export function providerRequestFetch(
  * back to OpenAI Chat Completions, the pre-apiStyle behavior. */
 export function apiBindingForStyle(apiStyle?: string): ApiBinding {
   switch (apiStyle) {
+    case "chatgpt_conversation":
+      return {
+        api: "chatgpt-conversation",
+        adapter: () => createChatGptConversationStreams({
+          call: async () => { throw new Error("ChatGPT browser transport is unavailable outside a desktop session"); },
+          onNotification: () => () => {},
+          onClose: () => () => {},
+        }),
+        defaultBaseUrl: "https://chatgpt.com/backend-api",
+      };
     case OPENCODE_GO_API_STYLE:
       return {
         api: "openai-completions",
@@ -504,7 +517,7 @@ export function createProviderModels(
   }, {
     ...operations,
     models: [model, ...(operations?.models ?? [])],
-    api: apiBindingForProviderModel(provider).adapter(),
+    api: provider.chatGptStreams ?? apiBindingForProviderModel(provider).adapter(),
   });
 }
 /** Build a pi-ai model collection for a trusted extension-owned agent. */

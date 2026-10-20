@@ -1,6 +1,8 @@
 import { en, type EnglishCatalog } from "../en/index.js";
+import { workflowCatalog } from "./workflow.js";
 
 export const zhTW = {
+  ...workflowCatalog,
   worktree: {
     menu: { group: "Git" },
     newIsolatedSession: "新增隔離工作階段",
@@ -1516,6 +1518,16 @@ sklm: {
     noApiKeyHint: "僅在此介面無需驗證時啟用。",
     apiStyle: "介面格式",
     apiStyleChatCompletions: "OpenAI Chat Completions",
+    apiStyleChatGPTConversation: "ChatGPT（訂閱聊天）",
+    chatgptChatCheckingStatus: "正在檢查 ChatGPT 登入狀態…",
+    chatgptChatLoggedIn: "已連結 ChatGPT 帳戶",
+    chatgptChatLoggedOut: "未連結 ChatGPT 帳戶",
+    chatgptChatLogin: "登入 ChatGPT",
+    chatgptChatLogout: "登出",
+    chatgptChatWorking: "正在開啟 ChatGPT…",
+    chatgptChatEndpointFixed: "ChatGPT 使用固定服務位址。",
+    chatgptChatChallenge: "請在 ChatGPT 視窗中完成登入。",
+    chatgptChatError: "無法確認 ChatGPT 登入狀態。檢查 ChatGPT 視窗後重試。",
     apiStyleOpenCodeGo: "OpenCode Go",
     service: "服務",
     searchService: "篩選服務",
@@ -1965,6 +1977,7 @@ sklm: {
     allowPrompt: "允許 <highlight>{{tool}}</highlight> 執行嗎？",
     allowOnce: "允許一次",
     allowSession: "允許本次對話",
+    workflowShellWarning: "每個 Shell 命令都需個別核准，且可能存取工作流可寫檔案與資料夾範圍以外的路徑。",
     deny: "拒絕",
     risk: {
       high: "高風險",

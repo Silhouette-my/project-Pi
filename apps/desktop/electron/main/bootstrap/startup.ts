@@ -110,6 +110,7 @@ export type StartupDependencies = {
   getSidecar?: () => unknown;
   invokeSessionCollaboration?: (input: McpControlInvokeInput) => Promise<unknown>;
   onSessionQueueChange?: () => void;
+  startProjectWorkflow?: () => Promise<void>;
 };
 
 /**
@@ -302,14 +303,18 @@ export function registerApplicationStartup(deps: StartupDependencies): void {
     });
     scheduledRunner.start();
     app.once("before-quit", () => scheduledRunner.stop());
+    let agentHostRestored = false;
     if (!bootError && state.agentHostBridge) {
       // Restore the persisted turn queue now that host-core answers. Restored
       // entries stay held until a controller attaches (D375).
-      state.agentHostBridge.agentHost.start().catch((error) => {
+      try {
+        await state.agentHostBridge.agentHost.start();
+        agentHostRestored = true;
+      } catch (error) {
         logger.app("runtime", "warn", "agent host queue restore failed", {
           data: String(error),
         });
-      });
+      }
     }
     const host = getHost();
     if (host) {
@@ -338,6 +343,10 @@ export function registerApplicationStartup(deps: StartupDependencies): void {
       // If the backend never started, retain the default focused/global path.
       applyPluginLauncherShortcut();
       applyToggleWindowShortcut();
+    }
+    if (agentHostRestored) {
+      try { await deps.startProjectWorkflow?.(); }
+      catch (error) { logger.app("runtime", "error", "project workflow reconciliation failed", { data: String(error) }); }
     }
     await ensureWindow();
     if (process.env.PI_DESKTOP_MCP_CONTROL === "1") {

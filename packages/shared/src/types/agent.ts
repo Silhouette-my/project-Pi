@@ -13,6 +13,8 @@ export type AgentPromptRequest = {
   content: string;
   /** Host-owned collaboration delivery; its durable record supplies the input. */
   sessionMessageId?: string;
+  /** Host validates this workflow run and binds its resource scope to the turn. */
+  workflowRunId?: string;
   /** Attachments are resolved by Electron main and never trusted by the sidecar. */
   attachments?: AgentPromptAttachment[];
   /**
@@ -120,6 +122,7 @@ export type QueuedTurnSummary = {
   content: string;
   sessionMessageId?: string;
   userMessageId?: string;
+  workflowRunId?: string;
   voiceOrigin?: VoiceOrigin;
   attachments?: AgentPromptAttachment[];
   position: number;
@@ -133,6 +136,7 @@ export type AgentQueuePushRequest = {
   content: string;
   sessionMessageId?: string;
   userMessageId?: string;
+  workflowRunId?: string;
   voiceOrigin?: VoiceOrigin;
   attachments?: AgentPromptAttachment[];
   idempotencyKey?: string;
@@ -159,6 +163,8 @@ export type ToolPermissionRequest = {
   argsPreview: unknown;
   risk: Risk;
   reason: string;
+  /** Host-derived Shell request requiring a separate, one-use user decision. */
+  approvalScope?: "workflow-shell";
   /** Subagent that asked, when the call came from a delegate (ADR 0062). */
   agentName?: string;
   /** `Task` call that spawned the asking delegate. */

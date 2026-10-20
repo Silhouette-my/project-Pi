@@ -1,5 +1,8 @@
 mod config_sync_rpc;
 mod plugin_reviews_rpc;
+mod project_workflow_rpc;
+#[cfg(test)]
+mod project_workflow_scope_tests;
 mod remote_tools;
 mod scheduled_rpc;
 mod scheduled_tools;
@@ -1946,6 +1949,10 @@ async fn handle_request(
                 .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?;
             Ok(json!({ "groups": groups }))
         }
+        "project.workflow.snapshot" | "project.workflow.mutate" | "project.workflow.search" => {
+            let st = state.lock().await;
+            project_workflow_rpc::handle(&st.db, method, &params)
+        }
         "project.group.createRemote" => {
             let name = params
                 .get("name")
@@ -3219,6 +3226,20 @@ async fn handle_request(
             let st = state.lock().await;
             let provider = params.get("providerId").and_then(Value::as_str);
             let model = params.get("modelId").and_then(Value::as_str);
+            let workflow_run = params
+                .get("workflowRunId")
+                .map(|value| {
+                    value.as_str().ok_or_else(|| {
+                        rpc_err(1002, "workflowRunId must be a string", "INVALID_ARGUMENT")
+                    })
+                })
+                .transpose()?;
+            let workflow_scope = workflow_run
+                .map(|run| {
+                    crate::project_workflow::tool_scope::prepare_binding(&st.db, session_id, run)
+                        .map_err(|e| rpc_err(1002, e.message, e.code))
+                })
+                .transpose()?;
             let turn_id = match params.get("sessionMessageId").and_then(Value::as_str) {
                 Some(message_id) => crate::session_collaboration::begin_turn(
                     &st.db, session_id, message_id, provider, model,
@@ -3226,6 +3247,23 @@ async fn handle_request(
                 None => sessions::begin_turn(&st.db, session_id, provider, model),
             }
             .map_err(session_collaboration_rpc_err)?;
+            if let (Some(run), Some(scope)) = (workflow_run, workflow_scope) {
+                if let Err(error) =
+                    crate::project_workflow::tool_scope::bind(&st.db, &turn_id, run, &scope)
+                {
+                    sessions::end_turn_settling(
+                        &st.db,
+                        &turn_id,
+                        "error",
+                        Some(error.code),
+                        None,
+                        false,
+                        false,
+                    )
+                    .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?;
+                    return Err(rpc_err(1002, error.message, error.code));
+                }
+            }
             Ok(json!({ "turnId": turn_id }))
         }
         "session.recordUsage" => {
@@ -3869,8 +3907,31 @@ async fn handle_request(
         }
         "tools.execute" => {
             let call_started = std::time::Instant::now();
-            let p: ToolsExecuteParams = serde_json::from_value(params.clone())
+            let mut p: ToolsExecuteParams = serde_json::from_value(params.clone())
                 .map_err(|e| rpc_err(1002, e.to_string(), "INVALID_PARAMS"))?;
+            let mut workflow_canonical_path = None;
+            let mut workflow_shell = false;
+            {
+                let st = state.lock().await;
+                match crate::project_workflow::tool_scope::authorize_tool(&st.db, &p) {
+                    Ok(Some(crate::project_workflow::tool_scope::ToolScope::File {
+                        turn,
+                        path,
+                    })) => {
+                        workflow_canonical_path = Some(path.clone());
+                        p.args["path"] = json!(path.to_string_lossy());
+                        p.turn_id = Some(turn);
+                    }
+                    Ok(Some(crate::project_workflow::tool_scope::ToolScope::Shell { turn })) => {
+                        workflow_shell = true;
+                        p.turn_id = Some(turn);
+                    }
+                    Ok(None) => (),
+                    Err(error) => {
+                        return Ok(crate::project_workflow::tool_scope::denial(&p, error))
+                    }
+                }
+            }
             let execution_timeout_ms = tools::effective_timeout_ms(&p.tool_name, p.timeout_ms);
 
             let remote_workspace = {
@@ -4057,6 +4118,9 @@ async fn handle_request(
                                 plan_safe_actions: p.plan_safe_actions.as_deref(),
                             },
                         );
+                    if workflow_shell {
+                        auto = None;
+                    }
                     // Write/Edit targeting the session scratch dir never touch
                     // the user's project — skip the prompt (D114). The lexical
                     // pre-check only decides prompting; execution still goes
@@ -4088,7 +4152,9 @@ async fn handle_request(
                             command_shell_id.clone(),
                         )
                     } else {
-                        let reason = if external_path_permission {
+                        let reason = if workflow_shell {
+                            "Approve this exact shell command once. It may access files or resources outside the workflow's writable paths."
+                        } else if external_path_permission {
                             "Accesses a path outside the session workspace"
                         } else {
                             match p.tool_name.as_str() {
@@ -4112,6 +4178,7 @@ async fn handle_request(
                                 reason,
                                 declared_risk: p.declared_risk.as_deref(),
                                 command_shell_id: command_shell_id.as_deref(),
+                                approval_scope: workflow_shell.then_some("workflow-shell"),
                             },
                         );
                         st.register_pending_permission(
@@ -4150,6 +4217,9 @@ async fn handle_request(
                         });
                         if let Some(shell_id) = req.command_shell_id.as_deref() {
                             permission_params["commandShellId"] = json!(shell_id);
+                        }
+                        if let Some(scope) = req.approval_scope.as_deref() {
+                            permission_params["approvalScope"] = json!(scope);
                         }
                         emit_notification(&tx, "permissions.request", permission_params).await;
                         tracing::info!(
@@ -4194,7 +4264,9 @@ async fn handle_request(
                 // microseconds, the prompt path costs however long the user took.
                 let permission_wait_ms = call_started.elapsed().as_millis() as u64;
 
-                if matches!(final_decision, PermissionDecision::Deny) {
+                if matches!(final_decision, PermissionDecision::Deny)
+                    || (workflow_shell && !matches!(final_decision, PermissionDecision::AllowOnce))
+                {
                     let _ = cancel_pending_permission(&state, &p).await;
                     let st = state.lock().await;
                     let mut denied_audit = json!({
@@ -4247,6 +4319,11 @@ async fn handle_request(
                     });
                     if let Some(shell_id) = permission_shell_id.as_deref() {
                         denied_result["commandShellId"] = json!(shell_id);
+                    }
+                    // This marker describes only the pre-runner approval
+                    // return. A started command's abort can have real effects.
+                    if workflow_shell {
+                        denied_result["approvalScope"] = json!("workflow-shell");
                     }
                     return Ok(denied_result);
                 }
@@ -4311,6 +4388,29 @@ async fn handle_request(
                     }
                 };
 
+                // Approval/admission may have awaited a user decision. Recheck
+                // live authority and real paths immediately before execution.
+                {
+                    let st = state.lock().await;
+                    match crate::project_workflow::tool_scope::authorize_tool(&st.db, &p) {
+                        Ok(Some(crate::project_workflow::tool_scope::ToolScope::File { turn, path })) => {
+                            workflow_canonical_path = Some(path.clone());
+                            p.args["path"] = json!(path.to_string_lossy());
+                            p.turn_id = Some(turn);
+                        }
+                        Ok(Some(crate::project_workflow::tool_scope::ToolScope::Shell { turn })) => {
+                            if !workflow_shell {
+                                return Ok(crate::project_workflow::tool_scope::denial(&p,
+                                    crate::project_workflow::Error { code: "WORKFLOW_RESOURCE_DENIED", message: "workflow shell requires its own exact approval".into(), conflict: None }));
+                            }
+                            p.turn_id = Some(turn);
+                        }
+                        Ok(None) => (),
+                        Err(error) => {
+                            return Ok(crate::project_workflow::tool_scope::denial(&p, error))
+                        }
+                    }
+                }
                 let ws_path = workspace_path.map(PathBuf::from);
                 let (data_dir, hashline_store, worktree_env) = {
                     let st = state.lock().await;
@@ -4404,6 +4504,7 @@ async fn handle_request(
                         extra_env: worktree_env.clone(),
                         run_in_background: p.run_in_background,
                         app_state: Some(state.clone()),
+                        workflow_call: workflow_shell.then(|| Box::new(p.clone())),
                     });
                 }
 
@@ -4445,6 +4546,7 @@ async fn handle_request(
                             timeout_ms: execution_timeout_ms,
                             bash_options,
                             allow_external_paths: external_path_permission,
+                            canonical_path_limit: workflow_canonical_path.as_deref(),
                             hashline: Some(hashline_ctx),
                         },
                     )
@@ -7395,6 +7497,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: false,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -7415,6 +7518,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: false,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -8639,6 +8743,7 @@ mod tests {
         assert_eq!(aborted["aborted"], true);
         let result = pending_task.await.unwrap().unwrap();
         assert_eq!(result["errorCode"], "TOOL_ABORTED");
+        assert!(result.get("approvalScope").is_none());
 
         let late_resolution = handle_request(
             state.clone(),
@@ -8736,6 +8841,7 @@ mod tests {
             .unwrap();
         assert_eq!(result["errorCode"], "TOOL_ABORTED");
         tokio::time::sleep(std::time::Duration::from_millis(1_500)).await;
+        assert!(result.get("approvalScope").is_none());
         assert!(
             !late_marker.exists(),
             "aborted descendants must not write later"

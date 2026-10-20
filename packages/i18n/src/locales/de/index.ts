@@ -1,6 +1,8 @@
 import { en, type EnglishCatalog } from "../en/index.js";
+import { workflowCatalog } from "./workflow.js";
 
 export const de = {
+  ...workflowCatalog,
   "worktree": {
     "menu": { "group": "Git" },
     "newIsolatedSession": "Neue isolierte Sitzung",
@@ -1521,6 +1523,16 @@ sklm: {
     "noApiKeyHint": "Aktivieren Sie diese Option nur, wenn der Endpunkt Anfragen ohne Authentifizierung akzeptiert.",
     "apiStyle": "API-Format",
     "apiStyleChatCompletions": "OpenAI-Chat-Abschlüsse",
+    "apiStyleChatGPTConversation": "ChatGPT (Abo-Chat)",
+    "chatgptChatCheckingStatus": "ChatGPT-Anmeldestatus wird geprüft …",
+    "chatgptChatLoggedIn": "ChatGPT-Konto verbunden",
+    "chatgptChatLoggedOut": "ChatGPT-Konto nicht verbunden",
+    "chatgptChatLogin": "Bei ChatGPT anmelden",
+    "chatgptChatLogout": "Abmelden",
+    "chatgptChatWorking": "ChatGPT wird geöffnet …",
+    "chatgptChatEndpointFixed": "ChatGPT verwendet eine feste Dienstadresse.",
+    "chatgptChatChallenge": "Schließen Sie die Anmeldung im ChatGPT-Fenster ab.",
+    "chatgptChatError": "Die ChatGPT-Anmeldung konnte nicht bestätigt werden. Prüfen Sie das ChatGPT-Fenster und versuchen Sie es erneut.",
     "apiStyleOpenCodeGo": "OpenCode Go",
     "service": "Dienst",
     "searchService": "Dienste filtern",
@@ -1970,6 +1982,7 @@ sklm: {
     "allowPrompt": "Ausführung von <highlight>{{tool}}</highlight> zulassen?",
     "allowOnce": "Einmal zulassen",
     "allowSession": "Für diesen Chat zulassen",
+    "workflowShellWarning": "Jeder Shell-Befehl muss einzeln genehmigt werden und kann auf Pfade außerhalb der für den Workflow beschreibbaren Dateien und Ordner zugreifen.",
     "deny": "Ablehnen",
     "risk": {
       "high": "Hohes Risiko",

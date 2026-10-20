@@ -1,4 +1,7 @@
 import { IconClock } from "./icons";
+import { WorkflowNavigation, WorkflowProjectConversations, useWorkflowProjectGroups } from "../features/project-workflow/WorkflowNavigation";
+import { workflowGroupForPath, workflowProjectEntries } from "../features/project-workflow/navigation-model";
+import { useProjectWorkflow } from "../features/project-workflow/useProjectWorkflow";
 import { RemoteProjectGroups } from "./remote/RemoteProjectGroups";
 import { groupRemoteProjectSessions } from "../lib/remote-project-catalog";
 import { isRemoteSession, sessionAllows } from "../lib/remote-session-safety";
@@ -260,6 +263,7 @@ export function Sidebar({
   onAnimationEnd?: ReactAnimationEventHandler<HTMLElement>;
 }) {
   const { t, i18n } = useTranslation();
+  const workflow = useProjectWorkflow();
   const sessions = useAppStore((s) => s.sessions);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
   const selectingSessionId = useAppStore((s) => s.selectingSessionId);
@@ -312,6 +316,7 @@ export function Sidebar({
   const setSettingsTab = useAppStore((s) => s.setSettingsTab);
   const setSettingsAnchor = useAppStore((s) => s.setSettingsAnchor);
   const update = useUpdateState();
+  const workflowGroups = useWorkflowProjectGroups(openProjects);
 
   const [sortOpen, setSortOpen] = useState(false);
   const [sessionMenu, setSessionMenu] = useState<string | null>(null);
@@ -2261,6 +2266,7 @@ export function Sidebar({
   });
 
   const renderProjectGroup = (entry: ProjectEntry) => {
+    const workflowGroup = workflow.snapshot ? workflowGroupForPath(workflowGroups.groups, entry.path) : undefined;
     const collapsedProject = entry.meta.collapsed ?? projectCollapsed[entry.key] ?? false;
     const projectId = projectDomId(entry.key);
     const isMenuOpen = projectMenu === entry.key;
@@ -2360,6 +2366,15 @@ export function Sidebar({
             );
           }}
         >
+          {workflowGroup ? <TooltipButton
+            type="button"
+            className="sidebar-toolbar-button"
+            ariaLabel={t("workflowNav.toggleProject")}
+            tooltip={t("workflowNav.toggleProject")}
+            aria-expanded={!collapsedProject}
+            aria-controls={`${projectId}-sessions`}
+            onClick={() => setCollapsed(entry.path, !collapsedProject)}
+          ><IconChevronDown size={13} className={`sidebar-disclosure-icon ${collapsedProject ? "collapsed" : ""}`} /></TooltipButton> : null}
           <TooltipButton
             type="button"
             id={projectId}
@@ -2369,8 +2384,8 @@ export function Sidebar({
             tooltipClassName="ui-tooltip-path"
             ariaLabel={entry.name}
             aria-describedby={`${projectId}-path-description`}
-            aria-expanded={!collapsedProject}
-            aria-controls={`${projectId}-sessions`}
+            aria-expanded={workflowGroup ? undefined : !collapsedProject}
+            aria-controls={workflowGroup ? undefined : `${projectId}-sessions`}
             aria-keyshortcuts="ArrowUp ArrowDown"
             aria-grabbed={draggingProjectKey === entry.key}
             data-action="toggle-project-collapse"
@@ -2382,16 +2397,20 @@ export function Sidebar({
                 suppressProjectTitleClickRef.current = false;
                 return;
               }
+              if (workflowGroup) {
+                setPage("project", { projectId: workflowGroup.id });
+                return;
+              }
               void (async () => {
                 if (!entry.active && !(await selectProject(entry.path))) return;
                 setCollapsed(entry.path, !collapsedProject);
               })();
             }}
           >
-            <IconChevronDown
+            {!workflowGroup ? <IconChevronDown
               size={13}
               className={`sidebar-disclosure-icon ${collapsedProject ? "collapsed" : ""}`}
-            />
+            /> : null}
             {entry.meta.pinned ? (
               <IconStar
                 size={13}
@@ -2452,7 +2471,8 @@ export function Sidebar({
         >
           <div className="sidebar-session-group-clip">
             <div className="sidebar-session-group-list">
-              {entry.sessions.length > 0 ? renderProjectSessions(visibleSessions) : (
+              {workflowGroup ? <WorkflowProjectConversations projectId={workflowGroup.id} sessions={entry.sessions}
+                renderSessions={(items) => renderSessionRows(items, { projectPath: entry.path, showLastReplyDate: settings?.sidebarSessionTime === true })} /> : entry.sessions.length > 0 ? renderProjectSessions(visibleSessions) : (
                 <div className="sidebar-session-empty">{t("nav.noProjectSessions")}</div>
               )}
             </div>
@@ -2587,6 +2607,7 @@ export function Sidebar({
 
       <div className="sidebar-body no-drag">
 
+        {workflow.snapshot ? <WorkflowNavigation sessions={filtered} renderSessions={(items) => renderSessionRows(items)} /> : null}
         {pinnedSessions.length > 0 ? (
           <section
             className="sidebar-pinned-sessions"
@@ -2604,7 +2625,7 @@ export function Sidebar({
           </section>
         ) : null}
 
-        <section
+        {!workflow.snapshot ? <section
           className="sidebar-standalone-sessions"
           aria-labelledby="sidebar-standalone-sessions-label"
           data-sidebar-session-section="temporary"
@@ -2681,7 +2702,7 @@ export function Sidebar({
               <div className="sidebar-session-empty">{t("nav.noTemporarySessions")}</div>
             ) : null}
           </div>
-        </section>
+        </section> : null}
 
         <div
           className="sidebar-list-toolbar"
@@ -2732,7 +2753,8 @@ export function Sidebar({
           onDragLeave={onProjectsAreaDragLeave}
           onDrop={onProjectsAreaDrop}
         >
-          {projectEntries.length > 0 ? projectEntries.map(renderProjectGroup) : (
+          {workflow.snapshot && workflowGroups.error ? <p role="alert" className="workflow-navigation-error">{workflowGroups.error}</p> : null}
+          {projectEntries.length > 0 ? (workflow.snapshot ? workflowProjectEntries(projectEntries, workflowGroups.groups) : projectEntries).map(renderProjectGroup) : (
             <section className="sidebar-session-group" aria-labelledby="sidebar-project-group-label">
               <div className="sidebar-session-group-header">
                 <button type="button" id="sidebar-project-group-label" className="sidebar-session-group-title" onClick={() => void openProjectPicker()}>

@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   NAMED_ENDPOINT_PRESETS,
+  CHATGPT_CHAT_BASE_URL,
   OPENCODE_GO_API_STYLE,
   normalizeApiStyle,
   type PluginProviderCatalogMeta,
@@ -128,7 +129,11 @@ export function ProviderSetupDialog({
     initialServiceId(initialService, initialDraft, provider),
   );
   const [name, setName] = useState(() => initialDraft?.name ?? initialName(provider));
-  const [baseUrl, setBaseUrl] = useState(() => initialDraft?.baseUrl ?? initialBaseUrl(provider));
+  const [baseUrl, setBaseUrl] = useState(() =>
+    initialDraft?.apiStyle === "chatgpt_conversation" || provider?.apiStyle === "chatgpt_conversation"
+      ? CHATGPT_CHAT_BASE_URL
+      : initialDraft?.baseUrl ?? initialBaseUrl(provider),
+  );
   const [apiKey, setApiKey] = useState("");
   const [noApiKeyRequired, setNoApiKeyRequired] = useState(() => provider?.authKind === "none");
   const [apiStyle, setApiStyle] = useState<CatalogApiStyle>(() =>
@@ -364,6 +369,7 @@ export function ProviderSetupDialog({
       return;
     }
     const persisted = selection.bindingsToPersist;
+    const chatgptStyle = custom && resolvedApiStyle === "chatgpt_conversation";
     // Removing a configured model releases its image binding even when the
     // capability checkbox was untouched. Ordinary provider edits keep their
     // existing save path when the image selection did not change.
@@ -389,10 +395,10 @@ export function ProviderSetupDialog({
           models: persisted,
           apiStyle: resolvedApiStyle,
           headers,
-          ...(custom && noApiKeyRequired !== (provider.authKind === "none")
-            ? { authKind: noApiKeyRequired ? "none" : "api_key_and_base_url" }
+          ...(custom && (chatgptStyle || noApiKeyRequired) !== (provider.authKind === "none")
+            ? { authKind: chatgptStyle || noApiKeyRequired ? "none" : "api_key_and_base_url" }
             : {}),
-          ...(custom && noApiKeyRequired ? {} : apiKey ? { secretValue: apiKey } : {}),
+          ...(custom && (chatgptStyle || noApiKeyRequired) ? {} : apiKey ? { secretValue: apiKey } : {}),
         });
         await onSaved(result.provider ?? provider, persisted, imageModelIdsToSave);
       } else {
@@ -402,10 +408,10 @@ export function ProviderSetupDialog({
           type: "openai_compatible",
           protocol: "openai_compatible",
           baseUrl: providerBaseUrl,
-          authKind: custom && noApiKeyRequired ? "none" : "api_key_and_base_url",
+          authKind: custom && (chatgptStyle || noApiKeyRequired) ? "none" : "api_key_and_base_url",
           defaultModelId: persisted[0]?.id,
           models: persisted,
-          ...(custom && noApiKeyRequired ? {} : { secretValue: apiKey || undefined }),
+          ...(custom && (chatgptStyle || noApiKeyRequired) ? {} : { secretValue: apiKey || undefined }),
           apiStyle: resolvedApiStyle,
           headers,
         });
@@ -530,10 +536,14 @@ export function ProviderSetupDialog({
               // endpoint's own suggestion from here on.
               setApiStyleTouched(true);
               setApiStyle(value);
+              if (value === "chatgpt_conversation") {
+                setBaseUrl(CHATGPT_CHAT_BASE_URL);
+              }
             }}
             apiStyleNote={endpointFormatNote}
             accountOnlyApiStyle={accountOnlyApiStyle}
             requiresApiStyleChoice={requiresApiStyleChoice}
+            onChatgptLoginChanged={discovery.reload}
           />
 
         </div>

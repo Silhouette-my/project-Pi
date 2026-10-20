@@ -1,6 +1,8 @@
 import { en, type EnglishCatalog } from "../en/index.js";
+import { workflowCatalog } from "./workflow.js";
 
 export const tr = {
+  ...workflowCatalog,
   worktree: {
     menu: { group: "Git" },
     newIsolatedSession: "Yeni yalıtılmış oturum",
@@ -1528,6 +1530,16 @@ sklm: {
     noApiKeyHint: "Yalnızca uç nokta kimlik doğrulaması olmadan istek kabul ediyorsa etkinleştirin.",
     apiStyle: "API biçimi",
     apiStyleChatCompletions: "OpenAI Chat Completions",
+    apiStyleChatGPTConversation: "ChatGPT (abonelik sohbeti)",
+    chatgptChatCheckingStatus: "ChatGPT oturumu kontrol ediliyor…",
+    chatgptChatLoggedIn: "ChatGPT hesabı bağlı",
+    chatgptChatLoggedOut: "ChatGPT hesabı bağlı değil",
+    chatgptChatLogin: "ChatGPT'ye giriş yap",
+    chatgptChatLogout: "Çıkış yap",
+    chatgptChatWorking: "ChatGPT açılıyor…",
+    chatgptChatEndpointFixed: "ChatGPT sabit hizmet adresini kullanır.",
+    chatgptChatChallenge: "ChatGPT penceresinde oturum açmayı tamamlayın.",
+    chatgptChatError: "ChatGPT oturumu doğrulanamadı. ChatGPT penceresini kontrol edip yeniden deneyin.",
     apiStyleOpenCodeGo: "OpenCode Go",
     service: "Servis",
     searchService: "Servisleri süz",
@@ -1980,6 +1992,7 @@ sklm: {
     allowPrompt: "<highlight>{{tool}}</highlight> çalıştırılsın mı?",
     allowOnce: "Bir kez izin ver",
     allowSession: "Bu sohbet için izin ver",
+    workflowShellWarning: "Her kabuk komutu ayrı onay gerektirir ve iş akışının yazabildiği dosya ve klasör kapsamı dışındaki yollara erişebilir.",
     deny: "Reddet",
     risk: {
       high: "Yüksek risk",

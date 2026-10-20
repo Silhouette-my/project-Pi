@@ -16,7 +16,7 @@ const source = (apiStyle) => ({
 
 test("custom creation offers general APIs without removing account or named transports", () => {
   assert.deepEqual(CUSTOM_PROVIDER_API_STYLES,
-    ["chat_completions", "responses", "anthropic_messages", "google_generative_ai"]);
+    ["chat_completions", "responses", "anthropic_messages", "google_generative_ai", "chatgpt_conversation"]);
   for (const style of ["openai_codex_responses", "pi_messages", "opencode_go"]) {
     assert.ok(API_STYLES.includes(style));
   }

@@ -41,6 +41,8 @@ export type TurnStartRequest = {
   voiceOrigin?: VoiceOrigin;
   attachments?: AgentPromptAttachment[];
   effectivePermissionMode: RacpPermissionMode;
+  /** Host validates this run identity and binds its resource scope to the turn. */
+  workflowRunId?: string;
   idempotencyKey?: string;
   principal: Principal;
 };
@@ -87,6 +89,7 @@ export type QueuedTurnRecord = {
   voiceOrigin?: VoiceOrigin;
   attachments?: AgentPromptAttachment[];
   effectivePermissionMode: RacpPermissionMode;
+  workflowRunId?: string;
   idempotencyKey?: string;
   /** Stable hash of the input, so a reused key with different input is a conflict. */
   inputHash: string;

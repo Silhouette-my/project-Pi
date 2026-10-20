@@ -12,6 +12,7 @@ ADR 记录那些不应被静默改变的架构选择。中文入口与英文索�
 | 决策 | 说明 |
 |---|---|
 | [配置同步中的本机项目列表](/adr/device-local-project-lists-in-config-sync) | 移除 projects 类别，忽略旧项目实体，保留云端历史及项目级能力的本地映射 |
+| [持久化项目工作流状态](/adr/project-workflow-durable-state) | 在不替换现有项目与会话身份的前提下持久化 workstream、决策、运行与验收证据 |
 | [ADR 0001：Electron 桌面壳](/adr/0001-use-electron) | 桌面窗口与平台能力的承载层 |
 | [ADR 0005：本地插件系统](/adr/0005-user-installable-plugin-system) | 用户安装插件的第一阶段边界 |
 | [ADR 0009：English-first 全球化](/adr/0009-english-first-globalization) | 源语言、术语和协作规则 |
@@ -314,6 +315,7 @@ ADR 记录那些不应被静默改变的架构选择。中文入口与英文索�
 | 0310 | [保持本地权限批准一直待解决](/adr/0310-local-permission-approvals-without-deadline) | 已接受实施 |
 | 0311 | [在 Host 受理时重新核验 Live Work 工作空间身份](/adr/0311-live-work-workspace-admission-guard) | 已实现候选 |
 | 0312 | [会话级 Todo 清单](/adr/0312-session-scoped-todo-checklist) | 已接受实施 |
+| project-workflow-durable-state | [持久化项目工作流状态](/adr/project-workflow-durable-state) | 已接受本地 MVP 实施 |
 | registry-header-variable-spelling | [Remote header variables accept the registry's `{name}` spelling](/adr/registry-header-variable-spelling) | Proposed |
 
 ## 什么时候看 ADR

@@ -3,6 +3,7 @@ import {
   ErrorCodes,
   inferEndpointProfile,
   normalizeApiStyle,
+  type ChatGptChatModelCatalog,
   type ModelBinding,
   type ProviderReorderInput,
   type OAuthRespondInput,
@@ -81,6 +82,7 @@ export type ProviderIpcDependencies = {
   enrichProviderList: (result: { providers: RuntimeProvider[] }) => Promise<unknown>;
   bindingForModel: (provider: Pick<RuntimeProvider, "models">, modelId: string) => ModelBinding | undefined;
   onProviderInvalidated?: (providerId: string) => Promise<void> | void;
+  listChatGptModels: () => Promise<ChatGptChatModelCatalog>;
 };
 
 /** Register provider catalog, model discovery, OAuth and secret channels. */
@@ -95,6 +97,7 @@ export function registerProviderIpc({
   enrichProviderList,
   bindingForModel,
   onProviderInvalidated,
+  listChatGptModels,
 }: ProviderIpcDependencies): void {
   let host: HostProcess | null = null;
   const handle = (channel: string, fn: (...args: any[]) => Promise<any>) => {
@@ -216,12 +219,6 @@ export function registerProviderIpc({
   });
   handle(IPC.invoke.providersTest, async (id: string) => {
     if (!host) throw new Error("host unavailable");
-    // Config-level validation first (secret present etc.)
-    const local = await host.call<{ ok: boolean; message?: string }>(
-      "providers.testConnection",
-      { id },
-    );
-    if (!local.ok) return { ...local, network: "skipped" };
     const detail = await host.call<{
       provider?: {
         baseUrl?: string;
@@ -230,6 +227,22 @@ export function registerProviderIpc({
         headers?: Record<string, string>;
       };
     }>("providers.get", { id });
+    if (detail.provider?.apiStyle === "chatgpt_conversation") {
+      try {
+        // Match account discovery: validate the browser session and consumer
+        // catalog, never probe this cookie-authenticated service from Main fetch.
+        await listChatGptModels();
+        return { ok: true, network: "ok" };
+      } catch (error) {
+        return { ok: false, network: "failed", errorCode: ErrorCodes.PROVIDER_ERROR, message: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    // Validate credential configuration before generic network probing.
+    const local = await host.call<{ ok: boolean; message?: string }>(
+      "providers.testConnection",
+      { id },
+    );
+    if (!local.ok) return { ...local, network: "skipped" };
     // A vendor account proves itself by resolving auth — refreshing the token
     // if it has expired — not by probing /models with a key it does not have.
     if (detail.provider?.authKind === OAUTH_AUTH_KIND) {
@@ -360,6 +373,48 @@ export function registerProviderIpc({
       if (provider) modelsDevCatalog.configureAccount(provider);
       const baseUrl = (req.baseUrl ?? provider?.baseUrl ?? "").trim();
       const apiStyle = req.apiStyle ?? provider?.apiStyle ?? "chat_completions";
+      // Consumer ChatGPT and Codex have separate account catalogs/transports.
+      // Only the dedicated browser may read this account's consumer models.
+      if (apiStyle === "chatgpt_conversation") {
+        if (req.source === "cache") {
+          const cached = provider
+            ? await host.call<{ models: unknown[] }>("providers.listModels", { providerId: provider.id })
+            : { models: [] };
+          return { models: cached.models, source: "cache" };
+        }
+        const catalog = await listChatGptModels();
+        const models = catalog.models.map((model) => ({
+          modelId: model.id,
+          displayName: model.name,
+          providerId: provider?.id ?? "",
+          capabilities: ["text"],
+          modalities: { input: ["text"], output: ["text"] },
+          source: "discovered",
+        }));
+        if (catalog.defaultModelId) models.sort((left, right) =>
+          Number(right.modelId === catalog.defaultModelId) - Number(left.modelId === catalog.defaultModelId));
+        logger.app("provider", "info", "ChatGPT consumer model catalog loaded", {
+          event: "provider.chatgpt.models",
+          data: { apiStyle: "chatgpt_conversation", modelIds: models.map((model) => model.modelId), defaultModelId: catalog.defaultModelId },
+        });
+        if (provider) {
+          const current = (await listRuntimeProviders()).find((row) => row.id === provider.id);
+          if (current?.apiStyle === "chatgpt_conversation") {
+            try {
+              await host.call("providers.cacheModels", { providerId: provider.id, models });
+            } catch (error) {
+              logger.app("provider", "warn", "ChatGPT model cache update failed", {
+                data: { providerId: provider.id, error: error instanceof Error ? error.message : String(error) },
+              });
+            }
+          }
+        }
+        return {
+          models,
+          defaultModelId: catalog.defaultModelId,
+          source: "remote",
+        };
+      }
       /*
         Static endpoint resolution, the same layer the settings dialog uses:
         which URL this row will really address, which wire style the evidence

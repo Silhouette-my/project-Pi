@@ -23,6 +23,11 @@ import { workPanelLayout } from "../../lib/work-panel-resize";
 import { LiveVoiceStatusHost } from "../voice/live/LiveVoiceStatusHost";
 import { CollapsedTitlebarActions, RoutePending } from "./chrome";
 import { useAppShellRuntime } from "./useAppShellRuntime";
+import { ProjectWorkflowProvider } from "../project-workflow/useProjectWorkflow";
+import { WorkflowConversationBar } from "../project-workflow/WorkflowConversationBar";
+import { useAppStore } from "../../stores/app-store";
+
+const ProjectConsole = lazy(() => import("../project-workflow/ProjectConsole").then((module) => ({ default: module.ProjectConsole })));
 
 const SettingsPage = lazy(() =>
   import("../../pages/SettingsPage").then((module) => ({
@@ -51,6 +56,12 @@ const WorkPanel = lazy(() =>
 );
 
 export function AppShell() {
+  const ready = useAppStore((state) => state.ready);
+  return <ProjectWorkflowProvider enabled={ready}><AppShellContent /></ProjectWorkflowProvider>;
+}
+
+function AppShellContent() {
+  const projectConsoleId = useAppStore((state) => state.projectConsoleId);
   const {
     t,
     ready,
@@ -216,6 +227,7 @@ export function AppShell() {
                   </div>
                 )}
                 {page !== "settings" ? <UpdateBanner /> : null}
+                {page === "chat" ? <WorkflowConversationBar /> : null}
 
                 {backendDown && (
                   <div
@@ -273,7 +285,9 @@ export function AppShell() {
                 )}
 
                 <Suspense fallback={<RoutePending />}>
-                  {page === "scheduled" ? (
+                  {page === "project" && projectConsoleId ? (
+                    <ProjectConsole key={projectConsoleId} projectId={projectConsoleId} />
+                  ) : page === "scheduled" ? (
                     <div className="route-surface route-page">
                       <ScheduledPage />
                     </div>

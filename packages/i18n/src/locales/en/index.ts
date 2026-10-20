@@ -1,4 +1,7 @@
+import { workflowCatalog } from "./workflow.js";
+
 export const en = {
+  ...workflowCatalog,
   worktree: {
     menu: { group: "Git" },
     newIsolatedSession: "New isolated session",
@@ -1538,6 +1541,16 @@ sklm: {
     noApiKeyHint: "Enable this only when the endpoint accepts requests without authentication.",
     apiStyle: "API format",
     apiStyleChatCompletions: "OpenAI Chat Completions",
+    apiStyleChatGPTConversation: "ChatGPT (subscription chat)",
+    chatgptChatCheckingStatus: "Checking ChatGPT login…",
+    chatgptChatLoggedIn: "ChatGPT account connected",
+    chatgptChatLoggedOut: "ChatGPT account not connected",
+    chatgptChatLogin: "Log in to ChatGPT",
+    chatgptChatLogout: "Log out",
+    chatgptChatWorking: "Opening ChatGPT…",
+    chatgptChatEndpointFixed: "ChatGPT uses its fixed service address.",
+    chatgptChatChallenge: "Complete sign-in in the ChatGPT window.",
+    chatgptChatError: "ChatGPT sign-in could not be verified. Retry after checking the ChatGPT window.",
     apiStyleOpenCodeGo: "OpenCode Go",
     service: "Service",
     searchService: "Filter services",
@@ -1990,6 +2003,7 @@ sklm: {
     allowPrompt: "Allow <highlight>{{tool}}</highlight> to run?",
     allowOnce: "Allow once",
     allowSession: "Allow for this chat",
+    workflowShellWarning: "Each shell command needs separate approval and may access paths beyond the workflow’s writable files and folders.",
     deny: "Deny",
     risk: {
       high: "High risk",

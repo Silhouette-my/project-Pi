@@ -1,6 +1,8 @@
 import { en, type EnglishCatalog } from "../en/index.js";
+import { workflowCatalog } from "./workflow.js";
 
 export const fr = {
+  ...workflowCatalog,
   "worktree": {
     "menu": { "group": "Git" },
     "newIsolatedSession": "Nouvelle session isolée",
@@ -1521,6 +1523,16 @@ sklm: {
     "noApiKeyHint": "Activez cette option uniquement si le point de terminaison accepte les requêtes sans authentification.",
     "apiStyle": "Format API",
     "apiStyleChatCompletions": "Achèvements de discussion OpenAI",
+    "apiStyleChatGPTConversation": "ChatGPT (chat par abonnement)",
+    "chatgptChatCheckingStatus": "Vérification de la connexion à ChatGPT…",
+    "chatgptChatLoggedIn": "Compte ChatGPT connecté",
+    "chatgptChatLoggedOut": "Compte ChatGPT non connecté",
+    "chatgptChatLogin": "Se connecter à ChatGPT",
+    "chatgptChatLogout": "Se déconnecter",
+    "chatgptChatWorking": "Ouverture de ChatGPT…",
+    "chatgptChatEndpointFixed": "ChatGPT utilise une adresse de service fixe.",
+    "chatgptChatChallenge": "Terminez la connexion dans la fenêtre ChatGPT.",
+    "chatgptChatError": "La connexion à ChatGPT n’a pas pu être vérifiée. Vérifiez la fenêtre ChatGPT et réessayez.",
     "apiStyleOpenCodeGo": "OpenCode Go",
     "service": "Service",
     "searchService": "Filtrer les services",
@@ -1970,6 +1982,7 @@ sklm: {
     "allowPrompt": "Autoriser <highlight>{{tool}}</highlight> à s'exécuter ?",
     "allowOnce": "Autoriser une fois",
     "allowSession": "Autoriser cette discussion",
+    "workflowShellWarning": "Chaque commande shell nécessite une approbation séparée et peut accéder à des chemins en dehors des fichiers et dossiers modifiables par le flux de travail.",
     "deny": "Refuser",
     "risk": {
       "high": "Risque élevé",

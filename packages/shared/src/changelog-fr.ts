@@ -5,6 +5,8 @@ export const frEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "La connexion ChatGPT affiche la vérification et les erreurs, puis charge les modèles de votre compte plutôt qu’une liste fixe.",
+      "Discutez avec votre abonnement ChatGPT dans l’interface native après une connexion dans le navigateur.",
       "Les plugins installés s'affichent en cartes dans une grille auto-adaptative, chacune avec une action claire et son état de confiance, de mise à jour et de portée visible.",
       "Consultez les notes et avis publics des plugins du marché et ouvrez le centre de plugins pour en écrire un — l'application de bureau ne se connecte jamais.",
       "Les longues commandes Bash continuent en tâche de fond à la fin du tour, et leur sortie reste consultable.",

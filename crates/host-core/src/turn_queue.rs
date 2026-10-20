@@ -39,6 +39,7 @@ pub struct QueuedTurnInput {
     pub voice_origin: Option<VoiceOrigin>,
     pub attachments: Option<Value>,
     pub permission_mode: String,
+    pub workflow_run_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -60,6 +61,8 @@ pub struct QueuedTurn {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Value>,
     pub permission_mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow_run_id: Option<String>,
     pub position: i64,
     /// Set once the entry is promoted ("send now"). The value is the entry's
     /// place inside the session's priority block, so promotions leave in the
@@ -93,6 +96,7 @@ fn row_to_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<QueuedTurn> {
         session_message_id: row.get(10)?,
         attachments: attachments.and_then(|text| serde_json::from_str(&text).ok()),
         permission_mode: row.get(7)?,
+        workflow_run_id: row.get(14)?,
         position: row.get(8)?,
         priority: row.get(11)?,
         user_message_id: row.get(12)?,
@@ -103,7 +107,7 @@ fn row_to_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<QueuedTurn> {
 
 const SELECT: &str = "SELECT id, session_id, principal, idempotency_key, input_hash, content,
         attachments_json, permission_mode, position, created_at, session_message_id, priority,
-        user_message_id, voice_origin_json
+        user_message_id, voice_origin_json, workflow_run_id
  FROM turn_queue";
 
 /// Delivery order: promoted entries first in click order (ascending
@@ -114,6 +118,13 @@ const ORDER_BY: &str = "ORDER BY (priority IS NULL) ASC, priority ASC, position 
 /// the existing entry when the input hash matches and fails with
 /// `IDEMPOTENCY_CONFLICT` otherwise; a full queue fails with `QUEUE_FULL`.
 pub fn push(db: &Database, input: QueuedTurnInput) -> Result<QueuedTurn> {
+    if input
+        .workflow_run_id
+        .as_ref()
+        .is_some_and(|id| id.is_empty() || id.len() > 512)
+    {
+        return Err(anyhow!("INVALID_ARGUMENT: invalid workflowRunId"));
+    }
     if let Some(origin) = &input.voice_origin {
         if origin.call_id.trim().is_empty()
             || origin.call_id.len() > 128
@@ -149,7 +160,9 @@ pub fn push(db: &Database, input: QueuedTurnInput) -> Result<QueuedTurn> {
             )
             .optional()?;
         if let Some(existing) = existing {
-            if existing.input_hash == input.input_hash {
+            if existing.input_hash == input.input_hash
+                && existing.workflow_run_id == input.workflow_run_id
+            {
                 return Ok(existing);
             }
             return Err(anyhow!("IDEMPOTENCY_CONFLICT"));
@@ -183,8 +196,8 @@ pub fn push(db: &Database, input: QueuedTurnInput) -> Result<QueuedTurn> {
         "INSERT INTO turn_queue (
             id, session_id, principal, idempotency_key, input_hash, content,
             attachments_json, permission_mode, position, created_at, session_message_id,
-            user_message_id, voice_origin_json
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            user_message_id, voice_origin_json, workflow_run_id
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             id,
             input.session_id,
@@ -198,7 +211,8 @@ pub fn push(db: &Database, input: QueuedTurnInput) -> Result<QueuedTurn> {
             created_at,
             input.session_message_id,
             input.user_message_id,
-            voice_origin_json
+            voice_origin_json,
+            input.workflow_run_id
         ],
     )?;
     tx.commit()?;
@@ -214,6 +228,7 @@ pub fn push(db: &Database, input: QueuedTurnInput) -> Result<QueuedTurn> {
         voice_origin: input.voice_origin,
         attachments: input.attachments,
         permission_mode: input.permission_mode,
+        workflow_run_id: input.workflow_run_id,
         position: max_position + 1,
         priority: None,
         created_at: ms_to_ts(created_at),
@@ -387,7 +402,62 @@ mod tests {
             voice_origin: None,
             attachments: None,
             permission_mode: "ask".into(),
+            workflow_run_id: None,
         }
+    }
+
+    #[test]
+    fn workflow_queue_v25_migration_preserves_old_rows_and_durable_run_identity() {
+        let (_dir, db, session) = open_with_session();
+        let ordinary = push(&db, input(&session, "ordinary", None)).unwrap();
+        let turn = crate::sessions::begin_turn(&db, &session, None, None).unwrap();
+        db.conn().execute_batch("ALTER TABLE turn_queue DROP COLUMN workflow_run_id; DROP TABLE workflow_turn_bindings; DROP TABLE workflow_run_scopes; PRAGMA user_version=25;").unwrap();
+        let path: String = db
+            .conn()
+            .query_row(
+                "SELECT file FROM pragma_database_list WHERE name='main'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        drop(db);
+        let db = Database::open(std::path::Path::new(&path)).unwrap();
+        let restored = list(&db, Some(&session)).unwrap();
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].id, ordinary.id);
+        assert_eq!(restored[0].workflow_run_id, None);
+        assert!(serde_json::to_value(&restored[0])
+            .unwrap()
+            .get("workflowRunId")
+            .is_none());
+        assert_eq!(
+            db.conn()
+                .query_row(
+                    "SELECT COUNT(*) FROM turns WHERE id=?1",
+                    params![turn],
+                    |r| r.get::<_, i64>(0)
+                )
+                .unwrap(),
+            1
+        );
+        let mut scoped = input(&session, "workflow", Some("scoped-key"));
+        scoped.workflow_run_id = Some("run-1".into());
+        let entry = push(&db, scoped.clone()).unwrap();
+        assert_eq!(entry.workflow_run_id.as_deref(), Some("run-1"));
+        scoped.workflow_run_id = Some("foreign-run".into());
+        assert!(push(&db, scoped)
+            .unwrap_err()
+            .to_string()
+            .contains("IDEMPOTENCY_CONFLICT"));
+        drop(db);
+        let db = Database::open(std::path::Path::new(&path)).unwrap();
+        assert_eq!(
+            list(&db, Some(&session)).unwrap()[1]
+                .workflow_run_id
+                .as_deref(),
+            Some("run-1")
+        );
+        assert!(crate::db::migration_backup_path(std::path::Path::new(&path), 25).exists());
     }
 
     #[test]
@@ -532,7 +602,7 @@ mod tests {
         assert_eq!(entries[0].content, "existing");
         assert!(entries[0].user_message_id.is_none());
         assert!(entries[0].voice_origin.is_none());
-        assert_eq!(crate::db::SCHEMA_VERSION, 24);
+        assert_eq!(crate::db::SCHEMA_VERSION, 26);
     }
 
     #[test]

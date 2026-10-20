@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { dialog, shell, type BrowserWindow, type IpcMain, type IpcMainInvokeEvent } from "electron";
-import { err, ErrorCodes, IPC, ok, type LifecycleDialogChoice, type Result } from "@pi-desktop/shared";
+import { err, ErrorCodes, IPC, ok, type LifecycleDialogChoice, type Result, type ProjectWorkflowHostPort, type ProjectWorkflowRuntimePort } from "@pi-desktop/shared";
 import type { AgentHostBridge } from "../agent-host-bridge";
 import type { AgentSidecar } from "../agent-sidecar";
 import type { HostProcess } from "../host-process";
@@ -19,6 +19,7 @@ import { registerPluginIpc } from "./plugin-ipc";
 import { registerPluginUiIpc } from "./plugin-ui-ipc";
 import { registerJevIpc } from "./jev-ipc";
 import { registerProviderIpc } from "./provider-ipc";
+import { listChatGptChatModels } from "../chatgpt-chat-models";
 import { registerScheduledIpc } from "./scheduled-ipc";
 import { registerSessionIpc } from "./session-ipc";
 import { registerSettingsIpc } from "./settings-ipc";
@@ -41,6 +42,9 @@ import type { LiveVoiceWidget } from "../live-voice/widget-window";
 import type { IpcRegistrar } from "./types";
 import type { createTraySessions } from "../tray-sessions";
 import type { createTaskbarUnreadBadge } from "../taskbar-unread-badge";
+import { getChatGptChatView } from "../chatgpt-chat-view";
+import { createChatGptDiagnosticLogger } from "../chatgpt-chat-diagnostics";
+import { registerProjectWorkflowIpc } from "./project-workflow-ipc";
 
 export type RegisterIpcDependencies = {
   isQuitting: () => boolean;
@@ -51,6 +55,8 @@ export type RegisterIpcDependencies = {
   taskbarUnreadBadge: ReturnType<typeof createTaskbarUnreadBadge>;
   getSidecar: () => AgentSidecar | null;
   getAgentHostBridge: () => AgentHostBridge | null;
+  projectWorkflowHost: ProjectWorkflowHostPort;
+  getProjectWorkflowRuntime: () => ProjectWorkflowRuntimePort | null;
   /**
    * Resolves the remote backend router once it exists. Renderer IPC calls whose
    * session is owned by a paired remote host are forwarded through it; every
@@ -248,6 +254,20 @@ export function registerIpcHandlers(dependencies: RegisterIpcDependencies) {
     assertMainWindowSender,
   };
 
+  const logChatGptStatus = createChatGptDiagnosticLogger(logger);
+  for (const [channel, action] of [
+    [IPC.invoke.chatgptChatStatus, "status"],
+    [IPC.invoke.chatgptChatLogin, "login"],
+    [IPC.invoke.chatgptChatLogout, "logout"],
+  ] as const) {
+    handleWithEvent(channel, async (event) => {
+      assertMainWindowSender(event);
+      const status = await getChatGptChatView()[action]();
+      logChatGptStatus(status);
+      return status;
+    });
+  }
+
   registerAppIpc({
     registrar,
     getHost,
@@ -257,6 +277,8 @@ export function registerIpcHandlers(dependencies: RegisterIpcDependencies) {
     updater,
   });
   registerStorageIpc({ registrar, getMainWindow, restart: dependencies.restartForStorage });
+  registerProjectWorkflowIpc({ registrar, getHost, host: dependencies.projectWorkflowHost, getRuntime: dependencies.getProjectWorkflowRuntime,
+    openPath: (path) => shell.openPath(stripWinLongPrefix(path)), openExternal: (url) => shell.openExternal(url) });
   registerNotificationIpc({
     registrar,
     getHost,
@@ -320,6 +342,7 @@ export function registerIpcHandlers(dependencies: RegisterIpcDependencies) {
     enrichProviderList,
     bindingForModel,
     onProviderInvalidated: (providerId) => liveCallService?.invalidateProvider(providerId),
+    listChatGptModels: () => listChatGptChatModels(getChatGptChatView()),
   });
   registerJevIpc({ registrar, logger });
   registerWorktreeIpc({

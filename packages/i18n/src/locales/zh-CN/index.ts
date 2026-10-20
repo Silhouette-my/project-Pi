@@ -1,6 +1,8 @@
 import { en, type EnglishCatalog } from "../en/index.js";
+import { workflowCatalog } from "./workflow.js";
 
 export const zhCN = {
+  ...workflowCatalog,
   worktree: {
     menu: { group: "Git" },
     newIsolatedSession: "新建隔离会话",
@@ -1516,6 +1518,16 @@ sklm: {
     noApiKeyHint: "仅当该接口无需身份验证时启用。",
     apiStyle: "接口格式",
     apiStyleChatCompletions: "OpenAI Chat Completions",
+    apiStyleChatGPTConversation: "ChatGPT（订阅聊天）",
+    chatgptChatCheckingStatus: "正在检查 ChatGPT 登录状态…",
+    chatgptChatLoggedIn: "已连接 ChatGPT 账号",
+    chatgptChatLoggedOut: "未连接 ChatGPT 账号",
+    chatgptChatLogin: "登录 ChatGPT",
+    chatgptChatLogout: "退出登录",
+    chatgptChatWorking: "正在打开 ChatGPT…",
+    chatgptChatEndpointFixed: "ChatGPT 使用固定服务地址。",
+    chatgptChatChallenge: "请在 ChatGPT 窗口中完成登录。",
+    chatgptChatError: "无法确认 ChatGPT 登录状态。检查 ChatGPT 窗口后重试。",
     apiStyleOpenCodeGo: "OpenCode Go",
     service: "服务",
     searchService: "筛选服务",
@@ -1965,6 +1977,7 @@ sklm: {
     allowPrompt: "允许 <highlight>{{tool}}</highlight> 运行吗？",
     allowOnce: "允许一次",
     allowSession: "允许本次对话",
+    workflowShellWarning: "每条 Shell 命令都需单独批准，且可能访问工作流可写文件和文件夹范围之外的路径。",
     deny: "拒绝",
     risk: {
       high: "高风险",

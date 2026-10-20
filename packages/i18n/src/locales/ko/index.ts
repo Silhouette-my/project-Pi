@@ -1,6 +1,8 @@
 import { en, type EnglishCatalog } from "../en/index.js";
+import { workflowCatalog } from "./workflow.js";
 
 export const ko = {
+  ...workflowCatalog,
   worktree: {
     menu: { group: "Git" },
     newIsolatedSession: "새 격리 세션",
@@ -1534,6 +1536,16 @@ sklm: {
     noApiKeyHint: "인증 없이 요청을 받는 엔드포인트에서만 사용하세요.",
     apiStyle: "API 형식",
     apiStyleChatCompletions: "OpenAI Chat Completions",
+    apiStyleChatGPTConversation: "ChatGPT (구독 채팅)",
+    chatgptChatCheckingStatus: "ChatGPT 로그인 상태 확인 중…",
+    chatgptChatLoggedIn: "ChatGPT 계정 연결됨",
+    chatgptChatLoggedOut: "ChatGPT 계정 연결 안 됨",
+    chatgptChatLogin: "ChatGPT 로그인",
+    chatgptChatLogout: "로그아웃",
+    chatgptChatWorking: "ChatGPT 여는 중…",
+    chatgptChatEndpointFixed: "ChatGPT는 고정된 서비스 주소를 사용합니다.",
+    chatgptChatChallenge: "ChatGPT 창에서 로그인을 완료하세요.",
+    chatgptChatError: "ChatGPT 로그인을 확인할 수 없습니다. ChatGPT 창을 확인한 후 다시 시도하세요.",
     apiStyleOpenCodeGo: "OpenCode Go",
     service: "서비스",
     searchService: "서비스 필터",
@@ -1986,6 +1998,7 @@ sklm: {
     allowPrompt: "<highlight>{{tool}}</highlight> 실행을 허용할까요?",
     allowOnce: "한 번 허용",
     allowSession: "이 채팅에서 허용",
+    workflowShellWarning: "셸 명령은 각각 별도 승인이 필요하며 워크플로에서 쓸 수 있는 파일 및 폴더 범위를 벗어난 경로에 접근할 수 있습니다.",
     deny: "거부",
     risk: {
       high: "높은 위험",

@@ -47,6 +47,80 @@ Settings / UI
 
 ## 4. Provider types
 
+### ChatGPT subscription chat
+
+In Settings → Models → Add service → Custom, choose **ChatGPT (subscription
+chat)** and **Log in to ChatGPT**. Complete login in the temporary native
+window; normal replies stream into the existing transcript. This style uses
+the dedicated persistent browser session, not an API key or Codex OAuth.
+After login, the form refreshes the account's consumer `/backend-api/models`
+catalog. Display names come from `title`; request IDs come unchanged from
+`slug`, with `default_model_slug` listed first. No static model fallback or
+Codex catalog is used. Save the service explicitly after selecting models.
+Logging out clears only this browser partition and aborts its active requests.
+
+Login requires validated authenticated JSON from `/api/auth/session`, not a
+bare HTTP 200. The form shows challenge, checking, signed-out and error states
+while the login window is open. Initial navigation is bounded to 30 seconds;
+the login window waits at most three minutes and ends after three consecutive
+probe errors. `provider.chatgpt.auth.status` records only endpoint, HTTP status,
+content type and diagnostic reason, including an observational cookie-only
+`/backend-api/me` check. It does not log response bodies or account identity.
+
+Test connection uses the same authenticated browser session to fetch the consumer
+model catalog. It checks authentication and catalog reachability, not generation;
+an observational `/me` 401 alone does not invalidate a verified session. Login
+document diagnostics strip URL queries, fragments and credentials, and distinguish
+failed navigation, HTTP responses, rendering exits and denied popups.
+
+`chatgpt_conversation` runs its adapter in the agent sidecar. Electron owns an
+unattached, sandboxed, offscreen `WebContentsView` in `persist:chatgpt-chat` and performs
+the conversation fetch in the page context. Cookies, Sentinel credentials and
+the session Bearer token stay there. Consumer requests include cookies and a
+page-local Bearer token when available, matching the consumer client's fetch
+behavior. Host RPC carries request data and SSE chunks, not credentials.
+Request preparation loads the official same-origin Sentinel SDK when needed
+and requests its chat token directly, with bounded waits for loading and token
+generation. It does not wait for the separate voice initialization flow.
+The transport has nonzero bounds and disables background throttling so that
+authorization iframe rendering can progress without a visible host window,
+including on the first send after restarting with an existing login. Login
+uses a separate, interactive view in the same partition; closing its temporary
+window destroys that view. Subsequent status/send operations recreate the
+offscreen transport and validate the shared session without copying credentials.
+The renderer can invoke status/login/logout only. Local tools are not sent
+as ChatGPT tools; account-side connectors execute on the service and appear
+as activity in the transcript.
+
+Pro is selectable only when returned by the account catalog. Its title never
+determines a slug or enables assumed Pro flags. The desktop thinking selector
+maps to the account effort enum (`low`, `medium`, `high`, `extra_high`);
+"off" sends no explicit effort. When none is set, the page prefers the
+model's advertised `instant` effort from the catalog `thinking_efforts`,
+otherwise `default_thinking_effort`; when neither exists the field is
+omitted and the service applies its default. An explicit effort outside the
+model's advertised efforts falls back to the account default; when the
+catalog is unavailable an explicit effort is sent unclamped. Actual Pro
+availability and successful generation remain account-side acceptance
+checks. After page reload, first use of a model refreshes the account
+catalog before submitting, preserving account limits across restart.
+
+Continuity is scoped to a local session and provider. Subsequent turns send
+only new user messages with the last remote assistant ID. After restart,
+interruption, or changed history, the adapter creates a new remote conversation
+and replays text history. Text is supported in v1; local tool-result and image
+history is rejected rather than silently discarded. Protocol changes and
+account restrictions surface as errors without automatic retries. An HTTP 429
+surfaces as an account rate-limit error including any server-provided retry
+delay; the transport never re-sends it automatically. The stream also watches
+which model actually executed: when server STE metadata in the stream names an
+execution model other than the requested one, or reports an automatic reasoning
+switch, the assistant message carries a `chatgpt.model_route` diagnostic; the
+turn is not failed for it.
+
+See [the transport decision](../../adr/chatgpt-conversation-browser-transport.md)
+and `E2E-PROVIDER-chatgpt-chat-login-and-stream` in the delivery test plan.
+
 | type | description | examples |
 |---|---|---|
 | `native` | first-class vendor integration via pi-ai | openai, anthropic, google, bedrock, mistral, etc. |

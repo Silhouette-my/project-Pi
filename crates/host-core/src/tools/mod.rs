@@ -612,7 +612,7 @@ const BINARY_EXTENSIONS: &[&str] = &[
     "wasm", "war", "webp", "xls", "xlsx", "zip",
 ];
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolsExecuteParams {
     pub session_id: String,
@@ -839,6 +839,8 @@ pub struct BashExecutionOptions {
     /// Host state the background spawn registers into. Present for RPC-driven
     /// calls; `None` for test/`local` constructions that never go background.
     pub app_state: Option<Arc<tokio::sync::Mutex<crate::state::AppState>>>,
+    /// Trusted RPC call retained across the permission wait, never model metadata.
+    pub workflow_call: Option<Box<ToolsExecuteParams>>,
 }
 
 impl BashExecutionOptions {
@@ -853,6 +855,7 @@ impl BashExecutionOptions {
             extra_env: Vec::new(),
             run_in_background: false,
             app_state: None,
+            workflow_call: None,
         }
     }
 }
@@ -862,6 +865,9 @@ pub struct ToolExecutionOptions<'a> {
     pub bash_options: Option<BashExecutionOptions>,
     pub allow_external_paths: bool,
     pub hashline: Option<HashlineContext<'a>>,
+    /// Host-authorized exact target for a bound workflow file call. Checked
+    /// again against the actual executor resolver, not a caller-supplied root.
+    pub canonical_path_limit: Option<&'a Path>,
 }
 
 pub fn validate_timeout_ms(timeout_ms: Option<u64>) -> Result<(), (String, String)> {
@@ -1109,6 +1115,7 @@ pub async fn execute_tool_with_options(
             timeout_ms,
             bash_options,
             allow_external_paths: false,
+            canonical_path_limit: None,
             hashline: None,
         },
     )
@@ -1124,8 +1131,10 @@ async fn run_file_tool(
     args: &Value,
     allow_external_paths: bool,
     hashline: Option<&HashlineContext<'_>>,
+    canonical_path_limit: Option<&Path>,
 ) -> Result<Value, hashline::ToolError> {
     let workspace = workspace.map(Path::to_path_buf);
+    let canonical_path_limit = canonical_path_limit.map(Path::to_path_buf);
     let scratch = scratch.map(Path::to_path_buf);
     let tool_name = tool_name.to_string();
     let args = args.clone();
@@ -1145,15 +1154,36 @@ async fn run_file_tool(
             (workspace.as_deref(), scratch.as_deref(), hashline.as_ref());
         let args = &args;
         match tool_name.as_str() {
-            "Read" => tool_read(workspace, scratch, args, allow_external_paths, hashline)
-                .map_err(Into::into),
+            "Read" => tool_read(
+                workspace,
+                scratch,
+                args,
+                allow_external_paths,
+                hashline,
+                canonical_path_limit.as_deref(),
+            )
+            .map_err(Into::into),
             "Glob" => tool_glob(workspace, scratch, args, allow_external_paths).map_err(Into::into),
             "Grep" => tool_grep(workspace, scratch, args, allow_external_paths, hashline)
                 .map_err(Into::into),
-            "Write" => tool_write(workspace, scratch, args, allow_external_paths, hashline)
-                .map_err(Into::into),
+            "Write" => tool_write(
+                workspace,
+                scratch,
+                args,
+                allow_external_paths,
+                hashline,
+                canonical_path_limit.as_deref(),
+            )
+            .map_err(Into::into),
             // "Edit": the caller routes only these five file tools here.
-            _ => tool_edit(workspace, scratch, args, allow_external_paths, hashline),
+            _ => tool_edit(
+                workspace,
+                scratch,
+                args,
+                allow_external_paths,
+                hashline,
+                canonical_path_limit.as_deref(),
+            ),
         }
     })
     .await
@@ -1174,6 +1204,7 @@ pub async fn execute_tool_with_path_access(
         bash_options,
         allow_external_paths,
         hashline,
+        canonical_path_limit,
     } = options;
     let started = Instant::now();
     let timeout_ms = effective_timeout_ms(tool_name, requested_timeout_ms);
@@ -1204,6 +1235,7 @@ pub async fn execute_tool_with_path_access(
                 args,
                 allow_external_paths,
                 hashline.as_ref(),
+                canonical_path_limit,
             )
             .await
         }
@@ -1394,12 +1426,24 @@ fn read_image_block(
     }))
 }
 
+fn require_canonical_target(resolved: &Path, limit: Option<&Path>) -> Result<(), (String, String)> {
+    if limit.is_some_and(|allowed| resolved != allowed) {
+        return Err((
+            "WORKFLOW_RESOURCE_DENIED".into(),
+            "file target changed after workflow authorization; re-authorize the actual target"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
 fn tool_read(
     workspace: Option<&Path>,
     scratch: Option<&Path>,
     args: &Value,
     allow_external_paths: bool,
     hashline: Option<&HashlineContext<'_>>,
+    canonical_path_limit: Option<&Path>,
 ) -> Result<Value, (String, String)> {
     let root = require_workspace(workspace)?;
     let path = args
@@ -1409,6 +1453,7 @@ fn tool_read(
     let (resolved, root_kind) =
         resolve_tool_path_with_external(root, scratch, path, allow_external_paths)
             .map_err(|e| (e.clone(), e))?;
+    require_canonical_target(&resolved, canonical_path_limit)?;
     if ignore_rules::is_sensitive_path(&resolved) {
         return Err(ignore_rules::denied_error(path));
     }
@@ -1546,6 +1591,7 @@ fn tool_write(
     args: &Value,
     allow_external_paths: bool,
     hashline: Option<&HashlineContext<'_>>,
+    canonical_path_limit: Option<&Path>,
 ) -> Result<Value, (String, String)> {
     let root = require_workspace(workspace)?;
     let path = args
@@ -1560,6 +1606,7 @@ fn tool_write(
     let (resolved, root_kind) =
         resolve_tool_path_with_external(root, scratch, path, allow_external_paths)
             .map_err(|e| (e.clone(), e))?;
+    require_canonical_target(&resolved, canonical_path_limit)?;
     if ignore_rules::is_sensitive_path(&resolved) {
         return Err(ignore_rules::denied_error(path));
     }
@@ -1640,6 +1687,7 @@ fn tool_edit(
     args: &Value,
     allow_external_paths: bool,
     hashline: Option<&HashlineContext<'_>>,
+    canonical_path_limit: Option<&Path>,
 ) -> Result<Value, hashline::ToolError> {
     let root = require_workspace(workspace).map_err(|(c, m)| hashline::ToolError::new(c, m))?;
     let path = args
@@ -1649,6 +1697,12 @@ fn tool_edit(
     let (resolved, root_kind) =
         resolve_tool_path_with_external(root, scratch, path, allow_external_paths)
             .map_err(|e| hashline::ToolError::new(e.clone(), e))?;
+    require_canonical_target(&resolved, canonical_path_limit).map_err(hashline::ToolError::from)?;
+    if canonical_path_limit.is_some() {
+        if let Some(ops) = args.get("ops").and_then(Value::as_str) {
+            hashline::require_single_target_edit(ops)?;
+        }
+    }
     if ignore_rules::is_sensitive_path(&resolved) {
         let (code, message) = ignore_rules::denied_error(path);
         return Err(hashline::ToolError::new(code, message));
@@ -2893,6 +2947,35 @@ async fn tool_bash(
         env_path: shell::user_login_path().map(str::to_string),
         extra_env: options.extra_env.clone(),
     };
+    // Hold the Host mutation lock through runner startup/config release: no
+    // revoke, decision change or turn replacement can slip between this final
+    // check and dispatching the approved command. Never hold it for execution.
+    let workflow_guard = if let Some(call) = options.workflow_call.as_deref() {
+        let state = options.app_state.as_ref().ok_or_else(|| {
+            (
+                "WORKFLOW_RESOURCE_DENIED".into(),
+                "workflow shell requires Host state".into(),
+            )
+        })?;
+        let guard = state.lock().await;
+        match crate::project_workflow::tool_scope::authorize_tool(&guard.db, call)
+            .map_err(|e| (e.code.to_string(), e.message))?
+        {
+            Some(crate::project_workflow::tool_scope::ToolScope::Shell { .. }) => (),
+            _ => {
+                return Err((
+                    "WORKFLOW_RESOURCE_DENIED".into(),
+                    "workflow shell binding lost".into(),
+                ))
+            }
+        }
+        if options.cancellation.as_ref().is_some_and(|rx| *rx.borrow()) {
+            return Err(("TOOL_ABORTED".into(), "bash aborted before launch".into()));
+        }
+        Some(guard)
+    } else {
+        None
+    };
     let SpawnedToolRunner {
         pid,
         mut ownership,
@@ -2901,6 +2984,7 @@ async fn tool_bash(
         stderr,
         mut wait_task,
     } = spawn_tool_runner(&config).await?;
+    drop(workflow_guard);
 
     // Drain both pipes in small chunks while the child is running. Waiting for
     // the process first can deadlock once a command exceeds the OS pipe size.
@@ -3962,6 +4046,7 @@ mod tests {
                 timeout_ms: Some(5_000),
                 bash_options: None,
                 allow_external_paths: true,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -4121,6 +4206,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: true,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -4144,6 +4230,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: true,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -4167,6 +4254,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: true,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -4194,6 +4282,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: true,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -4221,6 +4310,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: true,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -4242,6 +4332,7 @@ mod tests {
                 timeout_ms: None,
                 bash_options: None,
                 allow_external_paths: true,
+                canonical_path_limit: None,
                 hashline: None,
             },
         )
@@ -4915,6 +5006,7 @@ mod tests {
                 extra_env: Vec::new(),
                 run_in_background: false,
                 app_state: None,
+                workflow_call: None,
             }),
         )
         .await;
@@ -4959,6 +5051,7 @@ mod tests {
                 extra_env: Vec::new(),
                 run_in_background: false,
                 app_state: None,
+                workflow_call: None,
             }),
         )
         .await;
@@ -4998,6 +5091,7 @@ mod tests {
                 extra_env: Vec::new(),
                 run_in_background: false,
                 app_state: None,
+                workflow_call: None,
             }),
         )
         .await;
@@ -5070,6 +5164,7 @@ mod tests {
             extra_env: Vec::new(),
             run_in_background: false,
             app_state: None,
+            workflow_call: None,
         };
         let mut notifier = OutputNotifier::new(&options);
         for _ in 0..(MAX_OUTPUT_NOTIFICATIONS + 100) {
@@ -5098,6 +5193,7 @@ mod tests {
             extra_env: Vec::new(),
             run_in_background: false,
             app_state: None,
+            workflow_call: None,
         };
 
         let output = execute_tool_with_options(
@@ -5188,6 +5284,7 @@ mod tests {
             extra_env: Vec::new(),
             run_in_background: false,
             app_state: None,
+            workflow_call: None,
         };
         execute_tool_with_options(
             Some(workspace),

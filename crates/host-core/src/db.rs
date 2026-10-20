@@ -7,7 +7,7 @@ pub(crate) use serde_json::Value;
 pub(crate) use std::path::{Path, PathBuf};
 
 /// Current SQLite schema version.
-pub const SCHEMA_VERSION: i64 = 24;
+pub const SCHEMA_VERSION: i64 = 26;
 
 /// Absolute approval deadline for a newly submitted Plan or Goal proposal.
 pub const PLAN_APPROVAL_TIMEOUT_MS: i64 = 30 * 60 * 1000;
@@ -19,10 +19,12 @@ mod migrations;
 mod model;
 mod plugin_providers_migration;
 mod project_groups;
+mod project_workflow_migration;
 mod repositories;
 mod schema;
 mod session_collaboration_migration;
 mod session_title_source_migration;
+mod workflow_boundary_migration;
 mod worktree_migration;
 pub(crate) use migrations::{
     archive_legacy_db, create_migration_backup, migrate_and_validate_top_level_mode,
@@ -37,6 +39,7 @@ pub use project_groups::{
     ProjectGroupContextRecord, ProjectGroupRecord, ProjectGroupRoot, RemoteWorkspace,
     REMOTE_PROJECT_PREFIX,
 };
+pub(crate) use project_workflow_migration::{migrate_v24_to_v25, PROJECT_WORKFLOW_DDL};
 pub(crate) use repositories::{
     canonical_project_path, normalize_project_path, project_display_name,
     strip_obsolete_plan_approval_permission_mode, upsert_project_row, MAX_PROJECT_MEMORY_BYTES,
@@ -44,6 +47,7 @@ pub(crate) use repositories::{
 };
 pub(crate) use schema::{PLAN_APPROVALS_SCHEMA, SCHEMA_LATEST, SESSION_TODO_DDL};
 pub(crate) use session_title_source_migration::migrate_v22_to_v23;
+pub(crate) use workflow_boundary_migration::{migrate_v25_to_v26, WORKFLOW_BOUNDARY_DDL};
 pub(crate) use worktree_migration::{migrate_v23_to_v24, WORKTREE_DDL};
 
 pub fn now_ms() -> i64 {

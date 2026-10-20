@@ -119,6 +119,7 @@ export type HostQueueEntry = {
   voiceOrigin?: VoiceOrigin;
   attachments?: unknown;
   permissionMode: string;
+  workflowRunId?: string;
   position: number;
   priority?: number;
   createdAt: string;
@@ -127,6 +128,10 @@ export type HostQueueEntry = {
 export function fromHostQueueEntry(entry: HostQueueEntry): QueuedTurnRecord {
   const permissionMode: RacpPermissionMode =
     entry.permissionMode === "accept-edits" || entry.permissionMode === "auto" ? entry.permissionMode : "ask";
+  // Earlier workflow queues already persisted this exact identity pair. Keep
+  // them bounded after upgrade; Host still validates the run at beginTurn.
+  const workflowRunId = entry.workflowRunId ?? (entry.idempotencyKey
+    && entry.userMessageId === `workflow-run:${entry.idempotencyKey}` ? entry.idempotencyKey : undefined);
   return {
     id: entry.id,
     sessionId: entry.sessionId,
@@ -137,6 +142,7 @@ export function fromHostQueueEntry(entry: HostQueueEntry): QueuedTurnRecord {
     ...(entry.voiceOrigin ? { voiceOrigin: entry.voiceOrigin } : {}),
     ...(Array.isArray(entry.attachments) ? { attachments: entry.attachments as QueuedTurnRecord["attachments"] } : {}),
     effectivePermissionMode: permissionMode,
+    ...(workflowRunId ? { workflowRunId } : {}),
     ...(entry.idempotencyKey ? { idempotencyKey: entry.idempotencyKey } : {}),
     inputHash: entry.inputHash,
     ...(entry.priority !== undefined ? { priority: entry.priority } : {}),
@@ -166,6 +172,7 @@ export function createHostQueueStore(getHost: () => HostRpc | null): QueueStore 
         ...(record.voiceOrigin ? { voiceOrigin: record.voiceOrigin } : {}),
         ...(record.attachments ? { attachments: record.attachments } : {}),
         permissionMode: record.effectivePermissionMode,
+        ...(record.workflowRunId ? { workflowRunId: record.workflowRunId } : {}),
       });
     },
     async remove(id) {
