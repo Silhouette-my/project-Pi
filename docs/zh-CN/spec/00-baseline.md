@@ -94,7 +94,7 @@
 > 内嵌在各自的设置页面中；会话导入继续通过现有插件 API 提供
 >（D645 / ADR 0319）。
 > 本地项目工作流 MVP 在 schema v25 中新增版本化、由 host 拥有的工作流聚合与命令账本
->（从 v24 迁移），不会替换 ProjectGroup/会话身份，也不改变 host wire protocol。
+>（从 v24 迁移），并在 v26 增加不可变 Run 范围和回合绑定。它不会替换 ProjectGroup/会话身份，也不改变 host 消息分帧。
 > 类型化用户命令与 runtime 命令保留不同的权限边界。Run 完成仍不同于验收；打开已记录引用
 > 仍须经过既有 host 路径及 URL 校验。参见[项目工作流状态](/zh-CN/spec/02-architecture/project-workflow-state)
 > 与[ADR](/adr/project-workflow-durable-state)。

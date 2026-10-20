@@ -17,6 +17,17 @@ pub use tag::{
     tag_of_lf_text, NormalizedFile,
 };
 
+/// Workflow Edit is single-target until destination scope is carried through
+/// every move effect. Reuse the actual operation parser, including PUT bodies.
+pub(crate) fn require_single_target_edit(ops: &str) -> Result<(), ToolError> {
+    let parsed =
+        parse::parse_ops(ops).map_err(|error| ToolError::new(error.code, error.message))?;
+    if parse::mv_dest(&parsed).is_some() {
+        return Err(ToolError::new("WORKFLOW_RESOURCE_DENIED", "workflow Edit cannot move files; MV requires a separately contained multi-target operation"));
+    }
+    Ok(())
+}
+
 use serde_json::{json, Map, Value};
 use std::collections::BTreeSet;
 use std::path::Path;

@@ -126,8 +126,9 @@
 > current exclusion.
 >
 > The local Project Workflow MVP adds a versioned host-owned workflow aggregate
-> and command ledger in schema v25 (migration from v24); it does not replace
-> ProjectGroup/session identity or change the host wire protocol. Typed user and
+> and command ledger in schema v25 (migration from v24), followed by immutable
+> run scopes and turn bindings in v26. It does not replace ProjectGroup/session
+> identity or change host wire framing. Typed user and
 > runtime commands retain separate authority boundaries. Run completion remains
 > distinct from acceptance; recorded references remain subject to existing host
 > path and URL checks. See [Project Workflow State](02-architecture/project-workflow-state.md)

@@ -441,6 +441,7 @@ pub(super) async fn run_setup(
                 app_state: None,
             }),
             allow_external_paths: false,
+            canonical_path_limit: None,
             hashline: None,
         },
     )

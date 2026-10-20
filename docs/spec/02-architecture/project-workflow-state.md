@@ -18,7 +18,8 @@ it does not create a second project identity or session hierarchy.
 
 ## Durable aggregate and revision contract
 
-Storage schema v25 adds a workflow aggregate and command ledger. The aggregate
+Storage schema v25 adds a workflow aggregate and command ledger; v26 adds durable
+run scopes and turn bindings while preserving old queue rows. The aggregate
 contains version-1 snapshots; a fresh store reads as revision 0. Each typed
 command is applied to the aggregate in one SQLite transaction, with a global
 `expectedRevision` compare-and-swap. A successful command increments the
@@ -77,6 +78,21 @@ command.
   continuations. Terminal callbacks arriving during recovery are retained and
   drained before public actions become ready. Recovery failure keeps admission
   disabled; retry preserves the accepted checkpoint's exact next step and scope.
+
+## Turn-bound tool authority
+
+`session.beginTurn` accepts optional `workflowRunId`. Host validates the active
+run, session, project, decision revision and user authorization before persisting
+its binding to the real turn. The initial dispatch resources are immutable;
+later tool receipts cannot expand them. Queue persistence retains this identity.
+
+For a bound turn, Host checks authority before permission admission and again
+before execution. `Write` and `Edit` must remain within the captured output
+resources. `Read` may also use effective canonical resources and relevant
+artifact/delivery inputs, without adding write authority. Existing Host/tool
+permissions still apply. Other tools return `WORKFLOW_RESOURCE_DENIED` before
+effects; in particular, a path grant is not a process sandbox for `Bash`.
+Ordinary turns without a workflow binding retain their existing behavior.
 
 ## Opening a recorded reference
 
