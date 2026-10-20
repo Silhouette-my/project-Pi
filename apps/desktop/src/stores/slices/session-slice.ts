@@ -651,8 +651,7 @@ export function createSessionSlice({
       const scopeKey = `${runtime.newSessionScopeKey(requestedProjectPath)}${isolated ? "\u0000isolated" : ""}`;
       const pending = runtime.pendingNewSessionRequests.get(scopeKey);
       if (pending) {
-        await pending;
-        return;
+        return pending;
       }
 
       const intent = runtime.beginNavigationIntent();
@@ -689,21 +688,22 @@ export function createSessionSlice({
             submitted: runtime.submittedComposerDrafts.has(latest.id),
           })
         ) {
-          if (get().activeSessionId === latest.id && get().page === "chat") return;
+          if (get().activeSessionId === latest.id && get().page === "chat") return latest.id;
           await get().selectSession(latest.id, { navigationIntent: intent });
-          return;
+          return runtime.navigationIntentIsCurrent(intent) ? latest.id : undefined;
         }
 
-        await persistSessionAndSelect({
+        const sessionId = await persistSessionAndSelect({
           intent,
           projectPath: requestedProjectPath,
           draftConfiguration: null,
           ...(isolated ? { isolated: true } : {}),
         });
+        return runtime.navigationIntentIsCurrent(intent) ? sessionId ?? undefined : undefined;
       })();
       runtime.pendingNewSessionRequests.set(scopeKey, request);
       try {
-        await request;
+        return await request;
       } finally {
         if (runtime.pendingNewSessionRequests.get(scopeKey) === request) {
           runtime.pendingNewSessionRequests.delete(scopeKey);

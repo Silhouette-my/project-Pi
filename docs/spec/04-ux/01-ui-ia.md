@@ -17,22 +17,24 @@ destination, chat as the home surface, tools and permissions inline.
 | Platform titlebar: macOS traffic lights / Windows/Linux actions     |
 +------------------+--------------------------------+------------------+
 | Sidebar (275px) | Main pane (active destination) | Work panel       |
-|                  |  chat home / transcript        |  (optional,      |
-|                  |  or Extensions page            |   resizable      |
+|                  |  Chat / Project Console        |  (optional,      |
+|                  |  or another destination         |   resizable      |
 |                  |                                |   ≥244px, dynamic|
-|  Sessions     +↕ |                                | surface          |
-|   Recent rows ↕  |                                |                  |
+|  Chats        +↕ |                                | surface          |
+|   Folders/Recent |                                |                  |
 |  Projects      + |                                | ◫ | App.tsx  ⌄ × |
-|   Project A      |                                | > |              |
-|   Project B      |                                | ◎ | Active       |
+|   Workstreams   |                                | > |              |
+|                  |                                | ◎ | Active       |
 | Footer [⚙][plug][☾][bell] |  Floating composer (chat) |   | resource     |
 +------------------+--------------------------------+------------------+
 ```
 
-- **Sidebar**: primary navigation — path-less conversations under a compact
-  **Sessions** section with new-session and sort actions, retained open-project
-  groups under a following **Projects** section with a persistent new-project
-  action, and the WorkBuddy-inspired footer. The footer keeps compact Settings,
+- **Sidebar**: primary navigation has parallel **Chats** and **Projects** areas.
+  Chats organizes ordinary conversations in shallow, navigation-only folders;
+  unfiled chats remain accessible in Recent. Projects contains retained project
+  groups and their workstreams, not a flat permanent session list. Chat folders
+  never grant permissions or share model context. The WorkBuddy-inspired footer
+  keeps compact Settings,
   Extensions, Scheduled (clock), and notification icon actions. Each retained
   project is a
   path-keyed tab/group that can be
@@ -200,16 +202,22 @@ destination, chat as the home surface, tools and permissions inline.
   session's message, tool, and permission events never replace or cover the
   visible conversation.
 
-### 3.2 Sidebar project groups
+### 3.2 Sidebar projects and Chat folders
 
-- **Sections**: the compact `Sessions` heading precedes `Projects` and owns
-  path-less conversation creation plus the existing sort/archive-view menu. Its
-  toolbar places sorting before new-session creation. Both headings keep quiet
+- **Sections**: the compact `Chats` area precedes `Projects` and owns ordinary
+  conversation creation, shallow folders and the existing sort/archive-view
+  menu. A global new Chat is unfiled; one created inside a folder inherits that
+  folder. Folder create, rename, move and bulk move affect navigation only;
+  removing a folder does not delete its chats. Recent is a derived access and
+  activity view, not storage ownership; favorites are references. Its toolbar
+  places sorting before new-chat creation. Folder and chat order, user titles,
+  expansion state and transcript reading position remain stable across
+  navigation. Both areas keep quiet
   glyph actions and also accept a right-click create menu on the heading or empty
   list chrome so section creation stays discoverable
   without extra chrome. Its list shows at most five compact rows (146px) before
   scrolling internally, so standalone work stays visible without displacing
-  project navigation. The following `Projects` heading exposes the
+  project navigation. The following `Projects` area exposes the
   folder-picker action; retained project groups use the remaining height and
   scroll independently.
 - **Identity**: each project group is keyed by a host-owned logical group id;
@@ -287,15 +295,26 @@ destination, chat as the home surface, tools and permissions inline.
   first, and Name. Pinned rows precede unpinned rows. Project groups switch
   to `manual` by dragging a title or using ArrowUp/ArrowDown on that
   title. Session `manual` remains a compatibility value.
-- **Conversation list**: each project group shows the ten most-recent sessions
-  in the active sort order by default; the remainder folds behind a **Load N
-  more…** row. The list has no time-group headings. Rows show the title and a
+- **Workstream tree**: each project group organizes durable workstreams rather
+  than a flat permanent session list. Each workstream has one main conversation
+  line; related side conversations expand beneath it and completed side work
+  folds into history without deletion. Manual order, user titles, expansion and
+  transcript reading position remain stable across navigation. Background agent
+  activity updates status but never reorders navigation or adds each Run to
+  Recent. A Work side conversation folds after its latest run completes, unless
+  any run still has active execution or unknown effects. User-archived side
+  conversations also remain reachable in workstream history, with their existing
+  restore action, even when the global archived filter is off.
+- **Conversation list**: the main line stays visible and side conversations are
+  explicitly folded or expanded; older history remains reachable without
+  turning execution attempts into top-level rows. Rows show the title and a
   localized last-reply age through seven calendar days, then a concrete date;
   hovering or focusing a row replaces the date with its session actions. Pinned
-  rows precede unpinned rows and are never pushed behind the fold; expansion is
-  not persisted.
-- **Standalone sessions**: path-less sessions remain in the separate Sessions
-  section and never inherit the last active project's workspace.
+  rows precede unpinned rows and are never pushed behind the fold. Workstream
+  order, titles, expansion and transcript reading position remain stable across
+  navigation.
+- **Standalone chats**: chats outside a project remain under Chats and never
+  inherit the last active project's workspace. Folders affect navigation only.
 - **Concurrency**: the shell selects one visible project at a time, while
   agent run state remains keyed by session. Switching project tabs does not
   cancel a background turn. Background events update only their originating
@@ -435,6 +454,53 @@ shared capability contract:
   skeleton rows with the same anatomy and disable competing controls until the
   host refresh completes.
 
+### 3.6 Project Console and workstream
+
+Project Console is its own main-pane destination, independent of the active chat
+session and workspace. Opening it does not select, create or execute a session.
+Its overview answers what the project is trying to achieve, what is active or
+complete, who owns each workstream, what is blocked or awaits a decision, which
+candidate is current, and what action is next. Progress is expressed through
+those concrete states, never a fabricated percentage or message count. A
+project-level intent composer requires an explicit workstream target before
+routing; it never inherits an unrelated active chat as an implicit destination.
+
+Selecting a workstream opens its main line and a focused side-conversation
+surface. The workstream keeps its acceptance, owner, dependencies, current
+candidate and history; side conversations remain subordinate and do not create a
+second task hierarchy. Start work turns adopted discussion into a bounded
+execution brief. Discuss next brings evidence and blockers into Chat while Work
+continues unless explicitly paused. Adopt and continue records the chosen
+decision revision and delivers only relevant changes to its owner. Pause to
+discuss checkpoints and pauses affected work before returning to Chat.
+
+Start work explicitly selects an Agent conversation in the same project with an
+executable provider. Consumer Chat stays discussion-only; the UI never changes
+its provider as a fallback. The existing conversation composer configures a new
+execution conversation. Execution scope lists exact allowed actions and resource
+identifiers, bounded attempts and stop conditions; existing tool approvals remain
+authoritative. A late conversation-creation result cannot replace a newer project
+or workstream navigation choice.
+
+Side conversations start with an explicit Ask, Explore or Work intent. Ask uses
+selection and necessary background without writing effective project context.
+Explore proposes a conclusion that must be adopted before it becomes effective;
+the user can instead retain an alternative or dismiss it. Work receives a
+bounded assignment and authority and delivers its outcome, artifact, evidence or
+blocker to the owning workstream. Optional side-only visibility excludes that
+conversation from automatic project retrieval without hiding its record.
+
+Resources and decisions show their source, revision/update time, scope and
+effective or superseded status. The current candidate identifies the exact
+revision and environment; opening it targets that candidate, and feedback stays
+attached to that revision/environment. A passing local check is not presented as
+a live deployment. Search covers titles, messages, conclusions and artifact
+labels, respects side-conversation visibility, shows breadcrumbs and jumps to
+the matching message or result while preserving its reading position.
+Historical output hits expand their folded history before focusing the exact
+record. Editors preserve untouched background updates and fence conflicting edits;
+resource conflicts retain the user's draft until explicit reload or close.
+
 ## 4. Overlays
 
 | Overlay | Trigger | Notes |
@@ -448,9 +514,10 @@ shared capability contract:
 
 ## 5. Navigation model
 
-- `page` state: `chat | scheduled | plugins | settings`; `chat` is the
+- `page` state: `chat | project | scheduled | plugins | settings`; `chat` is the
   conversation-surface route, not an operating mode. The project
-  archive is the `projects` settings tab rather than a standalone page.
+  archive remains the `projects` settings tab; Project Console is a separate
+  destination identified by a project id and requires no active session.
 - Destination history is linear; `Cmd/Ctrl+[` and `Cmd/Ctrl+]` traverse it
   without persistent back/forward chrome. While Extensions is active, the
   footer Plugins button reuses one Back step (§2 shell regions); no separate
@@ -460,6 +527,14 @@ shared capability contract:
 - Selecting a project-scoped thread activates its project before switching to
   `chat`. Selecting a temporary thread clears the visible active workspace
   before loading it.
+- Project Console navigation changes only the visible destination and its
+  project identity. It does not change the active session, selected workspace,
+  or a running session. Back/Forward restores the exact project destination;
+  returning to Chat restores the chosen conversation and its reading position.
+- Starting or routing an intent from the project surface requires an explicit
+  workstream target. Chat/Work transitions preserve the same workstream identity
+  and make the handoff action explicit; an unadopted Explore proposal cannot
+  steer Work.
 - Empty home has four explicit session states: a project-bound session shows
   the project-underlined welcome; clicking the name opens a searchable
   switcher of the sidebar's open projects instead of the folder picker. An

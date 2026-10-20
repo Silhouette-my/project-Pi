@@ -1,4 +1,7 @@
+import { workflowCatalog } from "./workflow.js";
+
 export const en = {
+  ...workflowCatalog,
   worktree: {
     menu: { group: "Git" },
     newIsolatedSession: "New isolated session",

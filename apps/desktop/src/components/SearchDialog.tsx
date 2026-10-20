@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { listableSessions } from "../lib/session-origin";
 import { runPaletteCommand } from "../lib/commands";
 import { isDefaultSessionTitle, useAppStore } from "../stores/app-store";
+import { useUnfiledNewSession } from "../features/project-workflow/useUnfiledNewSession";
 import { normalizeProjectPath } from "../lib/sidebar-session-groups";
 import { searchSettings, type SettingsSearchHit } from "../lib/settings-search";
 import { useSessionSearch, useSessionSearchState } from "../hooks/use-session-search";
@@ -79,7 +80,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
   const runningSessions = useAppStore((s) => s.runningSessions);
   const refreshSessions = useAppStore((s) => s.refreshSessions);
   const selectSession = useAppStore((s) => s.selectSession);
-  const newSession = useAppStore((s) => s.newSession);
+  const newSession = useUnfiledNewSession();
   const setSettingsTab = useAppStore((s) => s.setSettingsTab);
   const setSettingsAnchor = useAppStore((s) => s.setSettingsAnchor);
   const setPage = useAppStore((s) => s.setPage);

@@ -22,7 +22,7 @@ export async function openRemoteProjectSession(
 ): Promise<void> {
   const scope = `remote-project:${JSON.stringify([project.hostKey, project.projectId])}`;
   const pending = runtime.pendingNewSessionRequests.get(scope);
-  if (pending) return pending;
+  if (pending) { await pending; return; }
   const intent = runtime.beginNavigationIntent();
   const request = (async () => {
     const state = get();
