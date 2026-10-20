@@ -4320,6 +4320,11 @@ async fn handle_request(
                     if let Some(shell_id) = permission_shell_id.as_deref() {
                         denied_result["commandShellId"] = json!(shell_id);
                     }
+                    // This marker describes only the pre-runner approval
+                    // return. A started command's abort can have real effects.
+                    if workflow_shell {
+                        denied_result["approvalScope"] = json!("workflow-shell");
+                    }
                     return Ok(denied_result);
                 }
 
@@ -8738,6 +8743,7 @@ mod tests {
         assert_eq!(aborted["aborted"], true);
         let result = pending_task.await.unwrap().unwrap();
         assert_eq!(result["errorCode"], "TOOL_ABORTED");
+        assert!(result.get("approvalScope").is_none());
 
         let late_resolution = handle_request(
             state.clone(),
@@ -8835,6 +8841,7 @@ mod tests {
             .unwrap();
         assert_eq!(result["errorCode"], "TOOL_ABORTED");
         tokio::time::sleep(std::time::Duration::from_millis(1_500)).await;
+        assert!(result.get("approvalScope").is_none());
         assert!(
             !late_marker.exists(),
             "aborted descendants must not write later"

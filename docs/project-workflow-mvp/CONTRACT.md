@@ -77,6 +77,9 @@ session and message IDs retain their existing meaning.
   Auto mode and session grants do not bypass this request; only `allow-once`
   admits execution. `allow-session` is rejected without a reusable grant.
   Approval waits retain the original call, not a replayable command token.
+  A refused/cancelled permission-wait result carries top-level
+  `approvalScope: "workflow-shell"`, proving it did not reach the runner.
+  An abort after command admission has no such marker and may have effects.
   The Host revalidates the actual turn and workflow authority before starting
   the command. Shell effects may exceed selected writable paths; the card states
   this explicitly. File-tool scope remains unchanged; background/delegated Shell
