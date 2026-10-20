@@ -387,3 +387,33 @@ test("Consumer-only Chat cannot silently become a tool-capable Work session", as
   await assert.rejects(() => execution.start({ run: { sessionId: "chat-session" }, authorization: {}, content: "Implement" }), /Choose an executable Agent session/);
   assert.equal(called, false);
 });
+
+test("A user counterexample routes the exact candidate, revision and environment back into authorized work", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  await f.finish("session-1", checkpoint("Candidate produced", undefined));
+  f.host.edit((state) => {
+    Object.assign(state.workstreams[0], { status: "ready", currentCandidateId: "candidate-1" });
+    state.feedback.push({ id: "counterexample-1", projectId: "project-1", workstreamId: "work-1", candidateId: "candidate-1", candidateRevision: "rev-7",
+      environment: "local-desktop", acceptanceId: "ac-1", comment: "Fails on my empty input", source: { kind: "user", ref: "feedback-button" }, createdAt: timestamp });
+  });
+  const event = { kind: "feedback.add", projectId: "project-1", workstreamId: "work-1", revision: (await f.host.snapshot()).revision, commandId: "feedback-command" };
+  await f.runtime.onHostChanged(event);
+  assert.equal(f.prompts.length, 2);
+  assert.match(f.prompts[1].content, /candidate-1@rev-7|local-desktop|Fails on my empty input/);
+  await f.runtime.onHostChanged(event);
+  assert.equal(f.prompts.length, 2);
+});
+
+test("An explicit corrected Start can recover a known admission rejection without an automatic retry", async () => {
+  const f = await setup();
+  const prompt = f.modelEdge.prompt;
+  f.modelEdge.prompt = async () => { throw Object.assign(new Error("Choose an executable session"), { code: "INVALID_ARGUMENT" }); };
+  await assert.rejects(() => f.action("start", { authorizationId: "auth-1", sessionId: "session-1" }), /Choose an executable session/);
+  assert.equal((await f.host.snapshot()).runs[0].state, "failed");
+  assert.equal(f.prompts.length, 0);
+  f.modelEdge.prompt = prompt;
+  f.host.edit((state) => { state.workstreams[0].nextAction = "Implement using the corrected explicit execution session"; });
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  assert.equal(f.prompts.length, 1);
+});

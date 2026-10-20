@@ -1930,9 +1930,16 @@ idempotent. Host changes and durable turn settlement drive continuation; there i
 no timer/model polling or unchanged-failure retry loop.
 
 Composition supplies Host snapshot/mutation, normal session creation with group and
-provider binding, transcript flush, AgentHost and shutdown ownership. It wires
+provider binding, transcript flush, AgentHost and shutdown ownership. The execution
+adapter requires `assertExecutableSession`: a consumer-only Chat provider is a
+discussion source, not an implicit executable Agent provider. Work must choose an
+explicit executable session/model or stop at that boundary without a fallback.
+It wires
 `contextForSession` into session launch, `onHostChanged` after durable mutations,
 and `onTurnSettled` after durable endTurn and bridge settlement, then reconciles
 active workstreams on startup. The native Chat provider and Agent/Plan paths remain
 unchanged. Integrated composition and rendered acceptance are separate from the
 synthetic lifecycle tests in `project-workflow-runtime-lifecycle.test.mjs`.
+`project-workflow-runtime-host.test.mjs` additionally uses the published real Rust
+Host to cover parallel main/side runs, terminal acknowledgement, pause/resume and
+populated-state restart, with only the provider execution edge synthetic.

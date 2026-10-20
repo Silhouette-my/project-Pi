@@ -30,9 +30,10 @@ export function assembleWorkflowContext(
     decisions: decisions.map((d) => ({ id: d.id, statement: d.statement, sources: d.sources, adoptedRevision: d.adoptedRevision })),
     resources: resources.map((r) => ({ id: r.id, kind: r.kind, uri: r.uri, revision: r.revision, source: r.source })),
     artifacts,
+    feedback: ask ? [] : snapshot.feedback.filter(inScope),
     ...(options.discussion ? {
       runs: snapshot.runs.filter(inScope), evidence: snapshot.evidence.filter(inScope),
-      deliveries: snapshot.deliveries.filter(inScope), feedback: snapshot.feedback.filter(inScope),
+      deliveries: snapshot.deliveries.filter(inScope),
     } : {
       // Ask/Explore raw transcripts and pending proposals never enter execution context.
       results: ask ? [] : snapshot.deliveries.filter((d) => inScope(d) && d.state === "consumed" && d.disposition === "integrated"),

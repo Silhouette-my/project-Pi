@@ -118,7 +118,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       if (!rejected && recorded.effects[0].state === "confirmed") effects.push({ ...recorded.effects[0], id: "dispatch-outcome", state: "unknown", detail: String(error) });
       await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: rejected ? "failed" : "unknown", outcome: String(error),
         effects });
-      await transition(w, "awaiting_user", "Reconcile the uncertain dispatch before resuming", String(error));
+      await transition(w, "awaiting_user", rejected ? "Resolve the admission rejection before starting work" : "Reconcile the uncertain dispatch before resuming", String(error));
       throw error;
     }
   }
@@ -131,7 +131,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       }
     }
   }
-  async function continueWork(w: WorkflowWorkstream, authId?: string, next?: WorkflowStep, key = id()) {
+  async function continueWork(w: WorkflowWorkstream, authId?: string, next?: WorkflowStep, key = id(), freshUserStart = false) {
     if (["paused", "cancelled", "completed", "draft", "awaiting_user"].includes(w.status)) return;
     if (currentRuns(w).some((r) => conversation(r.sessionId)?.relation === "main")) return;
     if (w.dependencyIds.some((dep) => state.workstreams.find((d) => d.id === dep)?.status !== "completed")) {
@@ -143,7 +143,8 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
     }
     const latest = state.runs.filter((r) => r.workstreamId === w.id && conversation(r.sessionId)?.relation === "main").at(-1);
     if (latest && ["unknown", "interrupted", "failed", "cancelled"].includes(latest.state)
-      && !latest.completionKey?.endsWith(":paused-before-start")) {
+      && !latest.completionKey?.endsWith(":paused-before-start")
+      && (!freshUserStart || latest.state === "unknown" || latest.effects.some((effect) => effect.state === "unknown"))) {
       await transition(w, "awaiting_user", "Resolve the last execution outcome before resuming", latest.outcome); return;
     }
     const authorizationId = authId ?? latest?.authorizationId
@@ -252,7 +253,7 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
         await link(w, sessionId);
         await mutate({ kind: "workstream.update", ...scope(w), patch: { mainSessionId: sessionId } });
         await transition(work(w.id), "ready", w.nextAction);
-        await continueWork(work(w.id), input.authorizationId, undefined, input.commandId);
+        await continueWork(work(w.id), input.authorizationId, undefined, input.commandId, true);
       } else if (input.kind === "discuss") {
         if (input.pause) { await transition(w, "paused", w.nextAction); await stopRuns(w, false); }
         sessionId = input.sessionId ?? await deps.execution.createSession({ projectId: w.projectId, sourceSessionId: w.mainSessionId, purpose: "explore" });
@@ -313,6 +314,13 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       await reload();
       if (["authorization.revoke", "feedback.add"].includes(event.kind)) {
         for (const run of state.runs.filter((r) => live(r) && (!event.workstreamId || r.workstreamId === event.workstreamId))) await deps.execution.stop(run, false);
+      }
+      if (event.kind === "feedback.add" && event.workstreamId) {
+        const w = work(event.workstreamId);
+        const feedback = state.feedback.filter((f) => f.workstreamId === w.id && f.candidateId === w.currentCandidateId).at(-1);
+        const auth = state.authorizations.filter((a) => a.workstreamId === w.id && !a.revoked).at(-1);
+        if (feedback && auth && !currentRuns(w).length) await continueWork(w, auth.id, { action: auth.actions[0], resources: auth.resources,
+          prompt: `Address the user counterexample for acceptance ${feedback.acceptanceId}, candidate ${feedback.candidateId}@${feedback.candidateRevision}, environment ${feedback.environment}: ${feedback.comment}` }, `feedback:${feedback.id}`);
       }
       if (["workstream.update", "workstream.transition", "delivery.publish", "decision.resolve", "authorization.grant"].includes(event.kind)) {
         for (const w of [...state.workstreams].sort((a, b) => b.priority - a.priority || a.order - b.order)) {

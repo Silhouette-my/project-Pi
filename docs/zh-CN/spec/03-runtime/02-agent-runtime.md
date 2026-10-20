@@ -1303,7 +1303,11 @@ Pause 只停止受影响 workstream。队列项确认在执行前取消时持久
 中断结算幂等。Host 事件和持久 turn 结算驱动后续任务，不进行定时模型轮询或原样失败重试。
 
 组合根提供绑定项目和 provider 的普通会话创建、Host snapshot/mutate、transcript flush
-及 AgentHost；将 `contextForSession` 接入 session launch，在持久化修改后触发
+及 AgentHost。执行适配器要求 `assertExecutableSession`：consumer-only Chat 只作为
+讨论来源；Work 必须显式选择可执行 Agent 会话/模型，否则停在该边界，不自动换 provider。
+将 `contextForSession` 接入 session launch，在持久化修改后触发
 `onHostChanged`，在 durable endTurn 和 bridge 结算后触发 `onTurnSettled`，启动时先
 reconcile，关闭时 dispose。原 native Chat provider 与 Agent/Plan 路径不变。
 `project-workflow-runtime-lifecycle.test.mjs` 的合成生命周期证据与最终跨进程、界面验收分开。
+`project-workflow-runtime-host.test.mjs` 另用已发布的真实 Rust Host 验证主/侧工作并行、
+终态消费确认、暂停恢复及有数据重启；只有 provider 执行边界为合成实现。
