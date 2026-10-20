@@ -22,6 +22,8 @@ export const zhCNEntries: ChangelogEntry[] = [
       "可在创建 HTML 本地页面的会话中直接打开页面。",
       "宽 Markdown 表格可横向滚动，不影响对话布局。",
       "工具返回超大图片时，对话仍可正常使用。",
+      "内置 LaTeX 技能可编译 LaTeX 项目，并诊断或安装 TeX 工具链。",
+      "深度多源研究交给专职子代理执行，产出带引用与来源清单的 Markdown 报告。",
     ],
   },
   {
