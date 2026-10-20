@@ -577,6 +577,115 @@ fn workflow_completed_work_reopens_when_acceptance_or_candidate_is_invalidated()
 }
 
 #[test]
+fn workflow_parallel_side_work_is_session_scoped_but_unknown_effects_fence_its_workstream() {
+    fn link(f: &Fixture, session: &str, work: &str, relation: &str) {
+        let current = snapshot(&f.db, &json!({"workstreamId":work})).unwrap();
+        f.execute("conversation.link", json!({"conversation":{"sessionId":session,"projectId":f.project,
+            "workstreamId":work,"sourceRevision":current["workstreams"][0]["revision"],"relation":relation,
+            "purpose":"work","visibility":"project","readContext":{"resourceIds":[],"includeDecisions":true,"includeArtifacts":true},
+            "returnPolicy":"delivery","archived":false,"order":0}}));
+    }
+    fn run(f: &Fixture, id: &str, session: &str, work: &str, authorization: &str) -> Value {
+        let current = snapshot(&f.db, &json!({"workstreamId":work})).unwrap();
+        json!({"id":id,"projectId":f.project,"workstreamId":work,"sessionId":session,"executor":"local",
+            "workstreamRevision":current["workstreams"][0]["revision"],"decisionRevision":current["workstreams"][0]["decisionRevision"],
+            "authorizationId":authorization,"state":"executing","outcome":"","effects":[],"startedAt":"now","updatedAt":"now"})
+    }
+    fn session(f: &Fixture) -> String {
+        crate::sessions::create_session(
+            &f.db,
+            None,
+            None,
+            None,
+            None,
+            Some(f._dir.path().to_string_lossy().into_owned()),
+        )
+        .unwrap()
+        .id
+    }
+    let f = Fixture::new();
+    f.create_work();
+    link(&f, &f.session, "w", "main");
+    f.start();
+    let side = session(&f);
+    link(&f, &side, "w", "child");
+    let state = f.execute(
+        "run.start",
+        json!({"run":run(&f,"side-run",&side,"w","auth")}),
+    );
+    assert_eq!(rows(&state, "runs").len(), 2);
+    assert_eq!(state["runs"][0]["state"], "executing");
+    let duplicate = f.command(
+        "run.start",
+        json!({"run":run(&f,"duplicate-side",&side,"w","auth")}),
+    );
+    assert_eq!(mutate(&f.db, &duplicate).unwrap_err().code, "CONFLICT");
+    // Different sessions share the same authorization budget, not separate allowances.
+    let third = session(&f);
+    link(&f, &third, "w", "child");
+    f.execute(
+        "run.start",
+        json!({"run":run(&f,"third-run",&third,"w","auth")}),
+    );
+    let fourth = session(&f);
+    link(&f, &fourth, "w", "child");
+    let fourth_run = run(&f, "fourth-run", &fourth, "w", "auth");
+    assert_eq!(
+        mutate(&f.db, &f.command("run.start", json!({"run":fourth_run})))
+            .unwrap_err()
+            .code,
+        "UNAUTHORIZED"
+    );
+    let mut observed = f.scope();
+    observed["runId"] = json!("side-run");
+    observed["state"] = json!("completed");
+    observed["outcome"] = json!("Turn ended with uncertain external action");
+    observed["effects"] = json!([{"id":"uncertain","action":"edit","resource":"src","state":"unknown","detail":"Receipt missing"}]);
+    f.execute("run.observe", observed);
+    let blocked = mutate(
+        &f.db,
+        &f.command(
+            "run.start",
+            json!({"run":run(&f,"blocked-run",&fourth,"w","auth")}),
+        ),
+    )
+    .unwrap_err();
+    assert_eq!(blocked.code, "CONFLICT");
+    assert!(blocked.message.contains("unknown effect"));
+    // A separate workstream remains runnable, with its own linked session and authority.
+    let mut work = snapshot(&f.db, &json!({"workstreamId":"w"})).unwrap()["workstreams"][0].clone();
+    work["id"] = json!("independent");
+    work["revision"] = json!(0);
+    work["status"] = json!("ready");
+    work.as_object_mut().unwrap().remove("mainSessionId");
+    f.execute("workstream.create", json!({"workstream":work}));
+    f.execute("authorization.grant",json!({"authorization":{"id":"independent-auth","projectId":f.project,"workstreamId":"independent",
+        "actions":["edit"],"resources":["src"],"source":{"kind":"user","ref":"local"},"permissionCeiling":"ask","maxRuns":1,"stopConditions":[],"revoked":false}}));
+    let wrong_scope = f.command(
+        "run.start",
+        json!({"run":run(&f,"wrong-link",&side,"independent","independent-auth")}),
+    );
+    assert_eq!(
+        mutate(&f.db, &wrong_scope).unwrap_err().code,
+        "INVALID_ARGUMENT"
+    );
+    let independent = session(&f);
+    link(&f, &independent, "independent", "main");
+    let state = f.execute(
+        "run.start",
+        json!({"run":run(&f,"independent-run",&independent,"independent","independent-auth")}),
+    );
+    assert_eq!(
+        find(&state, "runs", &json!("independent-run")).unwrap()["state"],
+        "executing"
+    );
+    assert_eq!(
+        find(&state, "runs", &json!("run")).unwrap()["state"],
+        "executing"
+    );
+}
+
+#[test]
 fn workflow_authority_budget_revocation_and_workspace_mismatch_are_enforced() {
     let f = Fixture::new();
     f.create_work();

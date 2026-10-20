@@ -91,6 +91,7 @@ function rendererApi(invoke) {
   const { api } = load("../src/lib/api.ts", {
     "@pi-desktop/shared": shared,
     "./plan-history": load("../src/lib/plan-history.ts", {}),
+    "./project-workflow-api": load("../src/lib/project-workflow-api.ts", { "@pi-desktop/shared": shared }),
     "./remote-ipc-safety": load("../src/lib/remote-ipc-safety.ts", {
       "@pi-desktop/shared": shared,
       i18next: { default: i18n },

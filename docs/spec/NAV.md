@@ -20,6 +20,7 @@
 - [03-repo-structure.md](02-architecture/03-repo-structure.md)
 - [05-remote-agent-control.md](02-architecture/05-remote-agent-control.md)
 - [06-pi-runtime-dependency-boundary.md](02-architecture/06-pi-runtime-dependency-boundary.md)
+- [project-workflow-state.md](02-architecture/project-workflow-state.md)
 
 ## 3. Runtime
 - [README.md](03-runtime/README.md)

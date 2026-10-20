@@ -107,7 +107,7 @@
 > inline card and host pending state remain open until an explicit decision,
 > cancellation, or process shutdown; per-tool execution timeouts remain.
 
-> The current post-baseline amendments add the P0/P1 host-owned plugin session
+> Earlier post-baseline amendments added the P0/P1 host-owned plugin session
 > API through ADR 0200 / D367, explicit project ids plus host-owned session
 > refresh through ADR 0201 / D368, and the opt-in local MCP control plane
 > through ADR 0203 / D370 (catalog and bind tightened by D372). Protocol v11 remains unchanged; schema v16 adds the host-owned session collaboration ledger
@@ -124,6 +124,14 @@
 > approval vocabulary, and D375 schedules the SSH-tunnel remote Host first
 > while Gateway and browser access stay unscheduled. None of them changes the
 > current exclusion.
+>
+> The local Project Workflow MVP adds a versioned host-owned workflow aggregate
+> and command ledger in schema v25 (migration from v24); it does not replace
+> ProjectGroup/session identity or change the host wire protocol. Typed user and
+> runtime commands retain separate authority boundaries. Run completion remains
+> distinct from acceptance; recorded references remain subject to existing host
+> path and URL checks. See [Project Workflow State](02-architecture/project-workflow-state.md)
+> and [ADR](../adr/project-workflow-durable-state.md).
 
 ## Frozen Decisions
 

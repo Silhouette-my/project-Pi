@@ -54,6 +54,12 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             let wi = work_index(db, value, row)?;
             let work = &value["workstreams"][wi];
             check_session_scope(db, &row["sessionId"], &row["projectId"])?;
+            if let Some(link) = rows(value, "conversations")
+                .iter()
+                .find(|link| link["sessionId"] == row["sessionId"])
+            {
+                check_scope(link, row)?;
+            }
             if row["workstreamRevision"] != work["revision"]
                 || row["decisionRevision"] != work["decisionRevision"]
             {
@@ -71,11 +77,16 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             }
             if rows(value, "runs").iter().any(|run| {
                 run["workstreamId"] == row["workstreamId"]
-                    && ["queued", "executing", "paused", "unknown"]
-                        .contains(&run["state"].as_str().unwrap())
+                    && (run["state"] == "unknown"
+                        || rows(run, "effects")
+                            .iter()
+                            .any(|effect| effect["state"] == "unknown")
+                        || (run["sessionId"] == row["sessionId"]
+                            && ["queued", "executing", "paused"]
+                                .contains(&run["state"].as_str().unwrap())))
             }) {
                 return Err(Error::conflict(
-                    "workstream already has an active or ambiguous run",
+                    "session already has an active run or workstream has an unknown effect",
                 ));
             }
             for dependency in rows(work, "dependencyIds") {

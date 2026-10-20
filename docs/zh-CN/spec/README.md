@@ -11,8 +11,8 @@
 基线是一个冻结的决策工件，而不是每个的完整列表
 当前应用程序中的功能。当前的实现添加了 Goal 合约，
 独立 MCP/Skills/Subagents、插件市场和启动器流程、会话
-导入、计划任务和下一轮输入框配置。主机线材
-协议为 v11；存储架构为 v15（见 `00-baseline.md`）。
+导入、计划任务和下一轮输入框配置。主机线协议为 v11；当前存储 schema v25
+包含从 v24 升级的项目工作流迁移（见 `00-baseline.md`）。
 
 ## 快速进入
 
@@ -24,6 +24,7 @@
 | [01-product/00-overview.md](/zh-CN/spec/01-product/00-overview) | 概述 |
 | [01-product/01-product-scope.md](/zh-CN/spec/01-product/01-product-scope) | 目前的产品范围和运营模式 |
 | [02-architecture/01-architecture.md](/zh-CN/spec/02-architecture/01-architecture) | 建筑 |
+| [02-architecture/project-workflow-state.md](/zh-CN/spec/02-architecture/project-workflow-state) | 持久化项目工作流状态与 host 边界 |
 | [02-architecture/05-remote-agent-control.md](/zh-CN/spec/02-architecture/05-remote-agent-control) | 远程 Agent Host 和 Gateway 目标架构 |
 | [03-runtime/05-host-core-rust.md](/zh-CN/spec/03-runtime/05-host-core-rust) | Rust 主机核心 |
 | [03-runtime/19-remote-agent-control-protocol.md](/zh-CN/spec/03-runtime/19-remote-agent-control-protocol) | 远程控制协议 |
@@ -63,11 +64,12 @@ docs/spec/
 ### 实施
 1.`00-baseline.md`
 2.`02-architecture/01-architecture.md`
-3.`03-runtime/05-host-core-rust.md`
-4.`03-runtime/02-agent-runtime.md`
-5.`03-runtime/01-ipc-protocol.md`
-6.`03-runtime/11-provider-model-system.md`
-7.`07-plugins/01-plugin-system.md`
+3.`02-architecture/project-workflow-state.md`（实现项目工作流时）
+4.`03-runtime/05-host-core-rust.md`
+5.`03-runtime/02-agent-runtime.md`
+6.`03-runtime/01-ipc-protocol.md`
+7.`03-runtime/11-provider-model-system.md`
+8.`07-plugins/01-plugin-system.md`
 
 ### 插件作者
 1. [`../plugin-development.md`](/zh-CN/plugin-development)
