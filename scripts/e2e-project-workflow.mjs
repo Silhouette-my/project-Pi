@@ -263,6 +263,8 @@ try {
   const createWork = async (id, goal) => {
     const created = await invoke("sessionCreate", { title: id, mode: "agent", providerId: setup.providerId, modelId: setup.modelId, projectPath: canonicalWorkspace, permissionMode: "auto" });
     const sessionId = created.session.id, resource = join(canonicalWorkspace, id);
+    await invoke("sessionConfigure", sessionId, { mode: "agent", permissionMode: "auto" });
+    assert.equal((await invoke("sessionGet", { id: sessionId })).session.permissionMode, "auto", "the boundary scenario uses an actual auto-permission session");
     await mkdir(resource);
     await mutate("workstream.create", { workstream: workstream(id, sessionId, goal) });
     await grant(`auth-${id}`, id, [resource]);
