@@ -71,7 +71,12 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     const final = rows.filter((message) => message.role === "assistant" && message.status === "complete" && !message.parentToolCallId).at(-1);
     if (terminal === "failed" || terminal === "interrupted" || terminal === "canceled") {
       return { state: terminal === "failed" ? "failed" : terminal === "canceled" ? "cancelled" : "interrupted",
-        content: terminalError ?? rows.findLast((message) => message.error)?.error?.message ?? final?.content ?? terminal, effects };
+        content: terminalError ?? rows.findLast((message) => message.error)?.error?.message ?? final?.content ?? terminal, effects,
+        refusedShellToolCallIds: rows.filter((message) => {
+          const details = (message.toolResult as { details?: { code?: unknown; approvalScope?: unknown } } | null)?.details;
+          return message.toolName === "Bash" && details?.approvalScope === "workflow-shell"
+            && (details.code === "TOOL_DENIED" || details.code === "TOOL_ABORTED");
+        }).map((message) => message.toolCallId ?? message.id) };
     }
     // A model's fenced string is not a terminal receipt. Recovery needs the
     // host-owned run observation persisted while the actual turn was terminal.
@@ -106,7 +111,7 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
       if (observeOutcome) readTurns.set(sessionId, { turnId: result.turn.id, messageId: userMessageId });
     },
     observe,
-    stop: async (run, cancel) => {
+    stop: async (run, cancel, pausePendingShell) => {
       const turn = workflowTurnId(run);
       if (!turn) return { cancelledBeforeStart: false }; // Never cancel by a guessed session identity.
       try {
@@ -117,6 +122,10 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
           } catch (error) {
             if ((error as { code?: string }).code !== "CONFLICT") throw error;
           }
+        }
+        if (pausePendingShell) {
+          await deps.getAgentHost().stopWorkflowTurn(DESKTOP_PRINCIPAL, turn);
+          return { cancelledBeforeStart: false };
         }
         if (cancel) await deps.getAgentHost().interruptTurn(DESKTOP_PRINCIPAL, turn);
         else await deps.getAgentHost().stopTurn(DESKTOP_PRINCIPAL, turn);

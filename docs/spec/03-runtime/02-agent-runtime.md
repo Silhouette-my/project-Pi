@@ -1960,9 +1960,19 @@ checkpoint acknowledging a delivery actually offered to that run marks it consum
 missing acknowledgement stops for review. Old-revision output remains in its source
 run and receives a stale disposition without replacing the current candidate.
 
-Pause stops only the affected workstream's turns. An exactly cancelled, unexecuted
-queue entry records its original assignment and can resume safely; an execution
-with unknown effects cannot. Restart reconciliation uses the actual AgentHost
+Pause stops only the affected workstream's turns. While its Shell approval is
+pending, it denies that exact Host request rather than waiting indefinitely for
+a tool boundary or aborting a started process. Only the actual terminal receipt
+with a known no-effect Shell refusal and no unknown effects makes this pause
+resumable. Resume preserves the original assignment/action/resource subset and
+current authorization limits, carries earlier confirmed effects forward without
+replaying them, and requires a fresh approval for a new Shell call. Cancel does
+not schedule a successor. A raced approval or an already-started command retains
+the normal safe-boundary/unknown-effect rules.
+
+An exactly cancelled, unexecuted queue entry also records its original assignment
+and can resume safely; an execution with unknown effects cannot. Restart
+reconciliation uses the actual AgentHost
 terminal state or an already persisted terminal run receipt. A model checkpoint
 string alone is never completion proof. Interrupted/unknown external actions are
 not replayed. Stable run/result/stage identities make torn settlement recovery

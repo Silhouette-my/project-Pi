@@ -189,4 +189,20 @@ describe("ApprovalBroker", () => {
     expect(synced?.summary).toContain(command);
     expect(synced?.summary).toContain("Shell access is outside the current permission mode.");
   });
+
+  it("lets authoritative Host-pending Shell state override an expired local broker entry", async () => {
+    const port = new FakeApprovalPort();
+    const request = { ...toolRequest, approvalScope: "workflow-shell" as const };
+    const expiresAt = new Date(999_000).toISOString();
+    port.pending = [{ ...request, createdAt: new Date(998_000).toISOString(), expiresAt }];
+    const broker = new ApprovalBroker(port, new FixedClock());
+    broker.fromToolPermission(request, { turnId: "t1", revision: 1, lifetimeMs: 1, allowSession: false, expiresAt });
+    expect(broker.list("s1")).toEqual([]);
+
+    const results = await broker.denyWorkflowShellForTurn({ sessionId: "s1", turnId: "t1", revision: () => 2,
+      lifetimeMs: 1, isCurrentTurn: () => true, onResolved: () => {} });
+
+    expect(port.tool).toEqual([{ requestId: "req_1", decision: "deny" }]);
+    expect(results).toMatchObject([{ result: { status: "resolved", decision: "deny" }, deniedToolCallId: "call_1" }]);
+  });
 });

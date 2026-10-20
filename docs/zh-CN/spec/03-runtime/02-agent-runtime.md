@@ -1322,8 +1322,14 @@ token，Host 在实际启动前复核 turn 和作用域。等待审批保持实�
 owner run 的终态 checkpoint 明确确认所提供的 delivery ID，才标记 consumed；未确认
 则停下评审。旧决策成果保留在来源 run 中并标为 stale，不替换当前候选。
 
-Pause 只停止受影响 workstream。队列项确认在执行前取消时持久化原任务，Resume 可重新
-排队；未知副作用不可重放。恢复依赖实际 AgentHost 终态或已持久化的可信 run 终态回执，
+Pause 只停止受影响 workstream。Shell 等待审批时，按精确 Host request ID 拒绝该调用，
+不再无限等待工具边界，也不借此中止已启动的进程。只有实际终态回执确认该 Shell 未执行、
+且没有未知副作用，才允许 Resume 在原有效授权限制内重新安排相同任务、action 和资源子集。
+先前已确认的效果保留且不重放，新 Shell 调用必须重新审批。Cancel 不安排后续运行；审批
+竞态或已启动命令仍遵守原安全边界与未知副作用规则。
+
+队列项确认在执行前取消时同样持久化原任务，Resume 可重新排队；未知副作用不可重放。
+恢复依赖实际 AgentHost 终态或已持久化的可信 run 终态回执，
 模型输出的 checkpoint 字符串本身不是完成凭证。稳定的 run/result/stage 标识保证
 中断结算幂等。Host 事件和持久 turn 结算驱动后续任务，不进行定时模型轮询或原样失败重试。
 

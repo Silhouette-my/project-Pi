@@ -37,6 +37,13 @@ const timestamp = "2026-10-20T00:00:00Z";
 const checkpoint = (summary, next, overrides = {}) => "Done\n```project-workflow-checkpoint\n" + JSON.stringify({ summary, next, stop: false, artifacts: [], evidence: [], ...overrides }) + "\n```";
 const next = (prompt, action = "check", resources = ["/synthetic/project"]) => ({ prompt, action, resources });
 
+function requestShellApproval(f, sessionId, turnId, requestId, toolCallId, approvalScope = "workflow-shell") {
+  const request = { requestId, sessionId, toolCallId, toolName: "Bash", argsPreview: { command: "npm test" }, risk: "high",
+    reason: "Workflow Shell call needs one-time approval", ...(approvalScope ? { approvalScope } : {}) };
+  f.pendingTools.push(request);
+  f.agentHost.ingest({ sessionId, turnId, ts: Date.parse(timestamp), event: { type: "tool_permission_request", request } });
+}
+
 /** The only mocked internal-process boundary is Rust persistence; commands validate against C0. */
 function durableHost(initial) {
   let state = structuredClone(initial);
@@ -106,10 +113,11 @@ async function setup(modify = () => {}) {
   initial.authorizations.push({ ...structuredClone(initial.authorizations[0]), id: "auth-side", resources: ["/synthetic/side-output"], source: { kind: "user", ref: "explicit-disjoint-side-scope" } });
   modify(initial);
   const host = durableHost(initial);
-  const transcripts = new Map([["session-1", []]]);
+  const sessionIds = [...new Set(initial.conversations.map((conversation) => conversation.sessionId))];
+  const transcripts = new Map(sessionIds.map((sessionId) => [sessionId, []]));
   const prompts = [], stops = [], aborts = [];
-  let count = 0, ids = 0, sessions = 1;
-  const summaries = new Map([["session-1", { id: "session-1", title: "Main", mode: "agent", permissionMode: "auto", createdAt: timestamp, updatedAt: timestamp }]]);
+  let count = 0, ids = 0, sessions = sessionIds.length;
+  const summaries = new Map(sessionIds.map((sessionId, index) => [sessionId, { id: sessionId, title: index === 0 ? "Main" : `Session ${index + 1}`, mode: "agent", permissionMode: "auto", createdAt: timestamp, updatedAt: timestamp }]));
   const modelEdge = {
     async prompt(request) {
       prompts.push(request);
@@ -120,9 +128,34 @@ async function setup(modify = () => {}) {
     async abort(sessionId) { aborts.push(sessionId); },
     async respondInput() {},
   };
+  const pendingTools = [];
+  const resolvedTools = [];
+  const syntheticShellEffects = [];
+  let approvalFailure;
   const agentOptions = { runtime: modelEdge,
     sessions: { get: async (id) => summaries.get(id) ?? null, history: async () => ({ items: [], hasMore: false }) },
-    approvals: { listPending: async () => [], resolveTool: async () => {}, resolveContract: async () => {} },
+    approvals: {
+      listPendingTools: async (sessionId) => pendingTools.filter((request) => !sessionId || request.sessionId === sessionId),
+      resolveTool: async (requestId, decision) => {
+        if (approvalFailure?.requestId === requestId) {
+          const failure = approvalFailure.error;
+          approvalFailure = undefined;
+          const index = pendingTools.findIndex((request) => request.requestId === requestId);
+          if (index >= 0) pendingTools.splice(index, 1);
+          throw failure;
+        }
+        resolvedTools.push({ requestId, decision });
+        const index = pendingTools.findIndex((request) => request.requestId === requestId);
+        if (index >= 0) {
+          const request = pendingTools[index];
+          if (decision === "allow-once" && request.approvalScope === "workflow-shell" && request.toolName === "Bash") {
+            syntheticShellEffects.push({ requestId, toolCallId: request.toolCallId });
+          }
+          pendingTools.splice(index, 1);
+        }
+      },
+      resolveContract: async () => {},
+    },
   };
   let agentHost = new AgentHost(agentOptions);
   const rpc = { async call(method, params) {
@@ -146,7 +179,8 @@ async function setup(modify = () => {}) {
     agentHost.endTurn(sessionId, active, status);
     await runtime.onTurnSettled(sessionId);
   }
-  return { host, runtime, execution, agentHost, modelEdge, prompts, stops, aborts, transcripts, action, finish,
+  return { host, runtime, execution, agentHost, modelEdge, prompts, stops, aborts, transcripts, summaries, pendingTools, resolvedTools, syntheticShellEffects, action, finish,
+    failApprovalResolveOnce(requestId, error) { approvalFailure = { requestId, error }; },
     restart(dropAgentHistory = false) {
       if (dropAgentHistory) agentHost = new AgentHost(agentOptions);
       return createProjectWorkflowRuntime({ host, execution, now: () => timestamp, id: () => `restart-${++ids}` });
@@ -236,6 +270,209 @@ test("Pause is scoped, safe checkpoint resumes, and unknown effects never replay
   f.host.edit((s) => { const r = s.runs.find((r) => r.id === uncertain.id); r.effects[0].state = "unknown"; r.state = "unknown"; });
   await assert.rejects(() => f.action("resume"), { code: "WORKFLOW_EFFECT_UNKNOWN" });
   assert.equal(f.prompts.length, 2);
+});
+
+test("Pause denies only its pending workflow Shell approval, then resumes that exact assignment with fresh approval", async () => {
+  const f = await setup((state) => {
+    const main = state.workstreams[0];
+    state.workstreams.push({ ...structuredClone(main), id: "work-2", title: "Independent workstream", owner: { kind: "session", ref: "session-2" }, mainSessionId: "session-2", order: 1 });
+    state.conversations.push({ ...structuredClone(state.conversations.find((conversation) => conversation.sessionId === "session-1")),
+      sessionId: "session-2", workstreamId: "work-2", order: 1 });
+    state.authorizations.push({ ...structuredClone(state.authorizations[0]), id: "auth-2", workstreamId: "work-2", resources: ["/synthetic/other-workstream"] });
+  });
+  await f.action("start", { workstreamId: "work-2", authorizationId: "auth-2", sessionId: "session-2" });
+  const otherTurn = (await f.agentHost.workSnapshot("session-2")).activeTurnId;
+  requestShellApproval(f, "session-2", otherTurn, "other-shell-approval", "other-shell-call");
+
+  const offer = await f.action("side.create", { purpose: "work", visibility: "project", authorizationId: "auth-side",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Prepare an independent check result" });
+  await f.finish(offer.sessionId, checkpoint("Reusable side check result"));
+  const deliveryId = (await f.host.snapshot()).deliveries[0].id;
+  const side = await f.action("side.create", { purpose: "work", visibility: "project", authorizationId: "auth-side",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Run the authorized side check" });
+  const sideTurn = (await f.agentHost.workSnapshot(side.sessionId)).activeTurnId;
+  requestShellApproval(f, side.sessionId, sideTurn, "side-shell-approval", "side-shell-call");
+  await f.action("start", { workstreamId: "work-1", authorizationId: "auth-1", sessionId: "session-1" });
+  const firstTurn = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
+  requestShellApproval(f, "session-1", firstTurn, "first-shell-approval", "first-shell-call");
+  requestShellApproval(f, "session-1", firstTurn, "ordinary-shell-approval", "ordinary-shell-call", null);
+  assert.deepEqual(f.agentHost.pendingApprovals("session-1").map((approval) => approval.id), ["first-shell-approval", "ordinary-shell-approval"]);
+  assert.deepEqual(f.agentHost.pendingApprovals(side.sessionId).map((approval) => approval.id), ["side-shell-approval"]);
+  assert.deepEqual(f.agentHost.pendingApprovals("session-2").map((approval) => approval.id), ["other-shell-approval"]);
+  assert.deepEqual(f.syntheticShellEffects, [], "pending approvals have not started any Shell effect");
+
+  f.host.failOnce("run.observe");
+  await assert.rejects(() => f.action("pause", { workstreamId: "work-1" }), /Synthetic Host interruption/);
+  assert.deepEqual(f.resolvedTools, [], "the Shell approval must not be touched before durable pause intent commits");
+  assert.equal(f.agentHost.pendingApprovals("session-1").length, 2);
+  assert.equal(f.agentHost.pendingApprovals(side.sessionId).length, 1);
+
+  await f.action("pause", { workstreamId: "work-1" });
+  assert.deepEqual(f.resolvedTools, [
+    { requestId: "side-shell-approval", decision: "deny" },
+    { requestId: "first-shell-approval", decision: "deny" },
+  ]);
+  assert.deepEqual(f.syntheticShellEffects, [], "denying pending approval has no external effect");
+  assert.deepEqual(f.agentHost.pendingApprovals("session-1").map((approval) => approval.id), ["ordinary-shell-approval"]);
+  assert.deepEqual(f.agentHost.pendingApprovals(side.sessionId), []);
+  assert.deepEqual(f.agentHost.pendingApprovals("session-2").map((approval) => approval.id), ["other-shell-approval"]);
+  assert.equal(f.agentHost.getTurn(otherTurn).status, "waiting_approval");
+  assert.equal(f.aborts.length, 0, "pausing a pending approval never aborts a started command");
+  const promptsWhilePaused = f.prompts.length;
+  await assert.rejects(() => f.action("resume", { workstreamId: "work-1" }), { code: "CONFLICT" });
+  assert.equal(f.prompts.length, promptsWhilePaused, "Resume waits for the actual terminal receipt");
+  let state = await f.host.snapshot();
+  for (const run of state.runs.filter((run) => run.workstreamId === "work-1" && ["session-1", side.sessionId].includes(run.sessionId))) {
+    assert.equal(JSON.parse(run.effects.find((effect) => effect.id === "dispatch").detail).pausePendingShell, true);
+  }
+
+  await f.finish("session-1", checkpoint("Pending Shell was denied before execution", next("Run the assigned check again")), "failed", [
+    { id: "first-shell-call", role: "tool", content: "Shell approval denied before execution", status: "complete", createdAt: timestamp,
+      toolName: "Bash", toolCallId: "first-shell-call", toolStatus: "error",
+      toolResult: { isError: true, terminate: true, details: { code: "TOOL_DENIED", approvalScope: "workflow-shell" } } },
+  ]);
+  await f.finish(side.sessionId, checkpoint("Side Shell was denied before execution"), "failed", [
+    { id: "side-shell-call", role: "tool", content: "Shell approval denied before execution", status: "complete", createdAt: timestamp,
+      toolName: "Bash", toolCallId: "side-shell-call", toolStatus: "error",
+      toolResult: { isError: true, terminate: true, details: { code: "TOOL_DENIED", approvalScope: "workflow-shell" } } },
+  ]);
+  assert.deepEqual(f.agentHost.pendingApprovals("session-1"), []);
+  state = await f.host.snapshot();
+  const pausedRun = state.runs.find((run) => run.workstreamId === "work-1" && run.sessionId === "session-1");
+  const pausedSideRun = state.runs.find((run) => run.workstreamId === "work-1" && run.sessionId === side.sessionId);
+  assert.equal(pausedRun.state, "failed");
+  assert.match(pausedRun.completionKey, /:paused-before-shell$/);
+  assert.equal(pausedRun.effects.find((effect) => effect.id === "first-shell-call").state, "failed");
+  assert.match(pausedSideRun.completionKey, /:paused-before-shell$/);
+  assert.equal(f.prompts.length, 4, "denied requests do not dispatch successors while paused");
+
+  await f.action("resume", { workstreamId: "work-1" });
+  state = await f.host.snapshot();
+  const resumedRun = state.runs.find((run) => run.sessionId === "session-1"
+    && JSON.parse(run.effects.find((effect) => effect.id === "dispatch").detail).resumedFromRunId === pausedRun.id);
+  const resumedSideRun = state.runs.find((run) => run.sessionId === side.sessionId
+    && JSON.parse(run.effects.find((effect) => effect.id === "dispatch").detail).resumedFromRunId === pausedSideRun.id);
+  assert.notEqual(resumedRun.id, pausedRun.id);
+  assert.equal(resumedRun.workstreamId, pausedRun.workstreamId);
+  assert.equal(resumedRun.sessionId, pausedRun.sessionId);
+  assert.equal(resumedRun.authorizationId, pausedRun.authorizationId);
+  assert.equal(resumedSideRun.authorizationId, pausedSideRun.authorizationId);
+  assert.deepEqual(JSON.parse(resumedRun.effects.find((effect) => effect.id === "dispatch").detail).step,
+    JSON.parse(pausedRun.effects.find((effect) => effect.id === "dispatch").detail).step);
+  assert.deepEqual(JSON.parse(resumedSideRun.effects.find((effect) => effect.id === "dispatch").detail).step,
+    JSON.parse(pausedSideRun.effects.find((effect) => effect.id === "dispatch").detail).step);
+  assert.deepEqual(JSON.parse(resumedRun.effects.find((effect) => effect.id === "dispatch").detail).deliveryIds, [deliveryId]);
+  assert.match(f.prompts.at(-1).content, /first-shell-call|prior.*Shell/i);
+  assert.equal(f.prompts.length, 6);
+  assert.deepEqual(f.syntheticShellEffects, [], "resume alone does not reuse an old approval or execute Shell");
+  const resumedTurn = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
+  requestShellApproval(f, "session-1", resumedTurn, "resumed-shell-approval", "resumed-shell-call");
+  const resumedSideTurn = (await f.agentHost.workSnapshot(side.sessionId)).activeTurnId;
+  requestShellApproval(f, side.sessionId, resumedSideTurn, "resumed-side-shell-approval", "resumed-side-shell-call");
+  assert.deepEqual(f.syntheticShellEffects, [], "new pending approvals still have no effect before allow-once");
+  await f.agentHost.respondApproval(principal, { approvalId: "resumed-shell-approval", decision: "allow-once", context: { requestId: "user-allowed-resume" } });
+  await f.agentHost.respondApproval(principal, { approvalId: "resumed-side-shell-approval", decision: "allow-once", context: { requestId: "user-allowed-side-resume" } });
+  assert.deepEqual(f.syntheticShellEffects, [
+    { requestId: "resumed-shell-approval", toolCallId: "resumed-shell-call" },
+    { requestId: "resumed-side-shell-approval", toolCallId: "resumed-side-shell-call" },
+  ], "each freshly approved resumed toolCallId causes exactly one synthetic external effect");
+  assert.deepEqual(f.resolvedTools, [
+    { requestId: "side-shell-approval", decision: "deny" },
+    { requestId: "first-shell-approval", decision: "deny" },
+    { requestId: "resumed-shell-approval", decision: "allow-once" },
+    { requestId: "resumed-side-shell-approval", decision: "allow-once" },
+  ]);
+
+  await f.finish(side.sessionId, checkpoint("Resumed side Shell effect completed"), "completed", [
+    { id: "resumed-side-shell-call", role: "tool", content: "side check passed", status: "complete", createdAt: timestamp,
+      toolName: "Bash", toolCallId: "resumed-side-shell-call", toolStatus: "success", toolResult: { details: { exitCode: 0, stdout: "side check passed" } } },
+  ]);
+  await f.finish("session-1", checkpoint("Resumed Shell effect completed", undefined, { consumedDeliveryIds: [deliveryId] }), "completed", [
+    { id: "resumed-shell-call", role: "tool", content: "tests passed", status: "complete", createdAt: timestamp,
+      toolName: "Bash", toolCallId: "resumed-shell-call", toolStatus: "success", toolResult: { details: { exitCode: 0, stdout: "tests passed" } } },
+  ]);
+  state = await f.host.snapshot();
+  assert.equal(state.runs.filter((run) => run.workstreamId === "work-1").length, 5);
+  assert.equal(state.runs.find((run) => run.id === resumedRun.id).effects.filter((effect) => effect.id === "resumed-shell-call" && effect.state === "confirmed").length, 1);
+  assert.equal(state.runs.find((run) => run.id === resumedSideRun.id).effects.filter((effect) => effect.id === "resumed-side-shell-call" && effect.state === "confirmed").length, 1);
+  assert.equal(state.deliveries.find((delivery) => delivery.id === deliveryId).state, "consumed");
+  assert.equal(state.deliveries.filter((delivery) => delivery.id === deliveryId).length, 1);
+  const resumedMappings = state.runs.filter((run) => run.workstreamId === "work-1")
+    .map((run) => JSON.parse(run.effects.find((effect) => effect.id === "dispatch").detail).resumedFromRunId)
+    .filter(Boolean);
+  assert.deepEqual(resumedMappings.sort(), [pausedRun.id, pausedSideRun.id].sort());
+  assert.equal(new Set(resumedMappings).size, resumedMappings.length, "each paused run is restored at most once");
+  const promptsBeforeSecondResume = f.prompts.length;
+  const runIdsBeforeSecondResume = state.runs.map((run) => run.id);
+  await f.action("resume", { workstreamId: "work-1" });
+  state = await f.host.snapshot();
+  assert.equal(f.prompts.length, promptsBeforeSecondResume, "a second Resume does not replay an already restored assignment");
+  assert.deepEqual(state.runs.map((run) => run.id), runIdsBeforeSecondResume);
+  assert.equal(f.agentHost.getTurn((await f.agentHost.workSnapshot("session-2")).activeTurnId).status, "waiting_approval", "the other workstream's pending approval survives");
+});
+
+test("A lost approval resolve race is not mistaken for a resumable pre-execution denial", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  const turnId = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
+  requestShellApproval(f, "session-1", turnId, "raced-shell-approval", "raced-shell-call");
+  f.failApprovalResolveOnce("raced-shell-approval", Object.assign(new Error("permission request already settled"), { code: "NOT_FOUND" }));
+
+  await f.action("pause");
+  assert.deepEqual(f.resolvedTools, []);
+  await f.finish("session-1", checkpoint("Approval raced with execution", next("Do not retry without a receipt")), "failed", [
+    { id: "raced-shell-call", role: "tool", content: "execution outcome unavailable", status: "complete", createdAt: timestamp,
+      toolName: "Bash", toolCallId: "raced-shell-call", toolStatus: "error",
+      toolResult: { isError: true, terminate: true, details: { code: "TOOL_ABORTED" } } },
+  ]);
+  const state = await f.host.snapshot();
+  const run = state.runs[0];
+  assert.equal(run.state, "failed");
+  assert.ok(!run.completionKey?.endsWith(":paused-before-shell"));
+  assert.equal(run.effects.find((effect) => effect.id === "raced-shell-call")?.state, "unknown");
+  assert.equal(f.prompts.length, 1);
+  await assert.rejects(() => f.action("resume"), { code: "WORKFLOW_EFFECT_UNKNOWN" });
+  assert.equal(f.prompts.length, 1);
+});
+
+test("Cancel does not turn a pending Shell approval into a resumable denial or successor", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  const turnId = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
+  requestShellApproval(f, "session-1", turnId, "cancelled-shell-approval", "cancelled-shell-call");
+  await f.action("cancel");
+
+  assert.deepEqual(f.resolvedTools, []);
+  assert.equal(f.aborts.length, 1, "Cancel uses the existing interrupt path");
+  assert.equal(f.prompts.length, 1);
+  assert.deepEqual(f.agentHost.pendingApprovals("session-1").map((approval) => approval.id), ["cancelled-shell-approval"]);
+  await f.finish("session-1", checkpoint("Cancelled pending approval", next("Must not continue")), "interrupted", []);
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].completionKey, state.runs[0].id + ":terminal");
+  assert.equal(state.workstreams[0].status, "cancelled");
+  assert.equal(f.prompts.length, 1);
+});
+
+test("Pausing an already-started Shell asks it to stop gracefully without resolving approval or aborting", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  const turnId = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
+  f.agentHost.ingest({ sessionId: "session-1", turnId, ts: Date.parse(timestamp),
+    event: { type: "tool_start", toolCallId: "started-shell-call", toolName: "Bash", args: { command: "npm test" } } });
+  await f.action("pause");
+  assert.deepEqual(f.resolvedTools, []);
+  assert.deepEqual(f.aborts, []);
+  assert.ok(f.stops.includes("session-1"), "the active runner receives a graceful stop request");
+  await f.finish("session-1", checkpoint("Started Shell did not report a final exit code", next("Reconcile before retry")), "interrupted", [
+    { id: "started-shell-call", role: "tool", content: "command interrupted", status: "complete", createdAt: timestamp,
+      toolName: "Bash", toolCallId: "started-shell-call", toolStatus: "error",
+      toolResult: { isError: true, terminate: true, details: { code: "TOOL_ABORTED" } } },
+  ]);
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].effects.find((effect) => effect.id === "started-shell-call")?.state, "unknown");
+  assert.equal(state.runs[0].completionKey, state.runs[0].id + ":terminal");
+  assert.equal(f.prompts.length, 1);
+  assert.equal(f.agentHost.getTurn(turnId).status, "interrupted");
 });
 
 test("Old decision result cannot replace a current candidate", async () => {

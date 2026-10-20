@@ -94,14 +94,19 @@ class FakeApprovals implements ApprovalPort {
   tool: Array<{ requestId: string; decision: string }> = [];
   contract: Array<Record<string, unknown>> = [];
   pending: PendingToolRequest[] = [];
+  pendingList?: (sessionId?: string) => Promise<PendingToolRequest[]>;
+  failToolRequestId?: string;
+  toolError?: Error;
   async resolveTool(requestId: string, decision: "allow-once" | "allow-session" | "deny"): Promise<void> {
+    if (requestId === this.failToolRequestId && this.toolError) throw this.toolError;
     this.tool.push({ requestId, decision });
   }
   async resolveContract(input: Record<string, unknown>): Promise<void> {
     this.contract.push(input);
   }
   async listPendingTools(sessionId?: string): Promise<PendingToolRequest[]> {
-    return this.pending.filter((request) => !sessionId || request.sessionId === sessionId);
+    const pending = this.pendingList ? await this.pendingList(sessionId) : this.pending;
+    return pending.filter((request) => !sessionId || request.sessionId === sessionId);
   }
 }
 
@@ -873,6 +878,85 @@ describe("AgentHost approvals and inputs", () => {
     const later = await host.respondApproval(approver, { approvalId: "req_1", decision: "allow-once", context: { requestId: "r" } });
     expect(later.alreadyResolved).toBe(true);
     expect(approvals.tool).toEqual([]);
+  });
+
+  it("stops one active workflow turn and denies only its pending workflow Bash approvals", async () => {
+    const { host, runtime, approvals, sessions, received } = build();
+    sessions.summaries.set("s2", summary("s2"));
+    const workflowRequest = { ...permission("req-workflow").request, approvalScope: "workflow-shell" as const,
+      toolCallId: "call-workflow-shell" };
+    const ordinaryRequest = { ...permission("req-ordinary").request, toolCallId: "call-ordinary-bash" };
+    const otherSessionRequest = { ...workflowRequest, requestId: "req-other-session", sessionId: "s2", toolCallId: "call-other-session" };
+    approvals.pending = [
+      { ...workflowRequest, createdAt: "2026-09-10T00:00:00.000Z" },
+      { ...ordinaryRequest, createdAt: "2026-09-10T00:00:00.000Z" },
+      { ...otherSessionRequest, createdAt: "2026-09-10T00:00:00.000Z" },
+    ];
+    host.ingest(envelope("s1", "rt_1", { type: "agent_start" }));
+    host.ingest(envelope("s1", "rt_1", { type: "tool_start", toolCallId: "call-started", toolName: "Bash", args: { command: "already running" } }));
+    host.ingest(envelope("s1", "rt_1", { type: "tool_permission_request", request: workflowRequest }));
+    host.ingest(envelope("s1", "rt_1", { type: "tool_permission_request", request: ordinaryRequest }));
+
+    await expect(host.stopWorkflowTurn(viewer, "rt_1")).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(runtime.stops).toEqual([]);
+    const result = await host.stopWorkflowTurn(controller, "rt_1");
+
+    expect(runtime.stops).toEqual(["s1"]);
+    expect(runtime.aborts).toEqual([]);
+    expect(approvals.tool).toEqual([{ requestId: "req-workflow", decision: "deny" }]);
+    expect(result.deniedToolCallIds).toEqual(["call-workflow-shell"]);
+    expect(host.approvals.result("req-workflow")).toMatchObject({ status: "resolved", decision: "deny" });
+    expect(host.pendingApprovals("s1").map((request) => request.id)).toEqual(["req-ordinary"]);
+    expect(received.filter((event) => event.kind === "approval.resolved").at(-1)?.payload)
+      .toMatchObject({ approvalId: "req-workflow", status: "resolved", decision: "deny" });
+  });
+
+  it("syncs a late workflow Shell approval only for the still-active turn and tolerates a resolution race", async () => {
+    const { host, runtime, approvals, received } = build();
+    const lateRequest = { ...permission("req-late-workflow").request, approvalScope: "workflow-shell" as const,
+      toolCallId: "call-late-workflow" };
+    approvals.pending = [{ ...lateRequest, createdAt: "2026-09-10T00:00:00.000Z" }];
+    approvals.failToolRequestId = "req-late-workflow";
+    approvals.toolError = Object.assign(new Error("approval is no longer pending"), { code: "NOT_FOUND" });
+    host.ingest(envelope("s1", "rt_1", { type: "agent_start" }));
+
+    const result = await host.stopWorkflowTurn(controller, "rt_1");
+
+    expect(runtime.stops).toEqual(["s1"]);
+    expect(runtime.aborts).toEqual([]);
+    expect(approvals.tool).toEqual([]);
+    expect(result.deniedToolCallIds).toEqual([]);
+    expect(host.approvals.result("req-late-workflow")).toMatchObject({ status: "canceled" });
+    expect(received.filter((event) => event.kind === "approval.resolved").at(-1)?.payload)
+      .toMatchObject({ approvalId: "req-late-workflow", status: "canceled" });
+  });
+
+  it("does not bind a late Host approval to a replacement turn after pending-list I/O", async () => {
+    const { host, runtime, approvals } = build();
+    let listStarted!: () => void;
+    let resolveList!: (requests: PendingToolRequest[]) => void;
+    const pendingListStarted = new Promise<void>((resolve) => { listStarted = resolve; });
+    approvals.pendingList = async () => {
+      listStarted();
+      return new Promise((resolve) => { resolveList = resolve; });
+    };
+    host.ingest(envelope("s1", "rt_old", { type: "agent_start" }));
+
+    const stopping = host.stopWorkflowTurn(controller, "rt_old");
+    await pendingListStarted;
+    host.ingest(envelope("s1", "rt_old", { type: "agent_end", messageIds: [] }));
+    host.ingest(envelope("s1", "rt_new", { type: "agent_start" }));
+    const newTurnApproval = { ...permission("req-new-turn").request, approvalScope: "workflow-shell" as const,
+      toolCallId: "call-new-turn" };
+    resolveList([{ ...newTurnApproval, createdAt: "2026-09-10T00:00:00.000Z" }]);
+
+    await expect(host.stopWorkflowTurn(controller, "rt_old")).resolves.toEqual({ deniedToolCallIds: [] });
+    await expect(stopping).resolves.toEqual({ deniedToolCallIds: [] });
+    expect(runtime.stops).toEqual(["s1"]);
+    expect(runtime.aborts).toEqual([]);
+    expect(approvals.tool).toEqual([]);
+    expect(host.approvals.get("req-new-turn")).toBeUndefined();
+    expect(host.getTurn("rt_new").status).toBe("running");
   });
 
   it("shows host-pending approvals to a late attach and uses the remote lifetime", async () => {

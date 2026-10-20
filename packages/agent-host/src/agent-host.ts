@@ -681,6 +681,32 @@ export class AgentHost {
     return this.toRacpTurn(state, turn);
   }
 
+  /** Stop one active workflow turn, then deny only its still-pending workflow Shell calls. */
+  async stopWorkflowTurn(principal: Principal, turnId: string): Promise<{ deniedToolCallIds: string[] }> {
+    this.requireRole(principal, "turn/stop");
+    const state = this.stateForTurn(turnId);
+    const turn = state.turns.get(turnId)!;
+    if (state.activeTurnId !== turnId || !isActive(turn.status)) return { deniedToolCallIds: [] };
+
+    await this.runtime.stop(state.id);
+    const isCurrentTurn = () => state.activeTurnId === turnId && isActive(turn.status);
+    if (!isCurrentTurn()) return { deniedToolCallIds: [] };
+    const resolutions = await this.approvals.denyWorkflowShellForTurn({
+      sessionId: state.id,
+      turnId,
+      revision: () => state.revision + 1,
+      lifetimeMs: this.approvalLifetime(state),
+      isCurrentTurn,
+      onResolved: (result) => {
+        this.afterApproval(state, turnId);
+        this.emit(state, "approval.resolved", result, { turnId });
+      },
+    });
+    return { deniedToolCallIds: resolutions.flatMap((resolution) =>
+      resolution.deniedToolCallId ? [resolution.deniedToolCallId] : []),
+    };
+  }
+
   async interruptTurn(principal: Principal, turnId: string): Promise<RacpTurn> {
     this.requireRole(principal, "turn/interrupt");
     const state = this.stateForTurn(turnId);
