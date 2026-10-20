@@ -1906,6 +1906,22 @@ the current user authorization and respect its expiry and total run budget.
 Existing Host/tool/root permissions still decide tool execution. A per-turn
 permission ceiling only narrows the stored session grant and survives queuing.
 
+Every Work dispatch carries `workflowRunId` through AgentHost admission, durable
+queue records and launch to `session.beginTurn`. Host validates the run and binds
+its scope to the actual durable turn, then checks resolved paths before tool
+effects. Write/Edit use the run's initial dispatch/scope resources; canonical
+context and visible artifact/delivery references are additional read inputs only.
+Ordinary Agent turns without this binding retain their existing contract.
+
+The bounded execution path permits Host-contained `Read`, `Write`, `Edit` and
+`asktool` clarification. It refuses Bash, recursive search, delegation, plugin/MCP,
+image, browser, scheduled and other uncontained effect tools before execution.
+The repository has no process/filesystem sandbox for arbitrary shell effects.
+`WORKFLOW_RESOURCE_DENIED` ends the actual turn with its specific tool/resource
+guidance; it cannot become a retry, successful checkpoint or automatic successor.
+Running builds/tests through Bash remains an unsupported bounded-work capability,
+not evidence of a completed check/fix workflow.
+
 Declared resource scopes are conservatively reserved while a run is queued,
 executing, paused or has unresolved effects. Generic labels such as `check` do
 not imply read-only access. Overlapping side Work fails with a typed conflict
@@ -1941,6 +1957,12 @@ string alone is never completion proof. Interrupted/unknown external actions are
 not replayed. Stable run/result/stage identities make torn settlement recovery
 idempotent. Host changes and durable turn settlement drive continuation; there is
 no timer/model polling or unchanged-failure retry loop.
+
+The durable user row preserves `workflow-run:<run.id>` only paired with the
+validated run identity. Ask/Explore use ordinary UUID messages and transient read
+receipts; these never identify a real Work run even when its session is repurposed.
+Workflow turns cannot absorb promoted or directly steered input from another
+assignment. Pause/discuss and create the next bounded turn to change its input.
 
 Composition supplies Host snapshot/mutation, normal session creation with group and
 provider binding, transcript flush, AgentHost and shutdown ownership. The execution

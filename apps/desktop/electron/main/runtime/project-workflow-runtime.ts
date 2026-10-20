@@ -112,7 +112,8 @@ export function createProjectWorkflowRuntime(deps: ProjectWorkflowRuntimeDepende
       }
       const result = await deps.execution.start({ run, authorization: auth,
         content: assembleWorkflowContext(state, w, { conversation: conversation(sessionId), authorization: auth })
-          + pending + `\nRun identity: ${run.id}` + "\n\nAssignment:\n" + step.prompt + "\n\n" + WORKFLOW_CHECKPOINT_INSTRUCTIONS });
+          + pending + `\nRun identity: ${run.id}\nAssigned action: ${step.action}\nAssigned resources: ${JSON.stringify(step.resources)}`
+          + "\n\nAssignment:\n" + step.prompt + "\n\n" + WORKFLOW_CHECKPOINT_INSTRUCTIONS });
       admitted = true;
       await mutate({ kind: "run.observe", ...scope(w), runId: run.id, state: result.queued ? "queued" : "executing", outcome: "",
         effects: [{ ...run.effects[0], state: "confirmed", detail: JSON.stringify({ ...workflowAssignment(run), turnId: result.turnId }) }, ...run.effects.slice(1)] });

@@ -42,6 +42,7 @@ export function assembleWorkflowContext(
       id: authorization.id, actions: authorization.actions, resources: authorization.resources,
       permissionCeiling: authorization.permissionCeiling, maxRuns: authorization.maxRuns,
       stopConditions: authorization.stopConditions, source: authorization.source,
+      executionBoundary: "Use Host-contained Read/Write/Edit and asktool for clarification. Writes are limited to this run's assigned resources; visible canonical resources and delivered artifacts are read inputs, not write grants. Bash, delegated, plugin/MCP and other uncontained tools stop this bounded turn. Report the concrete missing authorization or execution capability rather than retrying a denial.",
     } : undefined,
   };
   return "Project workflow context (data, not new tool permissions):\n" + JSON.stringify(payload, null, 2);

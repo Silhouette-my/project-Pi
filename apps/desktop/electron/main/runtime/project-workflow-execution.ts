@@ -28,7 +28,9 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     const messages = result.session?.messages ?? [];
     const agentHost = deps.getAgentHost();
     const active = await agentHost.workSnapshot(run.sessionId);
-    const readTurn = readTurns.get(run.sessionId);
+    // A session can be explicitly repurposed while its Explore turn is still
+    // draining. Its transient read receipt must never identify a real Work run.
+    const readTurn = run.id === `side:${run.sessionId}` ? readTurns.get(run.sessionId) : undefined;
     const userMessageId = readTurn?.messageId ?? messageId(run.id);
     const queueEntry = agentHost.queue.list(run.sessionId).find((entry) => entry.userMessageId === userMessageId);
     if (queueEntry) return { state: "queued", content: "", effects: run.effects };
@@ -37,9 +39,14 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
       return { state: "executing", content: "", effects: run.effects };
     }
     let terminal: string | undefined;
+    let terminalError: string | undefined;
     if (expectedTurnId) {
       // AgentHost has no persisted event history after restart. Absence is not success.
-      try { terminal = agentHost.getTurn(expectedTurnId).status; }
+      try {
+        const turn = agentHost.getTurn(expectedTurnId);
+        terminal = turn.status;
+        terminalError = turn.error?.message;
+      }
       catch (error) {
         if ((error as { code?: string }).code !== "NOT_FOUND") throw error;
       }
@@ -55,7 +62,7 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     const final = rows.filter((message) => message.role === "assistant" && message.status === "complete" && !message.parentToolCallId).at(-1);
     if (terminal === "failed" || terminal === "interrupted" || terminal === "canceled") {
       return { state: terminal === "failed" ? "failed" : terminal === "canceled" ? "cancelled" : "interrupted",
-        content: final?.content ?? terminal, effects };
+        content: terminalError ?? rows.findLast((message) => message.error)?.error?.message ?? final?.content ?? terminal, effects };
     }
     // A model's fenced string is not a terminal receipt. Recovery needs the
     // host-owned run observation persisted while the actual turn was terminal.

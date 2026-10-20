@@ -19,6 +19,7 @@ import {
   type RuntimePrompt,
   type RuntimePromptAttachment,
   type RuntimeProviderConfig,
+  workflowSetupDenial,
 } from "./runtime.js";
 import type { PluginSkillDef } from "./plugin-skills-prompt.js";
 import type { SessionMessageOrigin, TrustedExtensionSpec } from "@pi-desktop/shared";
@@ -140,6 +141,8 @@ type RuntimeParams = {
   compactionSettings?: ContextCompactionSettings;
   attachmentsDir?: string;
   userMessageId?: string;
+  /** Trusted binding for one workflow turn; never copied into RuntimeParams state. */
+  workflowRunId?: string;
   sessionMessage?: SessionMessageOrigin;
   attachments?: RuntimePromptAttachment[];
 };
@@ -463,6 +466,18 @@ async function handle(method: string, params: any): Promise<unknown> {
       const attachments = Array.isArray(params.attachments)
         ? (params.attachments as RuntimePromptAttachment[])
         : undefined;
+      const workflowRunId = typeof params.workflowRunId === "string" && params.workflowRunId.trim()
+        ? params.workflowRunId.trim()
+        : undefined;
+      const extensionDenial = workflowSetupDenial(
+        workflowRunId,
+        Array.isArray(params.trustedExtensions) ? params.trustedExtensions : undefined,
+      );
+      if (extensionDenial) {
+        throw Object.assign(new Error(extensionDenial), {
+          errorCode: "WORKFLOW_RESOURCE_DENIED",
+        });
+      }
       const runtime = await runtimeFor(params, content);
       const userMessageId =
         typeof params.userMessageId === "string" && params.userMessageId
@@ -486,7 +501,7 @@ async function handle(method: string, params: any): Promise<unknown> {
         attachments,
         ...(params.sessionMessage ? { sessionMessage: params.sessionMessage as SessionMessageOrigin } : {}),
       };
-      void runtime.prompt(prompt, userMessageId, turnId).catch((err) => {
+      void runtime.prompt(prompt, userMessageId, turnId, workflowRunId).catch((err) => {
         // Rejected-prompt path (pre-flight/transport failures). Streamed
         // provider errors surface via stopReason "error" and are classified
         // and emitted by the runtime itself.

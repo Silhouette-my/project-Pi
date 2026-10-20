@@ -499,3 +499,32 @@ test("Discuss cannot relink the live Work session into a branch", async () => {
   assert.equal((await f.host.snapshot()).conversations.find((c) => c.sessionId === "session-1").relation, "main");
   assert.equal(f.stops.length, 0);
 });
+
+test("Repurposing a running Explore session cannot substitute its old checkpoint for queued Work", async () => {
+  const f = await setup();
+  const explore = await f.action("side.create", { purpose: "explore", visibility: "project",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "Explore a candidate" });
+  await f.action("start", { authorizationId: "auth-1", sessionId: explore.sessionId });
+  await f.finish(explore.sessionId, checkpoint("Old Explore checkpoint must stay discussion", next("Never execute this old suggestion")));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(f.prompts.length, 2);
+  await f.finish(explore.sessionId, checkpoint("Actual Work result", undefined));
+  const state = await f.host.snapshot();
+  assert.deepEqual(state.deliveries.map((delivery) => delivery.summary), ["Actual Work result"]);
+  assert.equal(f.prompts.length, 2);
+});
+
+test("A resource denial keeps its precise authorization guidance and never dispatches a successor", async () => {
+  const f = await setup();
+  await f.action("start", { authorizationId: "auth-1", sessionId: "session-1" });
+  const turnId = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
+  const reason = "WORKFLOW_RESOURCE_DENIED: Write /synthetic/other requires explicit workflow resource authorization";
+  f.agentHost.ingest({ sessionId: "session-1", turnId, ts: Date.parse(timestamp),
+    event: { type: "error", error: { code: "WORKFLOW_RESOURCE_DENIED", message: reason, retriable: false } } });
+  await f.runtime.onTurnSettled("session-1");
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].state, "failed");
+  assert.equal(state.workstreams[0].status, "awaiting_user");
+  assert.match(state.workstreams[0].blocker.reason, /Write \/synthetic\/other requires explicit workflow resource authorization/);
+  assert.equal(f.prompts.length, 1);
+});

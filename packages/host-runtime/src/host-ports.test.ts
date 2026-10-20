@@ -102,4 +102,11 @@ describe("host ports", () => {
     expect(await store.listAll()).toEqual([]);
     await expect(store.remove("q1")).rejects.toMatchObject({ code: "AGENT_UNAVAILABLE" });
   });
+
+  it("restores the exact legacy workflow queue identity without unscoped execution", () => {
+    const entry = { id: "q", sessionId: "s", principal: "desktop", inputHash: "h", content: "c", permissionMode: "ask", position: 1,
+      createdAt: "2026-10-20T00:00:00Z", idempotencyKey: "workflow:legacy", userMessageId: "workflow-run:workflow:legacy" };
+    expect(fromHostQueueEntry(entry).workflowRunId).toBe("workflow:legacy");
+    expect(fromHostQueueEntry({ ...entry, userMessageId: "ordinary-user-id" }).workflowRunId).toBeUndefined();
+  });
 });

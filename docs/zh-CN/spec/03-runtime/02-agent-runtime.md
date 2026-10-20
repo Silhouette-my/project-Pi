@@ -1288,6 +1288,17 @@ Rust 继续独占 workstream、版本、授权、候选和交付回执的持久�
   action 及选定资源；后续任务必须落在同一授权的 action/resource、有效期及总运行预算内。
   Host 工具权限和根目录边界仍生效；每轮权限上限只能收窄，排队后也不扩大。
 
+Work 通过 AgentHost、持久队列与 launch 将 `workflowRunId` 传入 `session.beginTurn`。
+Host 验证 run 后将资源范围绑定到实际持久 turn，并在工具副作用前检查解析后的路径。
+Write/Edit 仅使用初始 dispatch/scope 的资源；规范上下文和可见成果、交付引用只增加读取
+输入，不授予写入范围。未绑定 workflow 的普通 Agent 保持原契约。
+
+有界执行仅允许 Host 限定的 `Read`、`Write`、`Edit` 与 `asktool` 澄清。Bash、递归搜索、
+委派、plugin/MCP、图片、浏览器、定时及其他无法约束副作用的工具会在执行前拒绝。
+仓库尚无隔离任意 shell 副作用的进程/文件系统 sandbox。`WORKFLOW_RESOURCE_DENIED`
+以具体工具、资源和所需授权提示终止实际 turn，不自动重试、伪造成功 checkpoint 或续跑。
+通过 Bash 构建、测试仍是有界 Work 未支持的能力，不能据此宣称完整 check/fix 验收。
+
 资源范围在 run 排队、执行、暂停或存在未知副作用期间保守占用，不能从 `check` 等标签
 推导只读。重叠侧 Work 在创建会话前返回明确冲突；显式不相交的侧授权仍可并行。本地路径
 和 file URI 会解析已存在祖先，识别 symlink 别名和将创建的输出路径；仅大小写不同的路径
@@ -1308,6 +1319,11 @@ Pause 只停止受影响 workstream。队列项确认在执行前取消时持久
 排队；未知副作用不可重放。恢复依赖实际 AgentHost 终态或已持久化的可信 run 终态回执，
 模型输出的 checkpoint 字符串本身不是完成凭证。稳定的 run/result/stage 标识保证
 中断结算幂等。Host 事件和持久 turn 结算驱动后续任务，不进行定时模型轮询或原样失败重试。
+
+持久 user row 仅在对应可信 run 身份时保留 `workflow-run:<run.id>`。Ask/Explore 使用
+普通 UUID 消息和临时 read receipt；即使会话改作 Work，也不能用旧讨论回执识别真实 run。
+Workflow turn 不吸收其他任务的 promoted 或直接 steer 输入；变更输入需先 pause/discuss，
+再进入下一个有界 turn。
 
 组合根提供绑定项目和 provider 的普通会话创建、Host snapshot/mutate、transcript flush
 及 AgentHost。执行适配器要求 `assertExecutableSession`：consumer-only Chat 只作为

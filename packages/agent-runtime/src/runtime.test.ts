@@ -11,6 +11,7 @@ import {
   type AssistantMessage,
 } from "@earendil-works/pi-ai";
 import { formatSessionMessage, type SessionMessageOrigin } from "@pi-desktop/shared";
+import { createChatGptConversationStreams } from "./chatgpt-conversation.js";
 import { estimateContextTokens as estimateTranscriptTokens } from "@earendil-works/pi-ai/utils/estimate";
 import { buildSessionContext } from "./session-context.js";
 import { estimateContextTokens as estimateAgentContextTokens, estimateTokens } from "./pi-runtime-estimates.js";
@@ -22,6 +23,7 @@ import {
   delegateWorktreeNote,
   looksLikePseudoToolCall,
   toolResultFromUi,
+  workflowSetupDenial,
   type CompactionStrategy,
   type PluginToolDef,
   type RuntimeMatchConfig,
@@ -671,6 +673,272 @@ describe("DesktopAgentRuntime configuration matching", () => {
     ).resolves.toEqual({ isError: true });
     expect((runtime as any).failedHostToolCalls.size).toBe(0);
 
+    await runtime.dispose();
+  });
+
+  it("contains workflow tool calls per prompt, aborts denied effects, and leaves ordinary prompts unchanged", async () => {
+    const host = {
+      call: vi.fn().mockResolvedValue({ ok: true, content: "ordinary execution" }),
+    };
+    const onEvent = vi.fn();
+    const runtime = createRuntime({ host, onEvent, projectInstructions: { entries: [] } });
+    const agent = (runtime as any).agent;
+    const bash = runtimeTool(runtime, "Bash");
+    agent.prompt = vi.fn(async () => bash.execute("bash-call", { command: "touch outside-scope" }));
+
+    await expect(runtime.prompt("workflow task", "workflow-user", "workflow-turn", "workflow-run-1"))
+      .rejects.toThrow(/cannot execute Bash/i);
+
+    expect(host.call.mock.calls.filter(([method]) => method === "tools.execute")).toHaveLength(0);
+    expect(onEvent.mock.calls.some(([envelope]) =>
+      (envelope as any).event?.error?.code === "WORKFLOW_RESOURCE_DENIED",
+    )).toBe(true);
+
+    await runtime.prompt("ordinary task", "ordinary-user", "ordinary-turn");
+    const ordinaryCall = host.call.mock.calls.find(([method]) => method === "tools.execute");
+    expect(ordinaryCall?.[1]).toMatchObject({
+      toolName: "Bash",
+      args: { command: "touch outside-scope" },
+    });
+    expect(ordinaryCall?.[1]).not.toHaveProperty("workflowRunId");
+    await runtime.dispose();
+  });
+
+  it.each([
+    {
+      firstTool: "Bash",
+      firstArgs: { command: "touch outside-scope" },
+      expectedHostCalls: 0,
+    },
+    {
+      firstTool: "Edit",
+      firstArgs: { path: "src/target.txt", tag: "ABCD", ops: "PUT 1.=1:\n+changed\n" },
+      expectedHostCalls: 1,
+    },
+  ] as const)("stops the real agent loop after workflow $firstTool denial before a later Write", async ({
+    firstTool,
+    firstArgs,
+    expectedHostCalls,
+  }) => {
+    const host = {
+      call: vi.fn(async (method: string, _params?: unknown) => {
+        if (method === "project.instructions.resolve") return undefined;
+        if (method === "tools.execute") {
+          return {
+            ok: false,
+            isError: true,
+            denied: true,
+            errorCode: "WORKFLOW_RESOURCE_DENIED",
+            content: "Edit target is outside this workflow assignment; request resource authorization for src/target.txt.",
+          };
+        }
+        return undefined;
+      }),
+    };
+    const runtime = createRuntime({ host, projectInstructions: { entries: [] } });
+    const internals = runtime as unknown as {
+      agent: Agent;
+      models: {
+        streamSimple: (
+          model: unknown,
+          context: { messages: AgentMessage[] },
+        ) => ReturnType<typeof createAssistantMessageEventStream>;
+      };
+    };
+    const requests: AgentMessage[][] = [];
+    internals.models = {
+      streamSimple: (_model, context) => {
+        requests.push([...context.messages]);
+        const message = assistantMessage({
+          content: [
+            { type: "toolCall", id: "denied-call", name: firstTool, arguments: firstArgs },
+            { type: "toolCall", id: "later-write", name: "Write", arguments: { path: "src/later.txt", content: "must not be written" } },
+          ],
+          stopReason: "toolUse",
+        }) as unknown as AssistantMessage;
+        const stream = createAssistantMessageEventStream();
+        queueMicrotask(() => {
+          stream.push({ type: "start", partial: message });
+          stream.push({ type: "done", reason: "toolUse", message });
+          stream.end(message);
+        });
+        return stream;
+      },
+    };
+
+    await runtime.prompt("Run the assigned work", "workflow-user", "workflow-turn", `workflow-${firstTool}`);
+
+    expect(requests).toHaveLength(1);
+    const hostExecutions = host.call.mock.calls.filter(([method]) => method === "tools.execute");
+    expect(hostExecutions).toHaveLength(expectedHostCalls);
+    if (expectedHostCalls === 1) expect(hostExecutions[0][1]).toMatchObject({ toolName: "Edit" });
+    expect(hostExecutions.some(([, params]) => (params as any)?.toolName === "Write")).toBe(false);
+    await runtime.dispose();
+  });
+
+  it("ends the real workflow loop after a successful Read and later Bash denial", async () => {
+    const host = {
+      call: vi.fn(async (method: string, params?: unknown) => {
+        if (method === "project.instructions.resolve") return undefined;
+        if (method === "tools.execute" && (params as any)?.toolName === "Read") {
+          return { ok: true, content: "authorized read" };
+        }
+        if (method === "tools.execute") {
+          return { ok: true, content: "unexpected effect" };
+        }
+        return undefined;
+      }),
+    };
+    const runtime = createRuntime({ host, projectInstructions: { entries: [] } });
+    const internals = runtime as unknown as {
+      agent: Agent;
+      models: {
+        streamSimple: (
+          model: unknown,
+          context: { messages: AgentMessage[] },
+        ) => ReturnType<typeof createAssistantMessageEventStream>;
+      };
+    };
+    const requests: AgentMessage[][] = [];
+    internals.models = {
+      streamSimple: (_model, context) => {
+        requests.push([...context.messages]);
+        const message = assistantMessage({
+          content: [
+            { type: "toolCall", id: "allowed-read", name: "Read", arguments: { path: "src/readme.txt" } },
+            { type: "toolCall", id: "denied-bash", name: "Bash", arguments: { command: "touch outside-scope" } },
+            { type: "toolCall", id: "later-write", name: "Write", arguments: { path: "src/later.txt", content: "must not be written" } },
+          ],
+          stopReason: "toolUse",
+        }) as unknown as AssistantMessage;
+        const stream = createAssistantMessageEventStream();
+        queueMicrotask(() => {
+          stream.push({ type: "start", partial: message });
+          stream.push({ type: "done", reason: "toolUse", message });
+          stream.end(message);
+        });
+        return stream;
+      },
+    };
+
+    await runtime.prompt("Read, then complete the assigned work", "workflow-user", "workflow-turn", "workflow-read-bash");
+
+    expect(requests).toHaveLength(1);
+    const executions = host.call.mock.calls.filter(([method]) => method === "tools.execute");
+    expect(executions).toHaveLength(1);
+    expect(executions[0][1]).toMatchObject({ toolName: "Read" });
+    expect(executions.some(([, params]) => ["Bash", "Write"].includes((params as any)?.toolName))).toBe(false);
+    await runtime.dispose();
+  });
+
+  it("terminates a workflow turn when Host denies a typed resource target", async () => {
+    const host = {
+      call: vi.fn(async (method: string) => method === "tools.execute" ? {
+        ok: false,
+        isError: true,
+        denied: true,
+        errorCode: "WORKFLOW_RESOURCE_DENIED",
+        content: "Edit target is outside this workflow assignment; request resource authorization for src/other.ts.",
+      } : undefined),
+    };
+    const onEvent = vi.fn();
+    const runtime = createRuntime({ host, onEvent, projectInstructions: { entries: [] } });
+    (runtime as any).activeWorkflowRunId = "workflow-run-2";
+    const edit = runtimeTool(runtime, "Edit");
+    await edit.execute("edit-outside", {
+      path: "src/other.ts",
+      tag: "ABCD",
+      ops: "PUT 1.=1:\n+changed\n",
+    });
+
+    expect(host.call).toHaveBeenCalledWith("tools.execute", expect.objectContaining({
+      toolName: "Edit",
+    }));
+    expect(onEvent.mock.calls.some(([envelope]) =>
+      (envelope as any).event?.error?.code === "WORKFLOW_RESOURCE_DENIED" &&
+      (envelope as any).event?.error?.message.includes("src/other.ts"),
+    )).toBe(true);
+    await runtime.dispose();
+  });
+
+  it("rejects steering before queuing or persisting into a bounded workflow turn", async () => {
+    const onEvent = vi.fn();
+    const runtime = createRuntime({ onEvent });
+    (runtime as any).activeWorkflowRunId = "workflow-run-steer";
+    const message = {
+      id: "mid-run-user",
+      role: "user" as const,
+      content: "Also edit another file",
+      status: "complete" as const,
+      createdAt: new Date().toISOString(),
+    };
+
+    expect(() => runtime.steeringContext("active-turn")).toThrow(/bounded assignments/i);
+    expect(() => runtime.steer({ text: message.content }, "active-turn", message))
+      .toThrow(/Pause or discuss the change/i);
+    expect((runtime as any).pendingSteering.size).toBe(0);
+    expect(onEvent).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
+  it("keeps Plan-mode Write denial when the workflow resource scope would allow Write", async () => {
+    const onEvent = vi.fn();
+    const runtime = createRuntime({ mode: "plan", onEvent });
+    (runtime as any).activeWorkflowRunId = "workflow-run-plan";
+    const write = runtimeTool(runtime, "Write");
+
+    await expect(write.execute("plan-write", { path: "src/output.txt", content: "no" }))
+      .rejects.toThrow(/not allowed in plan mode/i);
+
+    expect(onEvent.mock.calls.some(([envelope]) =>
+      (envelope as any).event?.error?.code === "WORKFLOW_RESOURCE_DENIED",
+    )).toBe(false);
+    await runtime.dispose();
+  });
+
+  it("rejects workflow use of provider-hosted ChatGPT connectors before the provider runs", async () => {
+    const onEvent = vi.fn();
+    const streams = createChatGptConversationStreams({
+      call: async () => { throw new Error("provider stream should not run"); },
+    } as never);
+    const runtime = createRuntime({
+      provider: { ...provider, apiStyle: "chatgpt_conversation", chatGptStreams: streams },
+      onEvent,
+    });
+    const agent = (runtime as any).agent;
+    agent.prompt = vi.fn();
+
+    await expect(runtime.prompt("workflow task", "workflow-user", "workflow-turn", "workflow-run-chatgpt"))
+      .resolves.toMatchObject({ turnId: "workflow-turn" });
+
+    expect(agent.prompt).not.toHaveBeenCalled();
+    expect(onEvent.mock.calls.some(([envelope]) =>
+      (envelope as any).event?.error?.code === "WORKFLOW_RESOURCE_DENIED" &&
+      (envelope as any).event?.error?.message.includes("ChatGPT-hosted connector tools"),
+    )).toBe(true);
+    await runtime.dispose();
+  });
+
+  it("rejects workflow prompts before trusted extension hooks can execute", async () => {
+    const onEvent = vi.fn();
+    const runtime = createRuntime({ onEvent });
+    (runtime as any).trustedExtensionSpecs = [{ extensionId: "trusted-extension" }];
+    const agent = (runtime as any).agent;
+    agent.prompt = vi.fn();
+    const extensionHook = vi.spyOn(runtime as any, "extensionBeforeAgentStart");
+
+    await expect(runtime.prompt("workflow task", "workflow-user", "workflow-turn", "workflow-run-extension"))
+      .resolves.toMatchObject({ turnId: "workflow-turn" });
+
+    expect(extensionHook).not.toHaveBeenCalled();
+    expect(agent.prompt).not.toHaveBeenCalled();
+    expect(workflowSetupDenial("workflow-run-extension", [{ extensionId: "trusted-extension" }]))
+      .toMatch(/trusted extensions/);
+    expect(workflowSetupDenial(undefined, [{ extensionId: "trusted-extension" }])).toBeUndefined();
+    expect(onEvent.mock.calls.some(([envelope]) =>
+      (envelope as any).event?.error?.code === "WORKFLOW_RESOURCE_DENIED" &&
+      (envelope as any).event?.error?.message.includes("trusted extensions"),
+    )).toBe(true);
     await runtime.dispose();
   });
 

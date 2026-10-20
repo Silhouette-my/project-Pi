@@ -8,7 +8,7 @@ import { TOOL_ACTIVATION_SECTION, toolDeclarationPolicy, toolActivationSection, 
 import { orderSystemRows, SystemTranscriptJournal } from "./system-transcript-journal.js";
 import { planWorkspaceRequiredResult } from "./plan-workspace-error.js";
 import { accountModelStream } from "./request-usage.js";
-import { modeToolDenial, retainModeToolDeclaration, withModeExecutionGuard } from "./mode-tool-access.js";
+import { modeToolDenial, retainModeToolDeclaration, withModeExecutionGuard, workflowToolDenial } from "./mode-tool-access.js";
 import { restoreHostedSearchReplay } from "./hosted-search-replay.js";
 import { requestExtensionUi } from "./extensions/ui-request.js";
 import { readLocalRequestErrorDetails } from "./local-request-errors.js";
@@ -314,6 +314,15 @@ export type RuntimePrompt = {
   sessionMessage?: SessionMessageOrigin;
   attachments?: RuntimePromptAttachment[];
 };
+
+/** Deny uncontained extension initialization before the sidecar loads its code. */
+export function workflowSetupDenial(
+  workflowRunId: string | undefined,
+  trustedExtensions: readonly unknown[] | undefined,
+): string | undefined {
+  if (!workflowRunId?.trim() || !trustedExtensions?.length) return undefined;
+  return "Workflow runs cannot invoke enabled trusted extensions because their hooks and provider tools are not confined to the assigned resources. Disable the extension for this execution session, or request a contained workflow capability.";
+}
 
 /**
  * The user's own words plus one quoted block per referenced conversation. The
@@ -1839,6 +1848,10 @@ export class DesktopAgentRuntime {
   private resumablePromptStale = false;
   /** Set by `abort` / `dispose` so a finishing delegate cannot restart the parent. */
   private runCancelled = false;
+  /** Trusted, turn-scoped workflow binding; never retained as session config. */
+  private activeWorkflowRunId?: string;
+  /** First fatal workflow-boundary denial; retained to block the rest of a tool batch. */
+  private workflowFailureMessage?: string;
   /**
    * Permission scope of the delegate currently executing one tool call,
    * keyed by tool call id (ADR 0089). The host reads it on `tools.execute` and
@@ -2292,6 +2305,9 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
       // queued renderer prompt ends a completed turn at the next boundary,
       // without treating an error or abort as a graceful stop.
       finishTurn: async ({ message }) => {
+        if (this.activeWorkflowRunId && this.workflowFailureMessage) {
+          return { action: "end" };
+        }
         if (!this.gracefulStopRequested) return;
         if (message.stopReason === "error" || message.stopReason === "aborted") return;
         this.gracefulStopRequested = false;
@@ -2611,6 +2627,21 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
   private async beforeToolCall(
     context: BeforeToolCallContext,
   ): Promise<BeforeToolCallResult | undefined> {
+    if (this.activeWorkflowRunId) {
+      const stoppedMessage = this.workflowFailureMessage;
+      if (stoppedMessage || this.turnHadError) {
+        return {
+          block: true,
+          terminate: true,
+          reason: stoppedMessage ?? "Workflow execution stopped after an earlier fatal turn error.",
+        };
+      }
+      const denial = workflowToolDenial(context.toolCall.name);
+      if (denial) {
+        this.failWorkflowResource(denial);
+        return { block: true, terminate: true, reason: denial };
+      }
+    }
     if (this.deferredToolNames.has(context.toolCall.name) && !this.activeDeferredToolNames.has(context.toolCall.name)) {
       return { block: true, reason: `Call ${TOOL_SEARCH_NAME} to activate ${context.toolCall.name} before using it. A tool declaration does not grant execution permission.` };
     }
@@ -3579,6 +3610,17 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
         if (abortError) throw abortError;
         if (executionFailed) throw executionError;
         if (!result) throw new Error("tool execution returned no result");
+        if (this.activeWorkflowRunId && result.errorCode === "WORKFLOW_RESOURCE_DENIED") {
+          const hostMessage = typeof result.content === "string"
+            ? result.content
+            : JSON.stringify(result.content);
+          this.failWorkflowResource(
+            hostMessage && hostMessage !== "null"
+              ? hostMessage
+              : `The Host denied ${toolName} because its target is outside the active workflow assignment. Request the specific additional resource authorization before continuing.`,
+            toolCallId,
+          );
+        }
         const recordParams = isRecord(params) ? params : undefined;
         const failedToolExecution = !result.ok && result.denied !== true;
         const failedEditPath =
@@ -3984,7 +4026,23 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
             executionMode:
               tool.name === SUBAGENT_TOOL_NAME ? "parallel" : "sequential",
           }),
-          () => this.isToolAllowedInMode(tool.name) ? undefined : modeToolDenial(tool.name, this.mode),
+          () => {
+            const workflowDenial = this.activeWorkflowRunId
+              ? workflowToolDenial(tool.name)
+              : undefined;
+            if (workflowDenial) return workflowDenial;
+            return this.isToolAllowedInMode(tool.name)
+              ? undefined
+              : modeToolDenial(tool.name, this.mode);
+          },
+          (reason, toolCallId) => {
+            if (
+              this.activeWorkflowRunId &&
+              workflowToolDenial(tool.name) === reason
+            ) {
+              this.failWorkflowResource(reason, toolCallId);
+            }
+          },
         ),
       );
     }
@@ -5217,6 +5275,21 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     this.clearAgentActivity();
   }
 
+  private failWorkflowResource(message: string, toolCallId?: string): void {
+    if (!this.workflowFailureMessage) {
+      this.workflowFailureMessage = message;
+      this.terminateParentTurn();
+      this.emit({
+        type: "error",
+        error: { code: "WORKFLOW_RESOURCE_DENIED", message, retriable: false },
+      });
+    }
+    if (toolCallId) {
+      this.failedHostToolCalls.add(toolCallId);
+      this.terminatingToolCalls.add(toolCallId);
+    }
+  }
+
   /** D328 keeps the turn open on parent idle, not on a fatal parent error. */
   private keepTurnOpenForDelegates(): boolean {
     return (
@@ -6411,6 +6484,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     this.clearMutationRecovery("parent");
     this.pendingMutationTermination = undefined;
     this.turnHadError = false;
+    this.workflowFailureMessage = undefined;
   }
 
   private async retryPendingProviderFailure(): Promise<void> {
@@ -8818,13 +8892,20 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     input: string | RuntimePrompt,
     userMessageId?: string,
     durableTurnId?: string,
+    workflowRunId?: string,
   ): Promise<{ turnId: string }> {
     if (this.disposed) throw new Error("runtime disposed");
     this.assertNotRunning();
     const turnId = durableTurnId?.trim() || randomUUID();
-    return this.trackTurnOperation(turnId, () =>
-      this.promptTurn(input, userMessageId, turnId),
-    );
+    const trustedWorkflowRunId = workflowRunId?.trim();
+    this.activeWorkflowRunId = trustedWorkflowRunId || undefined;
+    try {
+      return await this.trackTurnOperation(turnId, () =>
+        this.promptTurn(input, userMessageId, turnId),
+      );
+    } finally {
+      this.activeWorkflowRunId = undefined;
+    }
   }
 
   private async promptTurn(
@@ -8872,6 +8953,29 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
         content,
         timestamp: Date.now(),
       };
+      if (
+        this.activeWorkflowRunId &&
+        (this.provider.chatGptStreams || this.provider.apiStyle === "chatgpt_conversation")
+      ) {
+        this.failBeforeProviderRequest(incomingUserMessage, {
+          code: "WORKFLOW_RESOURCE_DENIED",
+          message: "This provider can execute ChatGPT-hosted connector tools outside the assigned resource boundary. Choose a provider whose tool effects are mediated by the scoped Host Read/Write/Edit tools, or request a different workflow execution route.",
+          retriable: false,
+        });
+        return { turnId: this.turnId };
+      }
+      const extensionDenial = workflowSetupDenial(
+        this.activeWorkflowRunId,
+        this.trustedExtensionSpecs,
+      );
+      if (extensionDenial) {
+        this.failBeforeProviderRequest(incomingUserMessage, {
+          code: "WORKFLOW_RESOURCE_DENIED",
+          message: extensionDenial,
+          retriable: false,
+        });
+        return { turnId: this.turnId };
+      }
       if (this.automaticCompactionNeeded([incomingUserMessage])) {
         const compacted = await this.runCompaction("threshold", false);
         if (!compacted) {
@@ -9034,6 +9138,12 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
 
   /** Resolve attachments against the configuration of the running turn. */
   steeringContext(expectedTurnId: string): { projectPath?: string; remoteWorkspace?: { hostKey: string; path: string }; supportsVision: boolean } {
+    if (this.activeWorkflowRunId) {
+      throw Object.assign(
+        new Error("Workflow turns are bounded assignments and cannot accept mid-run steering. Pause or discuss the change, then start a new bounded workflow turn with its authorized resources."),
+        { errorCode: "WORKFLOW_TURN_STEERING_DENIED" },
+      );
+    }
     if (
       this.disposed || !this.acceptingSteering || this.runCancelled ||
       this.turnHadError || !this.getStatus().isRunning ||
