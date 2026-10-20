@@ -10139,6 +10139,7 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 | Acceptance | Scenarios |
 |---|---|
 | B / C / Security / Quality — ChatGPT subscription chat | E2E-PROVIDER-chatgpt-chat-login-and-stream |
+| B / Security / Quality — Optional provider client certificate requests | E2E-PROVIDER-optional-client-certificate |
 | C / E / F / Quality / Security — Session Todo checklist | E2E-CHAT-session-todo-checklist |
 | C / E / Security / Quality — Live Voice four-stage interaction | E2E-LIVE-VOICE-four-stage-ui |
 | C / F — Hourly task updates | E2E-SCHEDULED-manual-to-hourly |
@@ -13946,17 +13947,21 @@ are withdrawn with ADR 0165.
 
 - **Preconditions**: At least one supported local config exists among
   `~/.claude/settings.json`, `~/.codex/config.toml` `[model_providers.*]`,
-  `~/.config/opencode/opencode.json`, `~/.pi/agent/models.json`, or
+  `~/.config/opencode/opencode.json`, `~/.pi/agent/models.json`,
+  `~/.pi/agent/auth.json` plus `~/.pi/agent/models-store.json`, or
   `~/.cc-switch/cc-switch.db`, including two API-key profiles with the same
-  endpoint and different keys, and optionally one OAuth-only vendor.
-  PI-Desktop may already have an equivalent provider.
+  endpoint and different keys, one auth-only Pi API-key provider, and
+  optionally one OAuth-only vendor. PI-Desktop may already have an equivalent
+  provider.
 - **Steps**:
   1. Open Settings → Models and expand **Import from other tools**. Confirm
      its scan explanation appears as inline text without a help icon, and the
      workbench remains idle until Scan is activated.
   2. Scan model configuration. Confirm source groups start expanded, rows
      show name, model count, host, and an API key / No API key badge, and no
-     secret value appears in the UI or scan IPC payload.
+     secret value appears in the UI or scan IPC payload. Confirm the
+     auth-only Pi provider appears in the Pi group with its cached model
+     count and an API key badge.
   3. Import the selected providers. Confirm both same-endpoint profiles appear
      as separate rows under Settings → Models and remain selectable in the
      Composer model menu. Re-import the same selection and confirm those
@@ -13967,10 +13972,12 @@ are withdrawn with ADR 0165.
   5. Confirm an OAuth-only source account is absent from the candidate
      list.
 - **Expected**: Explicit scan only (D007). Stored API keys land in the host
-  secret store. Only equivalent providers (normalized URL + API style + same
-  credential) skip; different credentials at one endpoint remain separate.
-  The expanded importer shows its scan explanation directly without a
-  question-mark control. No protocol or schema version bump.
+  secret store. Pi providers connected through `auth.json` are paired with
+  the cached `models-store.json` catalog; OAuth grants and `!command` keys
+  are not imported. Only equivalent providers (normalized URL + API style +
+  same credential) skip; different credentials at one endpoint remain
+  separate. The expanded importer shows its scan explanation directly
+  without a question-mark control. No protocol or schema version bump.
 - **Specs linked**: `04-ux/06-settings-ia.md`,
   `04-ux/08-component-spec.md` §18.5, `03-runtime/01-ipc-protocol.md`,
   `03-runtime/11-provider-model-system.md`, ADR 0179, D342
@@ -16797,6 +16804,30 @@ plugin-form fixtures in an isolated temporary directory at runtime.
 - **Specs:** runtime §12; storage §12; ADR 0254.
 - **Status:** Source-regression covered; full Desktop journey Draft.
 
+### E2E-SESSION-native-pi-project-session-dir
+
+- **Preconditions:** A local project has `.pi/settings.json` with
+  `"sessionDir": ".pi/sessions"` and a valid native v3 JSONL in that directory.
+  The default Pi agent session root also contains a valid session. A nested
+  JSONL and a symlink that leaves `.pi/sessions` are present. A second fixture
+  sets an absolute global `sessionDir` and no project path. A third sets a
+  relative global `sessionDir`.
+- **Steps:** Refresh the session list, open the project-local session, and fork
+  it. Repeat list and open for the absolute global directory. Refresh the
+  relative global fixture once with no known project and once after that
+  project is known, including a remote project id in the known set.
+- **Expected:** The project-local session and the default-root session both
+  appear. The nested file and the escaping symlink do not. Opening the
+  project-local session returns its transcript. Fork publishes one new JSONL
+  beside the parent and does not rewrite the parent. The absolute global
+  directory is listed without a project path. The relative global directory is
+  listed only for the known local project. Remote project ids are ignored.
+  Untrusted project resources stay browseable and read-only.
+- **Specs:** runtime §12; storage §12; security §12; ADR 0254.
+- **Status:** Source-regression covered by
+  `packages/agent-runtime/src/native-pi-session.test.ts` (the project fixture
+  asserts `readOnlyReason: project-untrusted` and `canPrompt: false`) and
+  `apps/desktop/test/native-pi-sessions.test.mjs`; full Desktop journey Draft.
 
 ### E2E-SUBAGENT-ordered-model-fallback-preserves-work
 
@@ -18318,3 +18349,28 @@ host-created files. The full app's file-preview viewer is covered separately.
   `ui.view` gating, panel-bridge channel) and the wiring contract in
   `apps/desktop/test/main-wiring-contract.test.mjs`; the interactive Electron
   scenario remains a manual validation run.
+
+### E2E-PROVIDER-optional-client-certificate
+
+- **Preconditions:** The locked Electron 43 runtime, built workspace packages,
+  and an isolated profile. Only a local HTTPS fixture and local proxy are used;
+  trust is confined to the test process/session and fixture certificate.
+- **Steps:** Run `node scripts/e2e-provider-client-certificate.mjs`. Confirm the
+  original `net.fetch` aborts before HTTP. Probe the model list and connection
+  through the real metadata service; repeat with an invalid fixture key and an
+  authenticated custom HTTP proxy. Return a cross-origin redirect, then cancel
+  a pending response.
+- **Expected:** Valid credentials return the fixture model; invalid credentials
+  reach HTTP 401. The retry follows the proxy route, sends no client identity,
+  refuses cross-origin redirects and aborts with the original signal.
+- **Security coverage:** `provider-https-metadata.test.mjs` additionally checks
+  mandatory client authentication, untrusted server certificates, hostname
+  mismatch, compressed responses, and late-tunnel cleanup. The metadata policy
+  tests reject fallback on other TLS/network errors or HTTP failures.
+- **Specs linked:** `03-runtime/07-process-model.md`,
+  ADR `provider-metadata-client-certificate-retry`, issue #1676.
+- **Acceptance:** Recovery without an Electron major upgrade, TLS verification
+  bypass, direct proxy bypass, or change to persisted provider bindings.
+- **Milestone:** Maintenance.
+- **Status:** Automated fixture; record the tested head/base and execution
+  result in the delivery report.

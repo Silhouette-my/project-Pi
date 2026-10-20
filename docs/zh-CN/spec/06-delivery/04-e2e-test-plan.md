@@ -5749,6 +5749,7 @@ eleven-tool-round desktop paths are verified by
 | 验收 | 应用场景 |
 |---|---|
 | B / C / Security / Quality — ChatGPT 订阅聊天 | E2E-PROVIDER-chatgpt-chat-login-and-stream |
+| B / Security / Quality — Optional provider client certificate requests | E2E-PROVIDER-optional-client-certificate |
 | C / E / F / Quality / Security — Session Todo checklist | E2E-CHAT-session-todo-checklist |
 | C / E / Security / Quality — Live Voice 四阶段交互 | E2E-LIVE-VOICE-four-stage-ui |
 | C / F — Hourly task updates | E2E-SCHEDULED-manual-to-hourly |
