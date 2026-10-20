@@ -10,6 +10,8 @@ export type WorkflowExecutionDependencies = {
   getAgentHost: () => AgentHost;
   getHost: () => HostRpc;
   createSession: SessionCreator;
+  /** Composition resolves the selected provider; consumer-only Chat is not tool execution. */
+  assertExecutableSession: (sessionId: string) => Promise<void>;
   /** Flush the existing transcript queue before reading a settled outcome. */
   flushTranscript: () => Promise<boolean>;
 };
@@ -56,7 +58,8 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     // host-owned run observation persisted while the actual turn was terminal.
     if (final && (terminal === "completed" || run.state === "completed")) {
       readTurns.delete(run.sessionId);
-      return { state: "completed", content: final.content, effects };
+      return { state: "completed", content: final.content, effects: terminal === "completed"
+        ? effects.map((effect) => effect.id === "terminal-outcome" ? { ...effect, state: "confirmed" } : effect) : effects };
     }
     return { state: "unknown", content: "The prior dispatch has no confirmed terminal checkpoint; inspect its session and external effects before resuming",
       effects: run.effects.length ? [...effects, { id: "terminal-outcome", action: run.effects[0].action,
@@ -69,6 +72,7 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
       await deps.getHost().call("session.appendMessage", { sessionId, message });
     },
     start: async ({ run, content, authorization }) => {
+      await deps.assertExecutableSession(run.sessionId);
       const result = await deps.getAgentHost().startTurn(DESKTOP_PRINCIPAL, { sessionId: run.sessionId,
         permissionCeiling: authorization.permissionCeiling, admission: "queue", idempotencyKey: run.id,
         input: { text: content, userMessageId: messageId(run.id) }, context: { requestId: run.id } });

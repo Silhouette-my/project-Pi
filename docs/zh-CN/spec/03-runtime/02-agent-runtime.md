@@ -1288,6 +1288,13 @@ Rust 继续独占 workstream、版本、授权、候选和交付回执的持久�
   action 及选定资源；后续任务必须落在同一授权的 action/resource、有效期及总运行预算内。
   Host 工具权限和根目录边界仍生效；每轮权限上限只能收窄，排队后也不扩大。
 
+资源范围在 run 排队、执行、暂停或存在未知副作用期间保守占用，不能从 `check` 等标签
+推导只读。重叠侧 Work 在创建会话前返回明确冲突；显式不相交的侧授权仍可并行。本地路径
+和 file URI 会解析已存在祖先，识别 symlink 别名和将创建的输出路径；仅大小写不同的路径
+按目标卷现存目录语义处理，语义不明时保守占用。仲裁不扩大授权或
+授予文件访问。主线续跑只使用其已有授权，不借用侧任务授权。下一步因资源占用阻塞时，
+由后续 Host 变化触发重检，并保留 checkpoint 原定的 action、资源子集和 prompt。
+
 最终回复包含唯一 `project-workflow-checkpoint` JSON 围栏：`summary`、可选 `next`
 （`action`、`resources`、`prompt`）、`stop`、`artifacts`、`evidence`、
 `consumedDeliveryIds`。成果与证据使用共享 schema；运行时固定来源和归属为实际 run，
@@ -1303,7 +1310,12 @@ Pause 只停止受影响 workstream。队列项确认在执行前取消时持久
 中断结算幂等。Host 事件和持久 turn 结算驱动后续任务，不进行定时模型轮询或原样失败重试。
 
 组合根提供绑定项目和 provider 的普通会话创建、Host snapshot/mutate、transcript flush
-及 AgentHost；将 `contextForSession` 接入 session launch，在持久化修改后触发
+及 AgentHost。执行适配器要求 `assertExecutableSession`：consumer-only Chat 只作为
+讨论来源；Work 必须显式选择可执行 Agent 会话/模型，否则停在该边界，不自动换 provider。
+将 `contextForSession` 接入 session launch，在持久化修改后触发
 `onHostChanged`，在 durable endTurn 和 bridge 结算后触发 `onTurnSettled`，启动时先
 reconcile，关闭时 dispose。原 native Chat provider 与 Agent/Plan 路径不变。
 `project-workflow-runtime-lifecycle.test.mjs` 的合成生命周期证据与最终跨进程、界面验收分开。
+`project-workflow-runtime-host.test.mjs` 另用已发布的真实 Rust Host 验证主/侧工作并行、
+终态消费确认、暂停恢复及有数据重启；只有 provider 执行边界为合成实现。
+该测试为主、侧任务分别指定不重叠范围，并在确认消费前实际读取侧文件生成具体候选。
