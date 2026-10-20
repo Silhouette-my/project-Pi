@@ -65,6 +65,12 @@ session and message IDs retain their existing meaning.
   awaits it before enabling actions: all existing runs are observed and persisted
   before any authorized successor is admitted. Failed recovery leaves admission
   disabled; accepted checkpoint continuations retain their exact scope on retry.
+- `AgentPromptRequest`, queued turn summaries and queue input carry optional
+  `workflowRunId`. `session.beginTurn` validates and binds it to the durable turn;
+  ordinary callers omit it. Bound turns preserve `workflow-run:<runId>` as their
+  user message identity. Tool execution resolves the Host-owned binding, not a
+  model-supplied resource list; out-of-scope tools return
+  `WORKFLOW_RESOURCE_DENIED` before effects.
 
 C0 declares the actual API/ports and adds validation tests, without fake Host or
 runtime implementations. A owns subsequent host wiring. C must report the exported
