@@ -9,7 +9,7 @@ export const workflowCatalog = {
     empty: "建立工作流以定義下一項成果。", chooseWorkstream: "選擇工作流", allWorkstreams: "所有工作流", completed: "已完成的工作", attention: "需要處理",
     currentCandidate: "目前候選版本", noCandidate: "尚未記錄候選版本", revision: "修訂 {{revision}}", blockerOwner: "負責人：{{owner}}", resumeWhen: "恢復條件：{{condition}}",
     openMain: "開啟主線對話", controls: "工作控制", start: "開始工作", discuss: "接續討論", pauseDiscuss: "暫停並討論", pause: "暫停工作", resume: "繼續工作", cancelWork: "取消工作", newSide: "側邊對話",
-    authority: "執行範圍", selectedAuthority: "授權範圍", authorityRequired: "開始工作前，請先定義執行範圍。", authorityHint: "列出確切的動作名稱（例如 implement、check、document），並逐行填寫可寫入的本機檔案或資料夾路徑。正式參照資料和已交付成果僅供唯讀；目前不支援 Shell 命令。現有工具核准仍然適用。",
+    authority: "執行範圍", selectedAuthority: "授權範圍", authorityRequired: "開始工作前，請先定義執行範圍。", authorityHint: "逐行填寫確切的動作名稱及可寫入的本機檔案或資料夾路徑。參照資料和已交付成果僅供唯讀。每個 Shell 命令都需個別核准，且可能存取此範圍以外的路徑。",
     allowedActions: "允許的動作", allowedResources: "可寫入的檔案/資料夾", maxRuns: "最多嘗試次數", stopConditions: "停止條件", grant: "授權此範圍", revokeAuthority: "撤銷此範圍", executionSession: "執行對話", chooseExecutionSession: "選擇 Agent 對話", executionHint: "執行工作需要此專案中已設定可執行服務的 Agent 對話。Consumer Chat 僅供討論。請在該對話中設定服務；系統不會自動切換服務供應商。", newExecutionSession: "新增對話並設定", purpose: "用途",
     purposes: { ask: "詢問", explore: "探索", work: "工作" }, visibility: "可見範圍", projectVisible: "顯示於專案搜尋", sideOnly: "僅此側邊對話",
     policies: { ask: "回答保留在此對話中；不會自動寫回決策。", explore: "採用前，結論都只是提案。", work: "結果與重要副作用會回到此工作流。" },

@@ -69,6 +69,28 @@ test("Project Workflow UI copy is translated in every shipped locale", () => {
   }
 });
 
+test("workflow shell approval copy is explicit and localized in every shipped locale", () => {
+  const keys = [
+    "workflow.authorityHint",
+    "workflow.allowedResources",
+    "permission.workflowShellWarning",
+  ];
+  for (const [id, catalog] of Object.entries(catalogs)) {
+    const flat = flattenCatalog(catalog);
+    for (const key of keys) {
+      assert.ok(flat[key]?.trim(), `${id} ${key}`);
+      if (id !== "en") assert.notEqual(flat[key], english[key], `${id} ${key} must be translated`);
+    }
+  }
+  assert.match(english["workflow.authorityHint"], /exact action names/i);
+  assert.match(english["workflow.authorityHint"], /one writable local file or folder path per line/i);
+  assert.match(english["workflow.authorityHint"], /read-only inputs/i);
+  assert.match(english["workflow.authorityHint"], /each shell command needs separate approval/i);
+  assert.match(english["workflow.authorityHint"], /may access paths beyond that scope/i);
+  assert.match(english["permission.workflowShellWarning"], /separate approval/i);
+  assert.match(english["permission.workflowShellWarning"], /paths beyond/i);
+});
+
 test("Live Voice preparation and call recovery copy is localized in every shipped catalog", () => {
   const keys = [
     "prepareCall", "details", "workOptions", "allowWork", "noWorkSession",

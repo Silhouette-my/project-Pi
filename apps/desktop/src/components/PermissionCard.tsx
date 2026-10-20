@@ -88,6 +88,11 @@ export function PermissionCard({
           components={{ highlight: <span className="text-text-primary" /> }}
         />
       </div>
+      {permission.approvalScope === "workflow-shell" ? (
+        <div className="permission-card-reason" role="note">
+          {t("permission.workflowShellWarning")}
+        </div>
+      ) : null}
       {permission.reason ? (
         <div className="permission-card-reason">{permission.reason}</div>
       ) : null}
@@ -111,13 +116,15 @@ export function PermissionCard({
         >
           {t("permission.deny")}
         </Button>
-        <Button
-          variant="secondary"
-          disabled={resolving}
-          onClick={() => void resolve("allow-session")}
-        >
-          {t("permission.allowSession")}
-        </Button>
+        {permission.approvalScope !== "workflow-shell" ? (
+          <Button
+            variant="secondary"
+            disabled={resolving}
+            onClick={() => void resolve("allow-session")}
+          >
+            {t("permission.allowSession")}
+          </Button>
+        ) : null}
         <Button
           variant="primary"
           disabled={resolving}

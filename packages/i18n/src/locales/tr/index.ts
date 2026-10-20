@@ -1992,6 +1992,7 @@ sklm: {
     allowPrompt: "<highlight>{{tool}}</highlight> çalıştırılsın mı?",
     allowOnce: "Bir kez izin ver",
     allowSession: "Bu sohbet için izin ver",
+    workflowShellWarning: "Her kabuk komutu ayrı onay gerektirir ve iş akışının yazabildiği dosya ve klasör kapsamı dışındaki yollara erişebilir.",
     deny: "Reddet",
     risk: {
       high: "Yüksek risk",

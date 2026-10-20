@@ -50,7 +50,7 @@ export const workflowCatalog = {
     authority: "Execution scope",
     selectedAuthority: "Authorized scope",
     authorityRequired: "Define an execution scope before starting work.",
-    authorityHint: "List exact action names (for example, implement, check, document) and one writable local file or folder path per line. Canonical references and delivered artifacts are read-only inputs; shell commands are unavailable. Existing tool approvals still apply.",
+    authorityHint: "List exact action names and one writable local file or folder path per line. References and delivered artifacts are read-only inputs. Each shell command needs separate approval and may access paths beyond that scope.",
     allowedActions: "Allowed actions",
     allowedResources: "Writable files/folders",
     maxRuns: "Maximum attempts",
