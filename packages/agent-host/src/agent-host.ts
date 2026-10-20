@@ -92,6 +92,8 @@ export type QueueEntryView = {
 
 export type StartTurnParams = {
   sessionId: string;
+  /** Host-owned work scope may narrow, never widen, the ordinary session grant. */
+  permissionCeiling?: RacpPermissionMode;
   idempotencyKey?: string;
   /** Main-private identity captured when authorizing a Live work scope. */
   expectedWorkspaceIdentity?: string | null;
@@ -491,7 +493,7 @@ export class AgentHost {
     }
     const state = this.state(summary.id);
     state.permissionMode = summary.permissionMode;
-    const inputHash = hashInput(params.input);
+    const inputHash = hashInput(params.input, params.permissionCeiling);
     const idempotencyKey = params.idempotencyKey ?? params.context.idempotencyKey;
     if (idempotencyKey) {
       const remembered = this.idempotency.get(`${principal.subject}|${idempotencyKey}`);
@@ -509,12 +511,16 @@ export class AgentHost {
         details: { expectedRevision: expected, revision: state.revision },
       });
     }
-    const effectivePermissionMode = effectiveRemotePermissionMode({
+    const sessionPermissionMode = effectiveRemotePermissionMode({
       sessionMode: summary.permissionMode,
       policy: this.policy,
       pairedDevice: principal.pairedDevice ?? false,
       approverOverride: principal.approverOverride ?? false,
     });
+    const permissionRank = { ask: 0, "accept-edits": 1, auto: 2 } as const;
+    const effectivePermissionMode = params.permissionCeiling !== undefined
+      && permissionRank[params.permissionCeiling] < permissionRank[sessionPermissionMode]
+      ? params.permissionCeiling : sessionPermissionMode;
     const admission: RacpTurnAdmission = forceQueue ? "queue" : params.admission ?? "reject_if_busy";
     const busy = this.isBusy(state);
     let turn: TurnRecord;
@@ -1527,11 +1533,12 @@ function requireSessionId(sessionId: string | undefined): string {
 }
 
 /** Small stable hash so a reused idempotency key with other input is detected. */
-export function hashInput(input: StartTurnParams["input"]): string {
+export function hashInput(input: StartTurnParams["input"], permissionCeiling?: RacpPermissionMode): string {
   const encoded = JSON.stringify({
     text: input.text,
     attachments: input.attachments ?? [],
     ...(input.sessionMessageId ? { sessionMessageId: input.sessionMessageId } : {}),
+    ...(permissionCeiling !== undefined ? { permissionCeiling } : {}),
   });
   let hash = 5381;
   for (let index = 0; index < encoded.length; index += 1) {

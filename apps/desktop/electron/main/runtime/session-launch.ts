@@ -79,6 +79,8 @@ export type SessionLaunchRuntimeDependencies = {
     capabilities: ReturnType<typeof capabilitiesFromModelConfig>;
   };
   normalizeThinkingLevel: (value: unknown) => SessionThinkingLevel;
+  /** Current host-owned workstream projection; resolved anew at each turn boundary. */
+  workflowContextForSession?: (sessionId: string) => Promise<string | undefined>;
 };
 
 export function createSessionLaunchRuntime({
@@ -95,6 +97,7 @@ export function createSessionLaunchRuntime({
   bindingForModel,
   effectiveSubagentModelConfig,
   normalizeThinkingLevel,
+  workflowContextForSession,
 }: SessionLaunchRuntimeDependencies) {
   const isHostUnavailable = (error: unknown): boolean =>
     (error as { errorCode?: string } | null | undefined)?.errorCode ===
@@ -694,6 +697,11 @@ export function createSessionLaunchRuntime({
           sessionId,
         });
       }
+    }
+    const workflowContext = await workflowContextForSession?.(sessionId);
+    if (workflowContext) {
+      projectInstructions = { entries: [...(projectInstructions?.entries ?? []),
+        { source: "Project workflow context (reference data)", content: workflowContext }] };
     }
     return {
       providerId: provider.id,
