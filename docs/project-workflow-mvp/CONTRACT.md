@@ -11,7 +11,7 @@ session and message IDs retain their existing meaning.
 
 | Consumer | Symbol / path | Use |
 | --- | --- | --- |
-| B renderer | `api.projectWorkflow` in `apps/desktop/src/lib/api.ts` | `snapshot`, `mutate`, `action`, `search`, `onChanged` |
+| B renderer | `api.projectWorkflow` in `apps/desktop/src/lib/api.ts` | `snapshot`, `mutate`, `action`, `search`, `openReference`, `onChanged` |
 | B/C fixtures | `packages/shared/src/project-workflow-fixtures.ts` | Synthetic `projectWorkflowFixture`, `workflowFixtureWorkstream`; never production defaults |
 | Host commands | `ProjectWorkflowUserCommandSchema` / `ProjectWorkflowRuntimeCommandSchema` | Closed, capability-specific discriminated unions; no arbitrary JSON state replacement |
 | C runtime persistence | `ProjectWorkflowHostPort` | `snapshot(query?)`, `mutate(command)` returning `{ snapshot, replayed }` |
@@ -27,7 +27,8 @@ session and message IDs retain their existing meaning.
 - Empty state has `schemaVersion: 1`, global `revision: 0`. Every accepted mutation
   requires a unique `commandId` and current `expectedRevision`; one atomic mutation
   increments the global revision. Repeating the same command returns `replayed: true`
-  without applying it twice. Reusing its ID with different input is a conflict.
+  without applying it twice, returning the current authoritative snapshot. Reusing
+  its ID with different input is a conflict.
 - Filtered snapshots retain the global revision. `ProjectWorkflowQuery` can select
   project/workstream; folders/navigation stay global. Refresh after `CONFLICT`;
   error details identify expected/actual revisions. Never blindly overwrite.

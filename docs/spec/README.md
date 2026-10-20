@@ -9,8 +9,8 @@ The baseline is a frozen decision artifact, not a complete list of every
 feature in the current app. The current implementation adds Goal contracts,
 standalone MCP/Skills/Subagents, plugin marketplace and launcher flows, session
 import, scheduled tasks, next-turn composer configuration, and host-owned
-session collaboration messages. The host wire protocol is v11; storage schema
-is v16 (see `00-baseline.md`).
+session collaboration messages. The host wire protocol is v11; current storage
+schema v25 includes the Project Workflow migration from v24 (see `00-baseline.md`).
 
 ## Quick entry
 
@@ -22,6 +22,7 @@ is v16 (see `00-baseline.md`).
 | [01-product/00-overview.md](01-product/00-overview.md) | Overview |
 | [01-product/01-product-scope.md](01-product/01-product-scope.md) | Current product scope and operating modes |
 | [02-architecture/01-architecture.md](02-architecture/01-architecture.md) | Architecture |
+| [02-architecture/project-workflow-state.md](02-architecture/project-workflow-state.md) | Durable project workflow state and host boundaries |
 | [02-architecture/05-remote-agent-control.md](02-architecture/05-remote-agent-control.md) | Remote Agent Host and Gateway target |
 | [03-runtime/05-host-core-rust.md](03-runtime/05-host-core-rust.md) | Rust host core |
 | [03-runtime/19-remote-agent-control-protocol.md](03-runtime/19-remote-agent-control-protocol.md) | Remote control protocol |
@@ -61,13 +62,14 @@ docs/spec/
 ### Implementation
 1. `00-baseline.md`
 2. `02-architecture/01-architecture.md`
-3. `02-architecture/05-remote-agent-control.md` when implementing remote control
-4. `03-runtime/05-host-core-rust.md`
-5. `03-runtime/02-agent-runtime.md`
-6. `03-runtime/01-ipc-protocol.md`
-7. `03-runtime/19-remote-agent-control-protocol.md` when implementing remote control
-8. `03-runtime/11-provider-model-system.md`
-9. `07-plugins/01-plugin-system.md`
+3. `02-architecture/project-workflow-state.md` when working on project workflow
+4. `02-architecture/05-remote-agent-control.md` when implementing remote control
+5. `03-runtime/05-host-core-rust.md`
+6. `03-runtime/02-agent-runtime.md`
+7. `03-runtime/01-ipc-protocol.md`
+8. `03-runtime/19-remote-agent-control-protocol.md` when implementing remote control
+9. `03-runtime/11-provider-model-system.md`
+10. `07-plugins/01-plugin-system.md`
 
 ### Plugin authors
 1. [`../plugin-development.md`](../plugin-development.md)
