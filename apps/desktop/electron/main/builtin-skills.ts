@@ -21,6 +21,8 @@ export const IMAGE_GENERATION_SKILL_ID = "pi-desktop/imagegen";
 export const LATEX_SKILL_ID = "pi-desktop/latex";
 /** Bundled multi-pass research skill (directory package with references/). */
 export const DEEP_RESEARCH_SKILL_ID = "pi-desktop/deep-research";
+/** Bundled skill authoring in-conversation visualization fragments. */
+export const VISUALIZE_SKILL_ID = "pi-desktop/visualize";
 
 /** electron-builder copies `resources/skills` to `<resources>/skills`. */
 function resolveBuiltinSkillPath(fileName: string): string | null {
@@ -100,6 +102,7 @@ const BUILTIN_SKILL_SOURCES: ReadonlyArray<readonly [string, string]> = [
   [PLUGIN_DEV_SKILL_ID, "plugin-development.md"],
   [LATEX_SKILL_ID, "latex/SKILL.md"],
   [DEEP_RESEARCH_SKILL_ID, "deep-research/SKILL.md"],
+  [VISUALIZE_SKILL_ID, "visualize.md"],
 ];
 
 /** All bundled skill entries, including ones whose applicability is conditional. */
@@ -117,7 +120,7 @@ export function builtinSkillCatalog(): PluginSkillDef[] {
  * fresh so a packaged update takes effect without a restart.
  */
 export function builtinSkills(input: BuiltinSkillInput): PluginSkillDef[] {
-  const ids = [IMAGE_GENERATION_SKILL_ID, LATEX_SKILL_ID, DEEP_RESEARCH_SKILL_ID];
+  const ids = [IMAGE_GENERATION_SKILL_ID, LATEX_SKILL_ID, DEEP_RESEARCH_SKILL_ID, VISUALIZE_SKILL_ID];
   if (isPluginWorkspace(input.workspacePath, input.pluginPaths)) ids.push(PLUGIN_DEV_SKILL_ID);
   const activeIds = new Set(ids);
   const disabled = new Set(input.disabledIds ?? []);
