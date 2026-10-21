@@ -1,9 +1,7 @@
 .workflow-navigation {
   flex-shrink: 0;
 }
-.workflow-navigation-header,
-.workflow-navigation-chat,
-.workflow-navigation-actions {
+.workflow-navigation-chat {
   display: flex;
   align-items: center;
   gap: 3px;
@@ -31,14 +29,6 @@
 }
 .workflow-navigation-folded {
   transform: rotate(-90deg);
-}
-.workflow-navigation-editor {
-  margin: 6px;
-  padding: 8px;
-  display: grid;
-  gap: 8px;
-  background: var(--ds-bg-hover);
-  border-radius: var(--radius-md);
 }
 .workflow-navigation-subheading {
   padding: 8px 6px 2px;
@@ -77,28 +67,45 @@
 .workflow-tree-row { position: relative; display: flex; align-items: flex-start; min-width: 0; border-radius: var(--radius-sm); }
 .workflow-tree-content { min-width: 0; flex: 1; }
 .workflow-tree-content > .project-group { margin: 0; }
-.workflow-tree-controls { display: flex; flex-shrink: 0; align-items: center; padding-top: 4px; }
 .workflow-tree-row.is-drop-before::before, .workflow-tree-row.is-drop-after::after { content: ""; position: absolute; z-index: 2; left: 3px; right: 3px; height: 2px; background: var(--ds-accent); pointer-events: none; }
 .workflow-tree-row.is-drop-before::before { top: 0; }
 .workflow-tree-row.is-drop-after::after { bottom: 0; }
 .workflow-tree-row.is-drop-inside, .workflow-tree-root-target.is-drop-inside { outline: 1px solid var(--ds-accent); background: var(--ds-bg-active); }
 .workflow-tree-node.is-dragging > .workflow-tree-row { opacity: .5; }
 .workflow-tree-empty { padding: 5px 10px; color: var(--ds-text-muted); font-size: var(--text-sm); }
-.workflow-tree-toolbar.is-headless { justify-content: flex-end; min-height: 0; }
 .workflow-tree-root-hint { min-height: 8px; color: var(--ds-text-muted); font-size: var(--text-sm); padding: 0 6px; }
 
+/* Folder rows share the sidebar row rhythm: 28px, chevron + icon + name, the
+   chevron nudged 3px past the "Recent" subheading's text start. Children indent
+   one step through .workflow-navigation-children. */
+.workflow-tree-row.is-folder { align-items: center; min-height: 28px; transition: background var(--motion-duration-fast) var(--motion-ease-out); }
+.workflow-tree-row.is-folder:hover, .workflow-tree-row.is-folder.is-menu-open { background: var(--ds-bg-hover); }
+.workflow-tree-content > .workflow-navigation-label.btn { min-height: 28px; padding: 5px 6px 5px 9px; font-size: var(--text-md); line-height: var(--leading-row); color: var(--ds-text-secondary); background: transparent; }
+.workflow-tree-row.is-folder:hover .workflow-navigation-label.btn, .workflow-tree-row.is-folder.is-menu-open .workflow-navigation-label.btn { color: var(--ds-text-primary); }
+/* The collapsed count and the row actions share one slot, like a session's
+   last-reply date and its "..." control. */
+.workflow-tree-meta { display: grid; flex: 0 0 auto; align-items: center; justify-items: end; padding-right: 2px; }
+.workflow-tree-meta > * { grid-area: 1 / 1; }
+.workflow-tree-count { padding-right: 6px; color: var(--ds-text-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; transition: opacity var(--motion-duration-fast) var(--motion-ease-out); }
+.workflow-tree-actions { display: flex; align-items: center; gap: 1px; }
+.workflow-tree-row:hover .workflow-tree-count,
+.workflow-tree-row:focus-within .workflow-tree-count,
+.workflow-tree-row.is-menu-open .workflow-tree-count { opacity: 0; visibility: hidden; }
+
 /* Row and toolbar actions follow the native sidebar contract: quiet at rest and
-   revealed by hover or keyboard focus on their owning row (09 §sidebar rows).
-   Organize mode keeps its explicit controls visible. */
+   revealed by hover or keyboard focus on their owning row (09 §sidebar rows). */
 .workflow-tree-toolbar:hover .sidebar-toolbar-button,
 .workflow-tree-toolbar:focus-within .sidebar-toolbar-button,
-.workflow-tree-toolbar .sidebar-toolbar-button[aria-pressed="true"],
-.workflow-navigation-tree:hover > .workflow-tree-toolbar.is-headless .sidebar-toolbar-button,
-.workflow-tree-controls .sidebar-toolbar-button,
-.workflow-tree-row:hover > .sidebar-toolbar-button,
-.workflow-tree-row:focus-within > .sidebar-toolbar-button,
+.workflow-tree-row:hover .workflow-tree-actions .sidebar-toolbar-button,
+.workflow-tree-row:focus-within .workflow-tree-actions .sidebar-toolbar-button,
+.workflow-tree-row.is-menu-open .workflow-tree-actions .sidebar-toolbar-button,
 .workflow-navigation-project-entry:hover > .workflow-agent-entry,
 .workflow-navigation-project-entry:focus-within > .workflow-agent-entry,
 .sidebar-session-group-header:hover .workflow-agent-entry,
 .sidebar-session-group-header:focus-within .workflow-agent-entry { opacity: 1; }
+.workflow-tree-row:hover .workflow-tree-actions .thread-item-more,
+.workflow-tree-row:focus-within .workflow-tree-actions .thread-item-more { opacity: 1; pointer-events: auto; }
 .workflow-agent-entry { flex-shrink: 0; }
+.workflow-folder-dialog-form { display: grid; gap: 14px; }
+.workflow-folder-dialog-select { width: 100%; }
+.workflow-folder-dialog-error { padding: 0; }

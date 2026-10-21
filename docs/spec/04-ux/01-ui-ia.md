@@ -207,8 +207,17 @@ destination, chat as the home surface, tools and permissions inline.
 - **Sections**: the compact `Chats` area precedes `Projects` and owns ordinary
   conversation creation, shallow folders and the existing sort/archive-view
   menu. A global new Chat is unfiled; one created inside a folder inherits that
-  folder. Folder create, rename, move and bulk move affect navigation only;
-  removing a folder does not delete its chats. Recent is a derived access and
+  folder. Folder create, rename and move, and chat move (including moving a
+  multi-selection from its batch menu), affect navigation only; removing a
+  folder does not delete its chats. There is no separate organize mode:
+  rows reorder by drag, and each folder or chat row's hover `...` menu holds
+  Rename, Move to..., Remove folder, Move to folder... and Add to/Remove from
+  Favorites. New folder and Rename/Move open one dialog modeled on session
+  rename (name, Location, Cancel plus Create/Save/Move). The Chats heading holds
+  New folder beside New chat; project and project-category folders are created
+  from the project overflow/right-click menu (New folder, workflow projects only)
+  and the Projects section menu. Folder rows align with the Recent subheading,
+  show a muted count when collapsed, and indent their children one step. Recent is a derived access and
   activity view, not storage ownership; favorites are references. Its toolbar
   places sorting before new-chat creation. Folder and chat order, user titles,
   expansion state and transcript reading position remain stable across

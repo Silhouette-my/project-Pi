@@ -26,8 +26,11 @@ their original contract.
 Project Agent is an icon action on the project title, project Home row, and the
 project-aware top bar; these reuse the same canonical discussion and request
 state. It has no dedicated navigation row. Project conversations are directly
-reachable, without a fixed history wrapper. Folder editors and move menus remain
-keyboard-accessible alongside drag-before, drag-after and drop-inside affordances.
+reachable, without a fixed history wrapper. Organizing is drag-only with no mode toggle:
+folder and session rows expose a hover/focus `...` menu (Rename, Move to...,
+Remove folder, Move to folder..., Favorites) and one folder dialog for create,
+rename and move, so every move stays keyboard-accessible alongside drag-before,
+drag-after and drop-inside affordances.
 Project pin/archive filtering remains owned by Sidebar.
 
 ## Deferred

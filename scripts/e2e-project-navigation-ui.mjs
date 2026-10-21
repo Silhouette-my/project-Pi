@@ -88,15 +88,35 @@ const fillControl = async (selector, value) => page.evaluate(`(() => { const inp
 const submitForm = async selector => page.evaluate(`(() => { const form=document.querySelector(${json(selector)}); if(!form) return false; form.requestSubmit(); return true })()`);
 const capture = async name => { const shot = await page.call("Page.captureScreenshot", { format: "png" }); await writeFile(join(output, name), Buffer.from(shot.data, "base64")); };
 
+let group;
 const treeSelector = scope => `[data-workflow-tree="${scope}"]`;
+const dialogSelector = '[data-workflow="folder-dialog"]';
+const clickMenuAction = async action => page.evaluate(`(() => { const el=document.querySelector('.sidebar-row-menu [data-action="'+${json(action)}+'"]'); if(!el || el.disabled) return false; el.click(); return true })()`);
+// New folder lives in the owning project's overflow menu (project scope) or the
+// Projects section menu (project categories); Chats keeps its header button.
+async function openFolderDialog(scope) {
+  if (scope === "project") {
+    assert.ok(await page.evaluate(`(() => { const group=document.querySelector('[data-sidebar-project-group="'+${json(group)}+'"]'); const more=group?.querySelector('.project-more'); if(!more) return false; more.click(); return true })()`), "project overflow menu");
+    await until(() => clickMenuAction("new-project-folder"), "project New folder menu item");
+  } else {
+    assert.ok(await page.evaluate(`(() => { const bar=document.querySelector('[data-sidebar-section="projects"]'); if(!bar) return false; const rect=bar.getBoundingClientRect(); bar.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:rect.left+20,clientY:rect.top+8})); return true })()`), "projects section menu");
+    await until(() => clickMenuAction("new-project-category-folder"), "projects New folder menu item");
+  }
+  await until(() => page.evaluate(`!!document.querySelector(${json(dialogSelector + " input")})`), "folder dialog");
+}
 async function createFolder(scope, name, parentId = "") {
-  const selector = treeSelector(scope);
-  assert.ok(await clickAria("新建文件夹", `${selector} > .workflow-tree-toolbar button`) || await clickAria("New folder", `${selector} > .workflow-tree-toolbar button`));
-  await until(() => page.evaluate(`!!document.querySelector(${json(selector + " > form input")})`), "folder editor");
-  assert.ok(await fillControl(selector + " > form input", name));
-  if (parentId) await page.evaluate(`(() => { const input=document.querySelector(${json(selector + " > form select")}); input.value=${json(parentId)}; input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
-  await submitForm(selector + " > form");
-  return until(async () => (await snapshot()).folders.find(folder => folder.name === name), `saved folder ${name}`);
+  await openFolderDialog(scope);
+  assert.ok(await fillControl(dialogSelector + " input", name));
+  if (parentId) await page.evaluate(`(() => { const input=document.querySelector(${json(dialogSelector + " select")}); input.value=${json(parentId)}; input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await submitForm(dialogSelector + " form");
+  const folder = await until(async () => (await snapshot()).folders.find(folder => folder.name === name), `saved folder ${name}`);
+  await until(() => page.evaluate(`!document.querySelector(${json(dialogSelector)})`), "folder dialog closed");
+  return folder;
+}
+// Rename and Move live in the folder row's "..." menu, which hover or focus reveals.
+async function folderMenuAction(folderId, action) {
+  assert.ok(await page.evaluate(`(() => { const more=document.querySelector('[data-workflow-folder="'+${json(folderId)}+'"] > .workflow-tree-row [data-action="folder-menu"]'); if(!more) return false; more.click(); return true })()`), "folder row menu");
+  await until(() => clickMenuAction(action), `folder menu ${action}`);
 }
 async function drag(sourceSelector, targetSelector, fraction = .5, captureName) {
   await until(() => page.evaluate(`document.querySelector(${json(sourceSelector)})?.draggable`), "drag source ready");
@@ -118,7 +138,7 @@ try {
   await until(() => page.evaluate("!!document.querySelector('.app-shell:not(.is-booting)')"),"renderer reload after Host setup");
   await page.evaluate("document.documentElement.dataset.theme='light'");
   await until(() => page.evaluate(`!!document.querySelector(${json(`[data-project-agent="${projectId}"]`)})`), "project Agent title entry");
-  const group = await page.evaluate(`document.querySelector(${json(`[data-project-agent="${projectId}"]`)})?.closest('[data-sidebar-project-group]')?.dataset.sidebarProjectGroup`);
+  group = await page.evaluate(`document.querySelector(${json(`[data-project-agent="${projectId}"]`)})?.closest('[data-sidebar-project-group]')?.dataset.sidebarProjectGroup`);
   await page.evaluate(`(() => { const group=document.querySelector('[data-sidebar-project-group="'+${json(group)}+'"]'); const toggle=group.querySelector('.project-toggle'); if(toggle.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   await until(() => page.evaluate(`!!document.querySelector(${json(`[data-workflow-tree="project"][data-project-id="${projectId}"]`)})`), "project conversation tree");
   assert.ok(await page.evaluate(`!!document.querySelector(${json(`.conversation-topbar [data-project-agent="${projectId}"]`)})`),"new task in a project must have the Agent topbar entry");
@@ -141,6 +161,34 @@ try {
   const chats3 = await createFolder("project", "导航方案", chats2.id);
   await mutate("navigation.expand",{expandedIds:[...(await snapshot()).expandedIds,chats.id,chats2.id,chats3.id]});
   await until(() => page.evaluate(`!!document.querySelector(${json(row("folder",chats3.id))})`),"deep conversation folder visible");
+  // Rename, move and delete go through the row "..." menu and the folder dialog.
+  const scratch = await createFolder("project", "临时");
+  await folderMenuAction(scratch.id, "rename-folder");
+  await until(() => page.evaluate(`!!document.querySelector(${json(dialogSelector + " input")})`), "rename dialog");
+  assert.ok(await fillControl(dialogSelector + " input", "临时目录"));
+  await capture("folder-rename-dialog-light.png");
+  await submitForm(dialogSelector + " form");
+  await until(async () => (await snapshot()).folders.find(folder => folder.id === scratch.id)?.name === "临时目录", "renamed folder");
+  await until(() => page.evaluate(`!document.querySelector(${json(dialogSelector)})`), "rename dialog closed");
+  await folderMenuAction(scratch.id, "move-folder");
+  await until(() => page.evaluate(`!!document.querySelector(${json(dialogSelector + " select")})`), "move dialog");
+  await page.evaluate(`(() => { const input=document.querySelector(${json(dialogSelector + " select")}); input.value=${json(chats2.id)}; input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await submitForm(dialogSelector + " form");
+  await until(async () => (await snapshot()).folders.find(folder => folder.id === scratch.id)?.parentId === chats2.id, "folder moved through the menu dialog");
+  await until(() => page.evaluate(`!document.querySelector(${json(dialogSelector)})`), "move dialog closed");
+  await page.evaluate(`document.querySelector(${json(`[data-workflow-folder="${chats.id}"] > .workflow-tree-row`)}).scrollIntoView({block:'center'})`);
+  await page.evaluate(`document.querySelector(${json(`[data-workflow-folder="${chats.id}"] > .workflow-tree-row [data-action="folder-menu"]`)}).click()`);
+  await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu [data-action=\"rename-folder\"]')"), "folder menu");
+  await capture("folder-menu-light.png");
+  await page.evaluate("document.documentElement.dataset.theme='dark'");
+  await capture("folder-menu-dark.png");
+  await page.evaluate("document.documentElement.dataset.theme='light'");
+  await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
+  await until(() => page.evaluate("!document.querySelector('.sidebar-row-menu')"), "folder menu dismissed");
+  await folderMenuAction(scratch.id, "remove-folder");
+  assert.ok((await snapshot()).folders.some(folder => folder.id === scratch.id), "first click must only arm removal");
+  await page.evaluate(`document.querySelector('.sidebar-row-menu [data-action="remove-folder"]').click()`);
+  await until(async () => !(await snapshot()).folders.some(folder => folder.id === scratch.id), "folder removal confirmed by second click");
   await drag(row("session",setup.sessionId),row("folder",chats3.id),.5,"drop-inside-folder.png");
   await until(async () => (await snapshot()).navigation.find(item=>item.sessionId===setup.sessionId)?.folderId===chats3.id,"project conversation placement");
   await drag(row("session",setup.sessionId),row("folder",chats.id),.1,"drop-before-folder.png");

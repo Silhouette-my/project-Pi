@@ -93,3 +93,21 @@ export function treePlacement(
           : (after?.order ?? 0) - 1,
   };
 }
+
+/**
+ * Which tree a session is organized in, or undefined when it is in none (a
+ * session of a project without a workflow group). A folder placement wins;
+ * otherwise a standalone chat belongs to Chats and a project conversation to
+ * its project.
+ */
+export function sessionTreeContext(
+  snapshot: ProjectWorkflowSnapshot,
+  session: { id: string; projectPath?: string | null },
+  projectId: string | undefined,
+): TreeContext | undefined {
+  const folderId = snapshot.navigation.find((item) => item.sessionId === session.id)?.folderId;
+  const folder = folderId ? snapshot.folders.find((item) => item.id === folderId) : undefined;
+  if (folder) return { scope: folder.scope ?? "chats", projectId: folder.projectId };
+  if (projectId) return { scope: "project", projectId };
+  return session.projectPath ? undefined : { scope: "chats" };
+}

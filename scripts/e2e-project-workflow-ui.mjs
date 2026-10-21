@@ -125,7 +125,7 @@ try {
   setup = await main.evaluate(`globalThis.__PI_DESKTOP_PLAN_UI_PROBE({operation:'liveSetup',workspace:${json(join(root, "apps"))}})`);
   assert.equal(setup.ok, true, json(setup));
   await invoke("settingsSet", { ...await invoke("settingsGet"), defaultProviderId: setup.providerId, defaultModelId: setup.modelId });
-  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "empty project in sidebar", 60000);
+  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim().includes('Workflow UI Production'))`), "empty project in sidebar", 60000);
   await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "empty project Agent composer");
@@ -149,7 +149,7 @@ try {
   coverage.push("Empty project opens canonical Agent from the overview, renders an actual loopback-model reply in ChatSurface, preserves it on revisit, and creates no Workstream/Run or tool catalog");
   await stopApp();
   await startApp();
-  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "project restored after restart", 60000);
+  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim().includes('Workflow UI Production'))`), "project restored after restart", 60000);
   await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "project composer after restart");
@@ -179,7 +179,7 @@ try {
   assert.equal(initial.artifacts.find(item => item.id === candidateId)?.revision, "candidate-r7");
   assert.equal(initial.resources.find(item => item.id === resourceId)?.source.revision, "src-r2");
   // The user path opens the project without selecting the seeded Agent session.
-  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "open project appears in real sidebar", 60000);
+  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim().includes('Workflow UI Production'))`), "open project appears in real sidebar", 60000);
   await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"][data-project-id="${projectId}"]')`), "Project Console opens from sidebar");
@@ -238,53 +238,81 @@ try {
   assert.equal(resourceOpenedPath, recordedPath);
   coverage.push("Opened the resource context through the actual tab, read its source revision, and verified both candidate/resource references resolve to their recorded path through the production IPC boundary");
 
-  // Folder management and chat placement/removal are actual sidebar DOM actions.
+  // Folder management and chat placement/removal are actual sidebar DOM actions:
+  // the Chats header button, the folder dialog, and the rows' "..." menus.
+  const dialogSelector = '[data-workflow="folder-dialog"]';
+  const dialogOpen = () => page.evaluate(`!!document.querySelector(${json(dialogSelector)})`);
+  const menuAction = action => page.evaluate(`(() => { const el=document.querySelector('.sidebar-row-menu [data-action="'+${json(action)}+'"]'); if(!el || el.disabled) return false; el.click(); return true })()`);
+  const openRowMenu = async (selector, action) => { assert.ok(await page.evaluate(`(() => { const el=document.querySelector(${json(selector)}); if(!el) return false; el.click(); return true })()`), `row menu trigger ${selector}`); await until(() => menuAction(action), `menu action ${action}`); };
+  const submitDialog = async () => { assert.ok(await submitForm(dialogSelector + " form")); await until(async () => !(await dialogOpen()), "folder dialog closed"); };
   const createFolder = async (name, parentId = "") => {
-    assert.ok(await clickAria("新建文件夹"), "new folder control is available");
-    await until(() => page.evaluate(`!![...document.querySelectorAll('label')].find(x=>x.textContent?.trim().startsWith('文件夹名称'))`), "folder editor");
+    assert.ok(await clickAria("新建文件夹", '[data-workflow-tree="chats"] > .workflow-tree-toolbar button'), "Chats header New folder button is available");
+    await until(() => dialogOpen(), "folder dialog");
     assert.ok(await fillByLabel("文件夹名称", name));
-    if (parentId) assert.ok(await fillByLabel("上级文件夹", parentId));
-    assert.ok(await submitForm(".workflow-navigation-editor"));
-    return until(async () => (await snapshot()).folders.find(folder => folder.name === name), `folder ${name} persisted`);
+    if (parentId) assert.ok(await fillByLabel("位置", parentId));
+    const saved = until(async () => (await snapshot()).folders.find(folder => folder.name === name), `folder ${name} persisted`);
+    await submitDialog();
+    return saved;
   };
   const folderRoot = await createFolder("UI Evidence");
   const folderNested = await createFolder("Nested Evidence", folderRoot.id);
   assert.equal(folderNested.parentId, folderRoot.id);
-  coverage.push("Created a top-level folder and a shallow nested folder through the real sidebar editor");
+  coverage.push("Created a top-level folder and a shallow nested folder through the Chats header button and the folder dialog");
+  assert.equal(await page.evaluate("!!document.querySelector('.workflow-navigation-editor, [data-workflow-tree=\"chats\"] input[type=checkbox]')"), false, "no inline editor or organize-mode checkboxes remain");
 
-  assert.ok(await clickAria("整理对话"), "chat organization mode opens");
   assert.ok(await page.evaluate(`(() => { const folder=document.querySelector('[data-workflow-folder="${folderRoot.id}"] .workflow-navigation-label'); if(!folder) return false; folder.click(); return true })()`), "parent folder can be expanded");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"]')`), "nested folder row");
+  const nestedRow = `[data-workflow-folder="${folderNested.id}"] > .workflow-tree-row`;
+  await openRowMenu(`[data-workflow-folder="${folderNested.id}"] > .workflow-tree-row [data-action="folder-menu"]`, "rename-folder");
+  await until(() => dialogOpen(), "rename dialog");
+  assert.ok(await fillByLabel("文件夹名称", "Nested Evidence 2"));
+  await submitDialog();
+  await until(async () => (await snapshot()).folders.find(folder => folder.id === folderNested.id)?.name === "Nested Evidence 2", "folder renamed through the row menu");
+  coverage.push("Renamed a folder through its row menu and the shared dialog");
+
   assert.ok(await page.evaluate(`(() => { const button=document.querySelector('[data-workflow-folder="${folderNested.id}"] button[aria-label="新建对话"]'); if(!button) return false; button.click(); return true })()`), "new chat action is available in nested folder");
   const nestedChat = await until(async () => (await snapshot()).navigation.find(item => item.folderId === folderNested.id), "chat created in nested folder");
   const sessionsResult = await invoke("sessionList");
   const setupSession = sessionsResult.sessions.find(session => session.id === nestedChat.sessionId);
   assert.ok(setupSession, "new folder chat appears in the ordinary session inventory");
   await page.evaluate(`document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-label')?.click()`);
-  await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat input[type=checkbox]')`), "folder chat selectable in organization mode");
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat')`), "folder chat rendered");
   assert.ok(await page.evaluate(`(() => { const button=document.querySelector('[data-workflow-folder="${folderNested.id}"] .thread-item-main'); if(!button) return false; button.click(); return true })()`));
   await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.lastAccessedAt, "folder chat recorded in recent view");
   assert.ok(await page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat')`), "recent view preserves folder visibility");
-  assert.ok(await clickAria("收藏对话", `[data-workflow-folder="${folderNested.id}"] button[aria-label]`));
+  const chatMenu = `[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat [data-action="session-menu"]`;
+  await openRowMenu(chatMenu, "toggle-session-favorite");
   await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.favorite, "folder chat favorited");
-  await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] button[aria-label="收藏对话"][aria-pressed=true]')`), "favorite remains visible in its folder");
-  coverage.push("Opened and favorited a folder chat through its rendered row; Recent and Favorites preserve its stable folder location");
-  const selectedChat = await page.evaluate(`(() => { const input=document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat input[type=checkbox]'); if(!input) return false; input.click(); return true })()`);
-  assert.ok(selectedChat, "folder chat can be selected without opening its transcript");
-  await until(() => page.evaluate(`!![...document.querySelectorAll('label')].find(x=>x.textContent?.includes('移动所选的'))`), "move-selected destination");
-  assert.ok(await fillByLabel("移动所选的", folderRoot.id));
-  assert.ok(await clickText("移动"));
-  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.folderId === folderRoot.id, "folder chat moved through sidebar organization controls");
-  coverage.push("Created a chat inside the nested folder and moved it to another folder with the sidebar organize controls");
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat')`), "favorite remains visible in its folder");
+  await sleep(300);
+  await openRowMenu(chatMenu, "toggle-session-favorite");
+  await until(async () => !(await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.favorite, "Remove from Favorites clears the star");
+  await sleep(300);
+  await openRowMenu(chatMenu, "toggle-session-favorite");
+  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.favorite, "folder chat favorited again");
+  coverage.push("Opened a folder chat, then added to and removed from Favorites through its row menu; Recent and Favorites preserve its stable folder location");
+  await sleep(300);
+  await openRowMenu(chatMenu, "move-session-to-folder");
+  await until(() => dialogOpen(), "session move dialog");
+  assert.ok(await fillByLabel("位置", folderRoot.id));
+  await submitDialog();
+  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.folderId === folderRoot.id, "folder chat moved through the row menu dialog");
+  coverage.push("Moved a chat to another folder with the Move to folder dialog from its row menu");
+  await page.evaluate(`document.documentElement.dataset.theme='light'`);
+  await capture("chats-tree-light.png");
+  await page.evaluate(`document.documentElement.dataset.theme='dark'`);
+  await capture("chats-tree-dark.png");
+  await page.evaluate(`document.documentElement.dataset.theme='light'`);
 
-  assert.ok(await clickAria("移除文件夹", `[data-workflow-folder="${folderNested.id}"] button[aria-label]`));
-  await until(() => page.evaluate(`!!document.querySelector('.workflow-navigation-editor[role=alert]')`), "non-destructive folder confirmation");
-  assert.ok(await clickText("移除文件夹"));
+  await openRowMenu(`${nestedRow} [data-action="folder-menu"]`, "remove-folder");
+  assert.ok((await snapshot()).folders.some(folder => folder.id === folderNested.id), "first click must only arm removal");
+  await until(() => page.evaluate(`!!document.querySelector('.sidebar-row-menu [data-sidebar-menu-note="remove-hint"]')`), "non-destructive folder confirmation");
+  assert.ok(await menuAction("remove-folder"));
   await until(async () => !(await snapshot()).folders.some(folder => folder.id === folderNested.id), "nested folder removal");
   const retainedNavigation = (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId);
   assert.equal(retainedNavigation?.folderId, folderRoot.id, "removing the empty nested folder leaves moved chat in its destination");
   assert.ok((await invoke("sessionList")).sessions.some(session => session.id === nestedChat.sessionId), "folder removal leaves the underlying chat accessible");
-  coverage.push("Removed the now-empty nested folder non-destructively and verified its chat remains available in the session inventory");
+  coverage.push("Removed the now-empty nested folder non-destructively with an armed second click and verified its chat remains available in the session inventory");
   await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"][data-project-id="${projectId}"]')`), "return to Project Console from chat navigation");

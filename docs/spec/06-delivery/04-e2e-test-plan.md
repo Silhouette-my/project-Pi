@@ -11086,7 +11086,7 @@ This test plan spec is accepted when:
   database with an existing ProjectGroup, existing Chat sessions, and a local
   project root. Use synthetic runtime/provider boundaries; no real account,
   paid model call, installed app or user profile.
-- **Steps**: Organize ordinary Chats into folders, move one and remove a folder;
+- **Steps**: Create Chat folders through the folder dialog, rename one, move a Chat with its row menu, favorite it and remove a folder (armed second click);
   restart and continue an existing Chat. Open a Project Console with no selected
   session and inspect a real workstream, owner, blocker, next action and candidate.
   Adopt a source-backed decision and explicit user authorization, then start work.

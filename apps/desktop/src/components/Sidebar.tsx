@@ -3,6 +3,8 @@ import { ProjectAgentButton } from "../features/project-workflow/ProjectAgentBut
 import { IconClock } from "./icons";
 import { WorkflowNavigation, WorkflowProjectConversations, useWorkflowProjectGroups } from "../features/project-workflow/WorkflowNavigation";
 import { workflowGroupForPath, workflowProjectEntries } from "../features/project-workflow/navigation-model";
+import { openFolderDialog } from "../features/project-workflow/folder-dialog-store";
+import { useWorkflowSessionMenu } from "../features/project-workflow/session-menu";
 import { useProjectWorkflow } from "../features/project-workflow/useProjectWorkflow";
 import { RemoteProjectGroups } from "./remote/RemoteProjectGroups";
 import { groupRemoteProjectSessions } from "../lib/remote-project-catalog";
@@ -124,6 +126,7 @@ import {
   IconFolder,
   IconMore,
   IconNewProject,
+  IconNewFolder,
   IconPin,
   IconPencil,
   IconSidebar,
@@ -319,6 +322,7 @@ export function Sidebar({
   const setSettingsAnchor = useAppStore((s) => s.setSettingsAnchor);
   const update = useUpdateState();
   const workflowGroups = useWorkflowProjectGroups(openProjects);
+  const workflowSessionMenu = useWorkflowSessionMenu(workflowGroups.groups);
 
   const [sortOpen, setSortOpen] = useState(false);
   const [sessionMenu, setSessionMenu] = useState<string | null>(null);
@@ -1732,6 +1736,7 @@ export function Sidebar({
             icon: <IconPin size={14} />,
             onSelect: () => toggleSessionPin(session),
           }),
+          ...workflowSessionMenu.sessionItems(session, () => closeMenus(false)),
           sidebarMenuAction({
             id: "toggle-session-archive",
             label: archived
@@ -1832,12 +1837,16 @@ export function Sidebar({
       settings?.developerMode,
       t,
       toggleSessionPin,
+      workflowSessionMenu,
     ],
   );
 
   const projectMenuContent = useCallback(
     (entry: ProjectEntry): SidebarMenuPanelContent => {
       const archived = Boolean(entry.meta.archived);
+      const workflowGroup = workflow.snapshot
+        ? workflowGroupForPath(workflowGroups.groups, entry.path)
+        : undefined;
       return {
         label: t("project.openActions", { name: entry.name }),
         items: [
@@ -1856,6 +1865,23 @@ export function Sidebar({
               setEditProjectFor(entry);
             },
           }),
+          ...(workflowGroup
+            ? [
+                sidebarMenuAction({
+                  id: "new-project-folder",
+                  label: t("workflowNav.newFolder"),
+                  icon: <IconNewFolder size={14} />,
+                  onSelect: () => {
+                    closeMenus(false);
+                    setCollapsed(entry.path, false);
+                    openFolderDialog({
+                      mode: "create",
+                      context: { scope: "project", projectId: workflowGroup.id },
+                    });
+                  },
+                }),
+              ]
+            : []),
           sidebarMenuAction({
             id: "toggle-project-pin",
             label: entry.meta.pinned ? t("project.unpin") : t("project.pin"),
@@ -1918,8 +1944,11 @@ export function Sidebar({
       projectIsolationItems,
       copyTextToClipboard,
       requestDeleteProject,
+      setCollapsed,
       t,
       toggleProjectPin,
+      workflow.snapshot,
+      workflowGroups.groups,
     ],
   );
 
@@ -1937,6 +1966,10 @@ export function Sidebar({
           icon: <IconArchive size={14} />,
           onSelect: () => void batchArchiveSessions(),
         }),
+        ...workflowSessionMenu.batchItems(
+          sessions.filter((session) => selectedIds.has(session.id)),
+          () => closeMenus(false),
+        ),
         sidebarMenuSubmenu({
           id: "batch-danger",
           label: t("nav.dangerZone", { defaultValue: "Danger zone" }),
@@ -1963,7 +1996,7 @@ export function Sidebar({
         }),
       ],
     }),
-    [armedDelete, batchArchiveSessions, batchDeleteSessions, t],
+    [armedDelete, batchArchiveSessions, batchDeleteSessions, selectedIds, sessions, t, workflowSessionMenu],
   );
 
   const sortMenuContent = useMemo(
@@ -2517,6 +2550,19 @@ export function Sidebar({
                   else void openProjectPicker();
                 },
               }),
+              ...(!isSessions && workflow.snapshot
+                ? [
+                    sidebarMenuAction({
+                      id: "new-project-category-folder",
+                      label: t("workflowNav.newFolder"),
+                      icon: <IconNewFolder size={14} />,
+                      onSelect: () => {
+                        closeMenus(false);
+                        openFolderDialog({ mode: "create", context: { scope: "projects" } });
+                      },
+                    }),
+                  ]
+                : []),
             ],
           }}
         />,

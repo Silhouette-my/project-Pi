@@ -1,8 +1,18 @@
 import { useState, type DragEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowFolder } from "@pi-desktop/shared";
-import { Button, Field, Input, Select, TooltipButton } from "../../components/ui";
-import { IconArrowUpDown, IconChevronDown, IconFolder, IconPencil, IconTrash } from "../../components/icons";
+import { Button, TooltipButton } from "../../components/ui";
+import { IconChevronDown, IconFolder, IconMore, IconPencil, IconTrash, IconArrowUpDown } from "../../components/icons";
+import { useArmedDelete } from "../../hooks/use-armed-delete";
+import { sidebarMenuAction, type SidebarMenuPanelContent } from "../../lib/sidebar-menu";
+import { FolderDialog, type FolderDialogValues } from "./FolderDialog";
+import {
+  closeFolderDialog,
+  openFolderDialog,
+  sameTreeContext,
+  useFolderDialogRequest,
+} from "./folder-dialog-store";
+import { useRowMenu } from "./useRowMenu";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import {
   dropPosition,
@@ -23,48 +33,85 @@ type Props = {
   entries: TreeEntry[];
   renderEntry: (entry: TreeEntry) => ReactNode;
   label: string;
+  /** Render the section header row (label plus New folder and extra actions). */
   toolbar?: boolean;
-  manage?: boolean;
-  onManageChange?: (manage: boolean) => void;
   toolbarActions?: ReactNode;
-  beforeTree?: ReactNode;
   shortcuts?: { label: string; ids: string[] }[];
   hiddenRootIds?: string[];
   renderFolderActions?: (folder: WorkflowFolder) => ReactNode;
 };
-/** The Host owns placement; local state only describes the current gesture/editor. */
+/** The Host owns placement; local state only describes the current gesture. */
 export function NavigationTree({
   context,
   entries: leaves,
   renderEntry,
   label,
   toolbar = true,
-  manage: controlledManage,
-  onManageChange,
   toolbarActions,
-  beforeTree,
   shortcuts = [],
   hiddenRootIds = [],
   renderFolderActions,
 }: Props) {
   const { t } = useTranslation();
   const workflow = useProjectWorkflow();
-  const [localManage, setLocalManage] = useState(false);
-  const manage = controlledManage ?? localManage;
-  const setManage = onManageChange ?? setLocalManage;
-  const [editor, setEditor] = useState<{
-    folder?: WorkflowFolder;
-    name: string;
-    parentId: string;
-  } | null>(null);
-  const [moving, setMoving] = useState<TreeEntry | null>(null);
-  const [destination, setDestination] = useState("");
-  const [removeId, setRemoveId] = useState<string | null>(null);
+  const snapshot = workflow.snapshot;
+  const request = useFolderDialogRequest();
+  const { armed, setArmed } = useArmedDelete();
   const [dragging, setDragging] = useState<TreeEntry | null>(null);
   const [drop, setDrop] = useState<{ key: string; position: DropPosition } | null>(null);
-  const snapshot = workflow.snapshot;
+  const folders = snapshot ? treeFolders(snapshot, context) : [];
+  const folderMenu = useRowMenu((id): SidebarMenuPanelContent | null => {
+    const folder = folders.find((item) => item.id === id);
+    if (!folder) return null;
+    const confirming = armed === folder.id;
+    return {
+      label: t("workflowNav.folderActions"),
+      items: [
+        sidebarMenuAction({
+          id: "rename-folder",
+          label: t("workflowNav.renameFolder"),
+          icon: <IconPencil size={14} />,
+          onSelect: () => {
+            folderMenu.close(false);
+            openFolderDialog({ mode: "rename", context, folderId: folder.id });
+          },
+        }),
+        sidebarMenuAction({
+          id: "move-folder",
+          label: t("workflowNav.moveTo"),
+          icon: <IconArrowUpDown size={14} />,
+          onSelect: () => {
+            folderMenu.close(false);
+            openFolderDialog({
+              mode: "move",
+              context,
+              targets: [{ kind: "folder", id: folder.id }],
+            });
+          },
+        }),
+        sidebarMenuAction({
+          id: "remove-folder",
+          label: confirming ? t("workflowNav.removeFolderConfirm") : t("workflowNav.removeFolder"),
+          icon: <IconTrash size={14} />,
+          danger: true,
+          armed: confirming,
+          disabled: workflow.busy,
+          separatorBefore: true,
+          onSelect: () => {
+            if (!confirming) {
+              setArmed(folder.id);
+              return;
+            }
+            setArmed(null);
+            folderMenu.close(false);
+            void workflow.mutate({ kind: "folder.remove", folderId: folder.id });
+          },
+        }),
+      ],
+      notes: confirming ? [{ id: "remove-hint", text: t("workflowNav.removeHint") }] : undefined,
+    };
+  });
   if (!snapshot) return <>{leaves.map(renderEntry)}</>;
-  const folders = treeFolders(snapshot, context);
   const entries: TreeEntry[] = [
     ...leaves,
     ...folders.map((folder) => ({
@@ -77,7 +124,10 @@ export function NavigationTree({
   ];
   const key = (entry: TreeEntry) => `${entry.kind}:${entry.id}`;
   const forbidden = (id?: string) => (id ? folderDescendants(folders, id) : new Set<string>());
-  const choices = (id?: string) => folders.filter((folder) => !forbidden(id).has(folder.id));
+  const choices = (id?: string) =>
+    folders
+      .filter((folder) => !forbidden(id).has(folder.id))
+      .map((folder) => ({ id: folder.id, label: folderPath(folders, folder) }));
   const toggle = (id: string) =>
     workflow.mutate({
       kind: "navigation.expand",
@@ -85,9 +135,10 @@ export function NavigationTree({
         ? snapshot.expandedIds.filter((item) => item !== id)
         : [...snapshot.expandedIds, id],
     });
+  /** Resolves false only when the Host rejected the move; a no-op counts as done. */
   async function move(source: TreeEntry, target?: TreeEntry, position: DropPosition = "after") {
     const placement = treePlacement(entries, source, target, position);
-    if (!placement) return;
+    if (!placement) return true;
     const siblings = treeSiblings(entries, placement.folderId).filter(
       (entry) => key(entry) !== key(source),
     );
@@ -110,7 +161,7 @@ export function NavigationTree({
         expandedIds: [...result.snapshot.expandedIds, placement.folderId],
       });
     }
-    if (result) setMoving(null);
+    return !!result;
   }
   function over(event: DragEvent, entry?: TreeEntry) {
     if (!dragging || !event.dataTransfer.types.includes(MIME)) return;
@@ -124,28 +175,63 @@ export function NavigationTree({
     event.dataTransfer.dropEffect = placement ? "move" : "none";
     setDrop(placement ? { key: entry ? key(entry) : "root", position } : null);
   }
-  async function saveFolder() {
-    if (!editor?.name.trim()) return;
+  const dialogRequest = request && sameTreeContext(request.context, context) ? request : null;
+  const editing =
+    dialogRequest?.mode === "rename"
+      ? folders.find((folder) => folder.id === dialogRequest.folderId)
+      : undefined;
+  const moving =
+    dialogRequest?.mode === "move"
+      ? dialogRequest.targets.flatMap((target) => {
+          const found = entries.find((entry) => entry.kind === target.kind && entry.id === target.id);
+          return found ? [found] : [];
+        })
+      : [];
+  async function submitDialog(values: FolderDialogValues) {
+    if (!dialogRequest) return false;
+    if (dialogRequest.mode === "move") {
+      const destination = values.parentId
+        ? entries.find((entry) => entry.kind === "folder" && entry.id === values.parentId)
+        : undefined;
+      // Moving to the start in reverse keeps the selected chats in their order.
+      for (const source of values.first ? [...moving].reverse() : moving) {
+        const first = values.first
+          ? treeSiblings(entries, values.parentId || undefined).find(
+              (entry) => key(entry) !== key(source) && (entry.rank ?? 0) === (source.rank ?? 0),
+            )
+          : undefined;
+        const ok = values.first
+          ? await move(source, first, "before")
+          : await move(source, destination, destination ? "inside" : "after");
+        if (!ok) return false;
+      }
+      return true;
+    }
+    if (!values.name) return false;
     const folder: WorkflowFolder = {
-      ...editor.folder,
-      id: editor.folder?.id ?? crypto.randomUUID(),
-      name: editor.name.trim(),
-      parentId: editor.parentId || undefined,
+      ...editing,
+      id: editing?.id ?? crypto.randomUUID(),
+      name: values.name,
+      parentId: values.parentId || undefined,
       order:
-        editor.folder?.order ??
-        Math.max(
-          -1,
-          ...treeSiblings(entries, editor.parentId || undefined).map((entry) => entry.order),
-        ) + 1,
+        editing?.order ??
+        Math.max(-1, ...treeSiblings(entries, values.parentId || undefined).map((entry) => entry.order)) + 1,
       ...context,
     };
-    if (await workflow.mutate({ kind: editor.folder ? "folder.update" : "folder.create", folder }))
-      setEditor(null);
+    return !!(await workflow.mutate({ kind: editing ? "folder.update" : "folder.create", folder }));
   }
   function row(entry: TreeEntry): ReactNode {
     const folder =
       entry.kind === "folder" ? folders.find((folder) => folder.id === entry.id)! : undefined;
     const open = snapshot!.expandedIds.includes(entry.id);
+    const count = folder
+      ? (() => {
+          const inside = folderDescendants(folders, folder.id);
+          return entries.filter(
+            (item) => item.kind !== "folder" && item.parentId && inside.has(item.parentId),
+          ).length;
+        })()
+      : 0;
     return (
       <div
         key={key(entry)}
@@ -154,8 +240,14 @@ export function NavigationTree({
         data-workflow-folder={folder?.id}
       >
         <div
-          className={`workflow-tree-row${drop?.key === key(entry) ? ` is-drop-${drop.position}` : ""}`}
+          className={`workflow-tree-row${folder ? " is-folder" : ""}${drop?.key === key(entry) ? ` is-drop-${drop.position}` : ""}${folder && folderMenu.openId === folder.id ? " is-menu-open" : ""}`}
           draggable={!workflow.busy}
+          onContextMenu={(event) => {
+            if (!folder) return;
+            event.preventDefault();
+            event.stopPropagation();
+            folderMenu.open(folder.id, null, { x: event.clientX, y: event.clientY });
+          }}
           onDragStartCapture={(event) => {
             if (
               (event.target as Element).closest("[data-workflow-tree]") !==
@@ -202,43 +294,28 @@ export function NavigationTree({
               renderEntry(entry)
             )}
           </div>
-          {folder ? renderFolderActions?.(folder) : null}
-          {manage ? (
-            <div className="workflow-tree-controls">
-              <TooltipButton
-                className="sidebar-toolbar-button"
-                tooltip={t("workflowNav.move")}
-                ariaLabel={t("workflowNav.move")}
-                disabled={workflow.busy}
-                onClick={() => {
-                  setMoving(entry);
-                  setDestination(entry.parentId ?? "");
-                }}
-              >
-                <IconArrowUpDown size={12} />
-              </TooltipButton>
-              {folder ? (
-                <>
-                  <TooltipButton
-                    className="sidebar-toolbar-button"
-                    tooltip={t("workflowNav.editFolder")}
-                    ariaLabel={t("workflowNav.editFolder")}
-                    onClick={() =>
-                      setEditor({ folder, name: folder.name, parentId: folder.parentId ?? "" })
-                    }
-                  >
-                    <IconPencil size={12} />
-                  </TooltipButton>
-                  <TooltipButton
-                    className="sidebar-toolbar-button"
-                    tooltip={t("workflowNav.removeFolder")}
-                    ariaLabel={t("workflowNav.removeFolder")}
-                    onClick={() => setRemoveId(folder.id)}
-                  >
-                    <IconTrash size={12} />
-                  </TooltipButton>
-                </>
-              ) : null}
+          {folder ? (
+            <div className="workflow-tree-meta">
+              {!open && count > 0 ? <span className="workflow-tree-count">{count}</span> : null}
+              <div className="workflow-tree-actions">
+                {renderFolderActions?.(folder)}
+                <TooltipButton
+                  type="button"
+                  className="thread-item-more"
+                  data-action="folder-menu"
+                  tooltip={t("workflowNav.folderActions")}
+                  ariaLabel={t("workflowNav.folderActions")}
+                  aria-haspopup="menu"
+                  aria-expanded={folderMenu.openId === folder.id}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (folderMenu.openId === folder.id) folderMenu.close();
+                    else folderMenu.open(folder.id, event.currentTarget);
+                  }}
+                >
+                  <IconMore size={14} />
+                </TooltipButton>
+              </div>
             </div>
           ) : null}
         </div>
@@ -260,135 +337,60 @@ export function NavigationTree({
       data-workflow-tree={context.scope}
       data-project-id={context.projectId}
     >
-      <div className={`workflow-tree-toolbar${toolbar ? "" : " is-headless"}`}>
-        <span>{toolbar ? label : null}</span>
-        <div className="sidebar-toolbar-actions">
-          {toolbarActions}
-          <TooltipButton
-            className="sidebar-toolbar-button"
-            tooltip={t("workflowNav.newFolder")}
-            ariaLabel={t("workflowNav.newFolder")}
-            onClick={() => setEditor({ name: "", parentId: "" })}
-          >
-            <IconFolder size={13} />
-          </TooltipButton>
-          <TooltipButton
-            className="sidebar-toolbar-button"
-            tooltip={t("workflowNav.organize")}
-            ariaLabel={t("workflowNav.organize")}
-            aria-pressed={manage}
-            onClick={() => setManage(!manage)}
-          >
-            <IconPencil size={13} />
-          </TooltipButton>
+      {toolbar ? (
+        <div className="workflow-tree-toolbar">
+          <span>{label}</span>
+          <div className="sidebar-toolbar-actions">
+            {toolbarActions}
+            <TooltipButton
+              className="sidebar-toolbar-button"
+              tooltip={t("workflowNav.newFolder")}
+              ariaLabel={t("workflowNav.newFolder")}
+              onClick={() => openFolderDialog({ mode: "create", context })}
+            >
+              <IconFolder size={13} />
+            </TooltipButton>
+          </div>
         </div>
-      </div>
-      {workflow.error ? (
+      ) : null}
+      {workflow.error && !dialogRequest ? (
         <p role="alert" className="workflow-navigation-error">
           {workflow.error}
         </p>
       ) : null}
-      {editor ? (
-        <form
-          className="workflow-navigation-editor"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void saveFolder();
-          }}
-        >
-          <Field label={t("workflowNav.folderName")}>
-            <Input
-              autoFocus
-              value={editor.name}
-              onChange={(event) => setEditor({ ...editor, name: event.target.value })}
-            />
-          </Field>
-          <Field label={t("workflowNav.parentFolder")}>
-            <Select
-              value={editor.parentId}
-              onChange={(event) => setEditor({ ...editor, parentId: event.target.value })}
-            >
-              <option value="">{t("workflowNav.topLevel")}</option>
-              {choices(editor.folder?.id).map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folderPath(folders, folder)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <div className="workflow-navigation-actions">
-            <Button type="submit" disabled={workflow.busy || !editor.name.trim()}>
-              {t("common.save")}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setEditor(null)}>
-              {t("common.cancel")}
-            </Button>
-          </div>
-        </form>
+      {dialogRequest && (dialogRequest.mode !== "rename" || editing) && (dialogRequest.mode !== "move" || moving.length) ? (
+        <FolderDialog
+          key={`${dialogRequest.mode}:${dialogRequest.mode === "rename" ? dialogRequest.folderId : ""}`}
+          mode={dialogRequest.mode}
+          title={
+            moving.length === 1
+              ? t("workflowNav.moveItem", { title: moving[0].label })
+              : t("workflowNav.moveSelected", { count: moving.length })
+          }
+          initialName={editing?.name}
+          initialParentId={
+            dialogRequest.mode === "create"
+              ? (dialogRequest.parentId ?? "")
+              : dialogRequest.mode === "rename"
+                ? (editing?.parentId ?? "")
+                : moving.length === 1
+                  ? (moving[0].parentId ?? "")
+                  : ""
+          }
+          choices={choices(
+            dialogRequest.mode === "rename"
+              ? editing?.id
+              : moving.length === 1 && moving[0].kind === "folder"
+                ? moving[0].id
+                : undefined,
+          )}
+          busy={workflow.busy}
+          error={workflow.error}
+          onClose={closeFolderDialog}
+          onSubmit={submitDialog}
+        />
       ) : null}
-      {moving ? (
-        <div className="workflow-navigation-editor">
-          <Field label={t("workflowNav.moveItem", { title: moving.label })}>
-            <Select value={destination} onChange={(event) => setDestination(event.target.value)}>
-              <option value="">{t("workflowNav.topLevel")}</option>
-              {choices(moving.kind === "folder" ? moving.id : undefined).map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folderPath(folders, folder)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <div className="workflow-navigation-actions">
-            <Button
-              disabled={workflow.busy}
-              onClick={() =>
-                void move(
-                  moving,
-                  destination
-                    ? entries.find((entry) => entry.kind === "folder" && entry.id === destination)
-                    : undefined,
-                  destination ? "inside" : "after",
-                )
-              }
-            >
-              {t("workflowNav.move")}
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={workflow.busy}
-              onClick={() => {
-                const siblings = treeSiblings(entries, destination || undefined).filter(
-                  (entry) => key(entry) !== key(moving) && (entry.rank ?? 0) === (moving.rank ?? 0),
-                );
-                void move(moving, siblings[0], "before");
-              }}
-            >
-              {t("workflowNav.moveFirst")}
-            </Button>
-            <Button variant="ghost" onClick={() => setMoving(null)}>
-              {t("common.cancel")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      {removeId ? (
-        <div className="workflow-navigation-editor" role="alert">
-          <p>{t("workflowNav.removeHint")}</p>
-          <Button
-            disabled={workflow.busy}
-            onClick={async () => {
-              if (await workflow.mutate({ kind: "folder.remove", folderId: removeId }))
-                setRemoveId(null);
-            }}
-          >
-            {t("workflowNav.removeFolder")}
-          </Button>
-          <Button variant="ghost" onClick={() => setRemoveId(null)}>
-            {t("common.cancel")}
-          </Button>
-        </div>
-      ) : null}
-      {beforeTree}
+      {folderMenu.menu}
       {shortcuts
         .filter((group) => group.ids.length)
         .map((group) => (

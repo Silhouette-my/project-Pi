@@ -5,8 +5,8 @@ import type {
   SessionSummary,
   WorkflowNavigation as NavigationRecord,
 } from "@pi-desktop/shared";
-import { Button, Checkbox, Field, Select, TooltipButton } from "../../components/ui";
-import { IconFolder, IconNewSession, IconStar } from "../../components/icons";
+import { Button, TooltipButton } from "../../components/ui";
+import { IconFolder, IconNewSession } from "../../components/icons";
 import { api } from "../../lib/api";
 import { sessionArchived } from "../../lib/sidebar-session-groups";
 import { useAppStore } from "../../stores/app-store";
@@ -25,9 +25,6 @@ type Props = {
 export function WorkflowNavigation({ sessions, renderSessions }: Props) {
   const workflow = useProjectWorkflow();
   const { t } = useTranslation();
-  const [manage, setManage] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [destination, setDestination] = useState("");
   const [creating, setCreating] = useState(false);
   const [creationError, setCreationError] = useState<string | null>(null);
   const snapshot = workflow.snapshot;
@@ -71,41 +68,7 @@ export function WorkflowNavigation({ sessions, renderSessions }: Props) {
             });
         }}
       >
-        {manage ? (
-          <Checkbox
-            checked={selected.includes(session.id)}
-            label={
-              <span className="sr-only">
-                {t("workflowNav.selectChat", { title: session.title })}
-              </span>
-            }
-            onChange={() =>
-              setSelected((ids) =>
-                ids.includes(session.id)
-                  ? ids.filter((id) => id !== session.id)
-                  : [...ids, session.id],
-              )
-            }
-          />
-        ) : null}
         <div className="workflow-navigation-session">{renderSessions([session])}</div>
-        {manage ? (
-          <TooltipButton
-            className="sidebar-toolbar-button"
-            tooltip={t("workflowNav.favorite")}
-            ariaLabel={t("workflowNav.favorite")}
-            aria-pressed={record(session.id).favorite}
-            disabled={workflow.busy}
-            onClick={() =>
-              void workflow.mutate({
-                kind: "navigation.update",
-                navigation: { ...record(session.id), favorite: !record(session.id).favorite },
-              })
-            }
-          >
-            <IconStar size={12} />
-          </TooltipButton>
-        ) : null}
       </div>
     );
   }
@@ -119,11 +82,6 @@ export function WorkflowNavigation({ sessions, renderSessions }: Props) {
       <NavigationTree
         context={{ scope: "chats" }}
         label={t("workflowNav.chats")}
-        manage={manage}
-        onManageChange={(value) => {
-          setManage(value);
-          setSelected([]);
-        }}
         toolbarActions={
           <TooltipButton
             className="sidebar-toolbar-button"
@@ -157,42 +115,6 @@ export function WorkflowNavigation({ sessions, renderSessions }: Props) {
           const session = eligible.find((session) => session.id === entry.id);
           return session ? renderChat(session) : null;
         }}
-        beforeTree={
-          <>
-            {manage && selected.length ? (
-              <div className="workflow-navigation-editor">
-                <Field label={t("workflowNav.moveSelected", { count: selected.length })}>
-                  <Select
-                    value={destination}
-                    onChange={(event) => setDestination(event.target.value)}
-                  >
-                    <option value="">{t("workflowNav.unfiled")}</option>
-                    {folders.map((folder) => (
-                      <option key={folder.id} value={folder.id}>
-                        {folder.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Button
-                  disabled={workflow.busy}
-                  onClick={async () => {
-                    if (
-                      await workflow.mutate({
-                        kind: "navigation.move",
-                        sessionIds: selected,
-                        folderId: destination || undefined,
-                      })
-                    )
-                      setSelected([]);
-                  }}
-                >
-                  {t("workflowNav.move")}
-                </Button>
-              </div>
-            ) : null}
-          </>
-        }
         shortcuts={[
           { label: t("workflowNav.favorites"), ids: favorites.map((item) => item.id) },
           { label: t("workflowNav.recent"), ids: recent.map((item) => item.id) },
