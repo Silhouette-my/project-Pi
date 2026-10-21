@@ -23,7 +23,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const MAX_PROMPT_BYTES = 64 * 1024;
+export const MAX_PROMPT_BYTES = 64 * 1024;
 
 export type CustomSystemPrompt = {
   /** Resolved `SYSTEM.md` content, when a file was found. */
@@ -46,7 +46,7 @@ export function customSystemPromptDirs(
   };
 }
 
-function limitUtf8(content: string, maxBytes: number): string {
+export function limitUtf8(content: string, maxBytes: number): string {
   if (Buffer.byteLength(content, "utf8") <= maxBytes) return content;
   let bytes = 0;
   let end = 0;

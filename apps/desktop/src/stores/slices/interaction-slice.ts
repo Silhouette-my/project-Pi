@@ -62,19 +62,24 @@ export function createInteractionSlice({
     setPage: (page, opts) => {
       runtime.beginNavigationIntent();
       const record = opts?.record !== false;
+      const projectConsoleId = page === "project" ? opts?.projectId : undefined;
       set((state) => {
-        if (!record) return { page };
+        if (!record) return { page, projectConsoleId };
         const entry = {
           page,
           sessionId: page === "chat" ? state.activeSessionId : undefined,
+          projectId: projectConsoleId,
         };
         const stack = state.navStack.slice(0, state.navIndex + 1);
         const last = stack[stack.length - 1];
         const same =
-          last?.page === entry.page && last?.sessionId === entry.sessionId;
+          last?.page === entry.page &&
+          last?.sessionId === entry.sessionId &&
+          last?.projectId === entry.projectId;
         const nextStack = same ? stack : [...stack, entry].slice(-50);
         return {
           page,
+          projectConsoleId,
           navStack: nextStack,
           navIndex: nextStack.length - 1,
         };
@@ -98,7 +103,11 @@ export function createInteractionSlice({
       if (state.navIndex <= 0) return;
       const index = state.navIndex - 1;
       const entry = state.navStack[index];
-      set({ navIndex: index, page: entry.page });
+      set({
+        navIndex: index,
+        page: entry.page,
+        projectConsoleId: entry.page === "project" ? entry.projectId : undefined,
+      });
       if (entry.page === "chat" && entry.sessionId) {
         void get().selectSession(entry.sessionId, {
           record: false,
@@ -114,7 +123,11 @@ export function createInteractionSlice({
       if (state.navIndex >= state.navStack.length - 1) return;
       const index = state.navIndex + 1;
       const entry = state.navStack[index];
-      set({ navIndex: index, page: entry.page });
+      set({
+        navIndex: index,
+        page: entry.page,
+        projectConsoleId: entry.page === "project" ? entry.projectId : undefined,
+      });
       if (entry.page === "chat" && entry.sessionId) {
         void get().selectSession(entry.sessionId, {
           record: false,

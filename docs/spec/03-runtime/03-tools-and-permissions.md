@@ -19,6 +19,23 @@
 | Edit contract | line-anchored ops + whole-file `tag`; no `old_string`/`new_string` (ADR 0087) |
 | asktool | interactive multi-question tool; no validity deadline; skipped answers become empty output fields |
 
+### Workflow Shell requires a separate decision
+
+A workflow's writable paths constrain typed Read/Write/Edit tools. To build or
+test with Bash, approve the exact command on its permission card. Shell effects
+can reach beyond those paths; this approval is command authority, not a file
+sandbox.
+
+The trusted Host turn binding derives `approvalScope: "workflow-shell"` on the
+existing permission request. Every foreground Bash invocation waits for a fresh
+`allow-once`, even in Auto mode or with an existing Bash session grant. The card
+shows complete arguments and omits Allow for session. A direct `allow-session`
+response is denied without storing a grant. Denial, cancellation, revoked or
+expired authorization, a changed decision or an inactive turn prevents launch.
+Approval applies to the captured pending invocation only; the next command needs
+its own request. Background/delegated execution and other uncontained tools stay
+unavailable to scoped Work. Ordinary unbound permissions are unchanged.
+
 ## 1. Goal
 
 Let the agent get things done, but stay under control by default.

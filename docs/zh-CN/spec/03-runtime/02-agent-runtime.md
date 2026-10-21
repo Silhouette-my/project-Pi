@@ -1272,3 +1272,81 @@ retries and images retain physical account/model attribution. Nested immediate
 parent and owning Task remain distinct. The migration does not add coding-agent
 AgentSession, Codemode or virtual routing. See the coding-agent design review for
 future adoption conditions.
+
+## Project workflow continuity runtime
+
+Electron `runtime/project-workflow-runtime.ts` 的
+`createProjectWorkflowRuntime` 实现共享 `ProjectWorkflowRuntimePort`。
+Rust 继续独占 workstream、版本、授权、候选和交付回执的持久状态；运行时不新增数据库。
+
+- 主线每轮读取当前有效决策、约束和规范资源引用；侧 Work 读取选定输入并继承当前约束。
+  Ask 只读取选区和所选资源。未采纳提案及原始侧聊日志不进入有效 Work 上下文。
+- Start 复用 AgentHost、原有队列与 Host 权限。Discuss 将执行状态、证据及后续增量放入
+  关联讨论；只有显式 pause 才停止 Work。Adopt 在安全边界停止旧版本，并为下一轮装配
+  新的有效决策。Ask 不回写有效状态；项目可见 Explore 只生成有来源的提案，私有探索
+  不自动回流。Work 成果交给持久 workstream，不依赖讨论父会话是否仍存在。
+- 授权 action 使用用户明确选定的精确标签（如 `implement`、`check`、`document`），
+  resource 使用精确路径或 URI，不扩展通配符或从摘要推导权限。初始有界任务使用首个
+  action 及选定资源；后续任务必须落在同一授权的 action/resource、有效期及总运行预算内。
+  Host 工具权限和根目录边界仍生效；每轮权限上限只能收窄，排队后也不扩大。
+
+Work 通过 AgentHost、持久队列与 launch 将 `workflowRunId` 传入 `session.beginTurn`。
+Host 验证 run 后将资源范围绑定到实际持久 turn，并在工具副作用前检查解析后的路径。
+Write/Edit 仅使用初始 dispatch/scope 的资源；规范上下文和可见成果、交付引用只增加读取
+输入，不授予写入范围。未绑定 workflow 的普通 Agent 保持原契约。
+
+有界执行允许 Host 限定的 `Read`、`Write`、`Edit` 与 `asktool` 澄清。前台 Bash 使用独立
+的逐次授权：Host 对每次完整精确参数等待用户 `allow-once`，auto 和 session grant 均不能
+绕过。`workflow-shell` 审批明确提示 Shell 副作用可能超出选定写入资源；批准不是可复用
+token，Host 在实际启动前复核 turn 和作用域。等待审批保持实际 turn 活跃，不记为 unknown
+或触发重试。
+
+已批准命令的非零退出码仍是可诊断、修复并再次检查的真实失败；后续每次 Bash 都需新审批。
+数值退出码确认的是命令执行完毕，不代表检查通过或验收满足。审批拒绝、取消或
+`WORKFLOW_RESOURCE_DENIED` 会停止实际 Agent loop，在工具结算后发出唯一终止 error，
+不再发出成功 `agent_end`。Host 的执行前 `workflow-shell` 拒绝标记记录已知 failed 副作用；
+超时、信号退出或生命周期失败若没有整数退出回执，则停止 loop 并保留不确定状态。拒绝、取消均不自动重试。Shell `runInBackground` 模式、递归搜索、
+委派、plugin/MCP、图片、浏览器、定时及其他无法约束的工具仍拒绝；此路径不新增 OS sandbox。
+
+资源范围在 run 排队、执行、暂停或存在未知副作用期间保守占用，不能从 `check` 等标签
+推导只读。重叠侧 Work 在创建会话前返回明确冲突；显式不相交的侧授权仍可并行。本地路径
+和 file URI 会解析已存在祖先，识别 symlink 别名和将创建的输出路径；仅大小写不同的路径
+按目标卷现存目录语义处理，语义不明时保守占用。仲裁不扩大授权或
+授予文件访问。主线续跑只使用其已有授权，不借用侧任务授权。下一步因资源占用阻塞时，
+由后续 Host 变化触发重检，并保留 checkpoint 原定的 action、资源子集和 prompt。
+
+最终回复包含唯一 `project-workflow-checkpoint` JSON 围栏：`summary`、可选 `next`
+（`action`、`resources`、`prompt`）、`stop`、`artifacts`、`evidence`、
+`consumedDeliveryIds`。成果与证据使用共享 schema；运行时固定来源和归属为实际 run，
+并标注证据为 agent-reported。测试、界面、真实账号和部署证据保持各自版本、环境和限制。
+
+运行结束不等于验收完成。侧成果在排队和执行期间保持 delivered，只有实际接收它的
+owner run 的终态 checkpoint 明确确认所提供的 delivery ID，才标记 consumed；未确认
+则停下评审。旧决策成果保留在来源 run 中并标为 stale，不替换当前候选。
+
+Pause 只停止受影响 workstream。Shell 等待审批时，按精确 Host request ID 拒绝该调用，
+不再无限等待工具边界，也不借此中止已启动的进程。只有实际终态回执确认该 Shell 未执行、
+且没有未知副作用，才允许 Resume 在原有效授权限制内重新安排相同任务、action 和资源子集。
+先前已确认的效果保留且不重放，新 Shell 调用必须重新审批。Cancel 不安排后续运行；审批
+竞态或已启动命令仍遵守原安全边界与未知副作用规则。
+
+队列项确认在执行前取消时同样持久化原任务，Resume 可重新排队；未知副作用不可重放。
+恢复依赖实际 AgentHost 终态或已持久化的可信 run 终态回执，
+模型输出的 checkpoint 字符串本身不是完成凭证。稳定的 run/result/stage 标识保证
+中断结算幂等。Host 事件和持久 turn 结算驱动后续任务，不进行定时模型轮询或原样失败重试。
+
+持久 user row 仅在对应可信 run 身份时保留 `workflow-run:<run.id>`。Ask/Explore 使用
+普通 UUID 消息和临时 read receipt；即使会话改作 Work，也不能用旧讨论回执识别真实 run。
+Workflow turn 不吸收其他任务的 promoted 或直接 steer 输入；变更输入需先 pause/discuss，
+再进入下一个有界 turn。
+
+组合根提供绑定项目和 provider 的普通会话创建、Host snapshot/mutate、transcript flush
+及 AgentHost。执行适配器要求 `assertExecutableSession`：consumer-only Chat 只作为
+讨论来源；Work 必须显式选择可执行 Agent 会话/模型，否则停在该边界，不自动换 provider。
+将 `contextForSession` 接入 session launch，在持久化修改后触发
+`onHostChanged`，在 durable endTurn 和 bridge 结算后触发 `onTurnSettled`，启动时先
+reconcile，关闭时 dispose。原 native Chat provider 与 Agent/Plan 路径不变。
+`project-workflow-runtime-lifecycle.test.mjs` 的合成生命周期证据与最终跨进程、界面验收分开。
+`project-workflow-runtime-host.test.mjs` 另用已发布的真实 Rust Host 验证主/侧工作并行、
+终态消费确认、暂停恢复及有数据重启；只有 provider 执行边界为合成实现。
+该测试为主、侧任务分别指定不重叠范围，并在确认消费前实际读取侧文件生成具体候选。

@@ -324,6 +324,16 @@ export function createSessionCoordination({
         projectPath: projectPath ?? undefined,
         ...(options.isolated ? { isolated: true } : {}),
       });
+      if (draftConfig?.promptPreset !== undefined) {
+        const configured = await api.configureSession(created.session.id, {
+          mode: created.session.mode,
+          providerId: created.session.providerId,
+          modelId: created.session.modelId,
+          thinkingLevel: created.session.thinkingLevel,
+          promptPreset: draftConfig.promptPreset,
+        });
+        created = { ...created, session: configured.session };
+      }
     } catch (error) {
       if (previousSessionId && runtime.navigationIntentIsCurrent(active)) {
         void get().selectSession(previousSessionId, {

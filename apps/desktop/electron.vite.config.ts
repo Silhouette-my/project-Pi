@@ -90,6 +90,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, "electron/preload/index.ts"),
           "plugin-panel": resolve(__dirname, "electron/preload/plugin-panel.ts"),
+          "chatgpt-chat": resolve(__dirname, "electron/preload/chatgpt-chat.ts"),
         },
         output: {
           format: "cjs",

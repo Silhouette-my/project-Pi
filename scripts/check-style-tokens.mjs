@@ -44,10 +44,21 @@ function stripVars(value) {
   return value;
 }
 
+/*
+ * Vendored design-system assets for the sandboxed visualization iframe
+ * (`src/features/visualize/assets`). They style a document the renderer does
+ * not own: the ported stylesheet defines its own token scale (`--background`,
+ * `--radius-*`, `--font-size-base`) inside the iframe, so the renderer's
+ * `--ds-*` scale cannot reach it. The files are kept verbatim from the
+ * upstream Codex visualize skill so a re-sync stays a diff, not a rewrite.
+ */
+const VENDORED_IFRAME_ASSETS = "apps/desktop/src/features/visualize/assets/";
+
 const violations = [];
 
 for (const file of walk(srcDir)) {
   const rel = relative(root, file);
+  if (rel.split(/[\\/]/).join("/").startsWith(VENDORED_IFRAME_ASSETS)) continue;
   const source = readFileSync(file, "utf8");
   if (file.endsWith(".css")) {
     for (const violation of findLiteralSurfaceColors(source)) {

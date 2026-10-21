@@ -1,0 +1,82 @@
+/*
+  In-conversation visualization cards (```visualize fences). The card chrome
+  follows the Mermaid block density; the content inside the iframe is styled
+  by the ported design system, not by these rules.
+*/
+
+.visualize-card {
+  margin: 0.85em 0;
+  overflow: hidden;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+  color: var(--ds-text-primary);
+}
+
+/*
+  `mode:"wide"` lets a card outgrow the prose column up to the official
+  1,024px design width. The middle term tracks the chat pane rather than the
+  column: the row clips descendants past its padding box, so the card must
+  not reach the pane edge. `clamp` keeps the card at least column-wide when
+  the pane is too narrow to grow.
+*/
+.visualize-card.wide {
+  width: clamp(100%, calc(100vw - 340px), 1024px);
+}
+
+.visualize-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  padding: 3px 6px 3px 14px;
+  background: var(--ds-tile-deep);
+}
+
+.visualize-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-compact);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.visualize-card-title > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visualize-frame {
+  display: block;
+  width: 100%;
+  min-height: 64px;
+  border: 0;
+  background: transparent;
+  color-scheme: light dark;
+}
+
+.visualize-card-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 14px 16px;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.visualize-card-action {
+  padding: 12px 16px;
+  font-size: var(--text-sm);
+}
+
+.visualize-card-action pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

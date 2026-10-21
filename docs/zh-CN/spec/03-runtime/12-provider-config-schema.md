@@ -57,6 +57,7 @@
         "anthropic_messages",
         "google_generative_ai",
         "openai_codex_responses",
+        "chatgpt_conversation",
         "pi_messages",
         "auto"
       ]
@@ -230,6 +231,13 @@ IPC 方法、存储 schema 或权限边界。
 | apiStyle | 提供商类型 | authKind | 名称 | baseUrl |
 |---|---|---|---|---|
 | `opencode_go` | `openai_compatible` | `api_key_and_base_url` | `OpenCode Go` | `https://opencode.ai/zen/go/v1` |
+| `chatgpt_conversation` | `openai_compatible` | `none` | 用户自定义 | `https://chatgpt.com/backend-api` |
+
+对 `chatgpt_conversation` 而言，`authKind: "none"` 仅表示无需 Host 管理的 API key，
+仍需在独立持久 Chromium 分区中登录。提供商记录不含 cookie 或 OAuth 凭据。
+设置中的服务地址固定只读，模型名称与 ID 来自已登录消费者账号目录，不从
+静态 `gpt-6` 或 Codex 目录填充。此类提供商共用浏览器登录状态；登录本身不会
+创建提供商，仍需明确保存服务及所选模型。
 
 OpenCode Go（以及任何 `opencode.ai` 主机）的 LLM 请求必须带稳定的
 `x-opencode-session`。agent-runtime 在会话、子代理、插件拥有的提示词增强与其它插件 one-shot

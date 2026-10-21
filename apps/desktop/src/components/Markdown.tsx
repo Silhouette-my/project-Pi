@@ -96,8 +96,10 @@ import {
   themeForMode,
   tokenizeIncremental,
   type LineCache,
-  type ThemeMode,
 } from "../lib/shiki";
+import { useThemeMode } from "../lib/use-theme-mode";
+import { parseVisualizeFence } from "../features/visualize/visualize-fence";
+import { VisualizeCard } from "../features/visualize/VisualizeCard";
 
 /*
  * Streaming-optimized chat markdown renderer.
@@ -122,35 +124,6 @@ export function useCopy() {
     });
   }, []);
   return { copied, copy };
-}
-
-/* ---------- theme (follows documentElement[data-theme]) ---------- */
-
-const themeListeners = new Set<() => void>();
-let themeObserver: MutationObserver | null = null;
-
-function subscribeTheme(listener: () => void): () => void {
-  if (!themeObserver) {
-    themeObserver = new MutationObserver(() => {
-      for (const cb of themeListeners) cb();
-    });
-    themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-  }
-  themeListeners.add(listener);
-  return () => {
-    themeListeners.delete(listener);
-  };
-}
-
-function getThemeSnapshot(): ThemeMode {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
-}
-
-function useThemeMode(): ThemeMode {
-  return useSyncExternalStore(subscribeTheme, getThemeSnapshot, getThemeSnapshot);
 }
 
 /* ---------- syntax highlighting ---------- */
@@ -422,6 +395,8 @@ function MermaidBlock({ code, ...position }: { code: string } & SourcePositionPr
 
 /* ---------- react-markdown component overrides ---------- */
 
+const MarkdownSourceIdentityContext = createContext("");
+
 const MarkdownBlockContext = createContext({
   closedFence: false,
   renderDiagrams: true,
@@ -471,6 +446,7 @@ function PreBlock({
   ...rest
 }: ComponentProps<"pre"> & SourcePositionProps & { node?: unknown }) {
   const { closedFence, renderDiagrams } = useContext(MarkdownBlockContext);
+  const sourceId = useContext(MarkdownSourceIdentityContext);
   const info = extractCode(children);
   // Hooks stay unconditional: the fence language and closed-ness can flip
   // between streaming renders, so the lookup must run on every render.
@@ -485,6 +461,25 @@ function PreBlock({
     info.lang.toLowerCase() === "mermaid"
   ) {
     return <MermaidBlock code={info.code} {...sourcePositionProps(rest)} />;
+  }
+  // A visualize fence becomes a sandboxed card only once it is closed, so a
+  // half-typed reference streams as plain text; an unparseable payload
+  // stays a plain code block.
+  if (
+    renderDiagrams &&
+    closedFence &&
+    info.lang.toLowerCase() === "visualize"
+  ) {
+    const spec = parseVisualizeFence(info.code);
+    if (spec) {
+      return (
+        <VisualizeCard
+          sourceId={sourceId}
+          spec={spec}
+          sourcePosition={sourcePositionProps(rest)}
+        />
+      );
+    }
   }
   if (blockEntry) {
     return (
@@ -957,8 +952,10 @@ export const Markdown = memo(function Markdown({
   renderDiagrams = true,
   baseDir,
   streaming = false,
+  sourceId,
 }: {
   source: string;
+  sourceId?: string;
   renderDiagrams?: boolean;
   /** True only while an assistant message is still receiving text. */
   streaming?: boolean;
@@ -1012,6 +1009,7 @@ export const Markdown = memo(function Markdown({
   );
   let sourceOffset = 0;
   return (
+    <MarkdownSourceIdentityContext.Provider value={sourceId ?? source}>
     <MarkdownFileMenuContext.Provider value={openMarkdownFileMenu}>
       <MarkdownBaseDirContext.Provider value={baseDir ?? ""}>
         {fullSourceTooLarge ? (
@@ -1056,5 +1054,6 @@ export const Markdown = memo(function Markdown({
       </MarkdownBaseDirContext.Provider>
       <ContextMenu state={fileMenu} onClose={closeFileMenu} />
     </MarkdownFileMenuContext.Provider>
+    </MarkdownSourceIdentityContext.Provider>
   );
 });

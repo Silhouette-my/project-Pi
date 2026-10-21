@@ -20,6 +20,7 @@ import {
 import {
   capabilitiesFromModelConfig,
   clampThinkingLevel,
+  resolveChatInstructions,
   loadCustomSystemPrompt,
   loadInstructionChain,
   loadSubagentDefinitions,
@@ -79,6 +80,9 @@ export type SessionLaunchRuntimeDependencies = {
     capabilities: ReturnType<typeof capabilitiesFromModelConfig>;
   };
   normalizeThinkingLevel: (value: unknown) => SessionThinkingLevel;
+  /** Current host-owned workstream projection; resolved anew at each turn boundary. */
+  workflowContextForSession?: (sessionId: string) => Promise<string | undefined>;
+  isProjectAgentSession?: (sessionId: string) => Promise<boolean>;
 };
 
 export function createSessionLaunchRuntime({
@@ -95,6 +99,8 @@ export function createSessionLaunchRuntime({
   bindingForModel,
   effectiveSubagentModelConfig,
   normalizeThinkingLevel,
+  workflowContextForSession,
+  isProjectAgentSession,
 }: SessionLaunchRuntimeDependencies) {
   const isHostUnavailable = (error: unknown): boolean =>
     (error as { errorCode?: string } | null | undefined)?.errorCode ===
@@ -439,6 +445,17 @@ export function createSessionLaunchRuntime({
     // pi-compatible SYSTEM.md / APPEND_SYSTEM.md (issue #542): resolved once
     // per launch; a change retires the runtime through the reuse match.
     const customSystemPrompt = await loadCustomSystemPrompt(localInstructionRoot);
+    // ChatGPT chat mode replaces the desktop agent prompt with a per-session
+    // chat instruction preset (spec 03-runtime/11). A preset id that no longer
+    // resolves falls back to the built-in chat persona silently; a change
+    // retires the runtime through the reuse match.
+    const chatInstructions =
+      apiStyle === "chatgpt_conversation"
+        ? await resolveChatInstructions(
+            localInstructionRoot,
+            typeof session.promptPreset === "string" ? session.promptPreset : undefined,
+          )
+        : undefined;
     let projectMemory: string | undefined;
     if (projectPath) {
       try {
@@ -695,6 +712,12 @@ export function createSessionLaunchRuntime({
         });
       }
     }
+    const workflowContext = await workflowContextForSession?.(sessionId);
+    const discussionOnly = await isProjectAgentSession?.(sessionId) ?? false;
+    if (workflowContext && apiStyle !== "chatgpt_conversation") {
+      projectInstructions = { entries: [...(projectInstructions?.entries ?? []),
+        { source: "Project workflow context (reference data)", content: workflowContext }] };
+    }
     return {
       providerId: provider.id,
       modelId,
@@ -702,6 +725,7 @@ export function createSessionLaunchRuntime({
       workspaceRoot,
       sidecarParams: {
         sessionId,
+        ...(discussionOnly ? { discussionOnly: true } : {}),
         mode,
         ...(overrides.turnId ? { turnId: overrides.turnId } : {}),
         thinkingLevel,
@@ -714,6 +738,8 @@ export function createSessionLaunchRuntime({
         ...(remoteWorkspace ? { remoteWorkspace } : {}),
         ...(workspaceRoot ? { workspaceRoot } : {}),
         customSystemPrompt,
+        ...(chatInstructions !== undefined ? { chatInstructions } : {}),
+        ...(workflowContext && apiStyle === "chatgpt_conversation" ? { chatWorkflowContext: workflowContext } : {}),
         projectInstructions,
         projectMemory,
         provider: {

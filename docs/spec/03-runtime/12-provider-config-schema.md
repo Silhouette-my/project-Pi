@@ -60,6 +60,7 @@ Tables (canonical DDL in [04-data-storage](04-data-storage.md) §4.3–4.4, §4.
         "anthropic_messages",
         "google_generative_ai",
         "openai_codex_responses",
+        "chatgpt_conversation",
         "pi_messages",
         "auto"
       ]
@@ -404,6 +405,16 @@ unauthenticated requests. Named cloud presets retain their declared auth kind.
 | apiStyle | provider type | authKind | name | baseUrl |
 |---|---|---|---|---|
 | `opencode_go` | `openai_compatible` | `api_key_and_base_url` | `OpenCode Go` | `https://opencode.ai/zen/go/v1` |
+| `chatgpt_conversation` | `openai_compatible` | `none` | user-defined | `https://chatgpt.com/backend-api` |
+
+For `chatgpt_conversation`, `authKind: "none"` means no Host-managed API key,
+not anonymous access: login is required in the dedicated persistent Chromium
+partition. Provider records contain no cookies or OAuth credentials. The
+settings endpoint is fixed/read-only; model IDs and display names come from
+the signed-in consumer account catalog, not Codex or a static `gpt-6` list.
+Login state is shared across these provider rows. See §4 of the provider/model
+system spec. Login does not create a provider row: the user still saves the
+service and selected model bindings explicitly.
 
 ### Named endpoint presets
 

@@ -98,6 +98,10 @@ CREATE TABLE sessions (
                                           'high', 'xhigh', 'max', 'omit')),
   permission_mode TEXT NOT NULL DEFAULT 'inherit'
                 CHECK (permission_mode IN ('inherit', 'ask', 'accept-edits', 'auto')),
+  -- ChatGPT chat-mode instruction preset id (spec 03-runtime/11). NULL means
+  -- the built-in chat persona; 'none' means no system prompt at all. No CHECK:
+  -- ids are file stems discovered at launch, so the host cannot enumerate them.
+  prompt_preset TEXT,
   source      TEXT,
   deleted_at  INTEGER,
   pinned      INTEGER NOT NULL DEFAULT 0,
@@ -155,6 +159,7 @@ CREATE TABLE turn_queue (
   content          TEXT NOT NULL,
   attachments_json TEXT,
   session_message_id TEXT,
+  workflow_run_id   TEXT,
   user_message_id TEXT,
   permission_mode  TEXT NOT NULL,
   position         INTEGER NOT NULL,

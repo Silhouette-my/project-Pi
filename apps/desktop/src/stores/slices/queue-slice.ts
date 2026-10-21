@@ -514,6 +514,7 @@ export function createQueueSlice({
       } catch (error) {
         // Keep sendPrompt's Promise<boolean> contract so the composer can
         // restore a draft cleared before submission, even on unexpected setup errors.
+        get().showToast(messageErrorFromUnknown(error).message, { variant: "error" });
         return false;
       } finally {
         pendingSubmissions.delete(submissionKey);

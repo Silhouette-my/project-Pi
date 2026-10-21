@@ -1,5 +1,6 @@
 import { app, BrowserWindow, crashReporter, Menu, safeStorage } from "electron";
 import { createScheduledRunner } from "../runtime/scheduled-runner";
+import { installSystemDockIcon } from "../system-dock-icon";
 import {
   APP_NAME,
   APP_VERSION,
@@ -13,6 +14,7 @@ import {
 import { installApplicationMenu } from "../application-menu";
 import { installPluginAssetProtocol } from "../plugin-asset-protocol";
 import { installPluginRendererProtocol } from "../plugin-renderer-protocol";
+import { installVisualizeFrameProtocol } from "../visualize-frame-protocol";
 import { registerPluginSchemes } from "../plugin-schemes";
 import { applyNetworkProxyFromAppSettings } from "../network-proxy";
 import { readCloseBehavior } from "../window-preferences";
@@ -113,6 +115,7 @@ export type StartupDependencies = {
   getSidecar?: () => unknown;
   invokeSessionCollaboration?: (input: McpControlInvokeInput) => Promise<unknown>;
   onSessionQueueChange?: () => void;
+  startProjectWorkflow?: () => Promise<void>;
 };
 
 /**
@@ -177,6 +180,7 @@ export function registerApplicationStartup(deps: StartupDependencies): void {
     // create a window, a tray, or a child process on top of the running app.
     if (!hasSingleInstanceLock) return;
     applyDevelopmentBranding();
+    installSystemDockIcon();
 
     // A Chromium-process crash from a previous run left a minidump, and nothing
     // else would ever mention it. Report one durable line per new dump set,
@@ -199,6 +203,7 @@ export function registerApplicationStartup(deps: StartupDependencies): void {
     installPluginRendererProtocol((pluginId, generation, requestPath) =>
       plugins.resolveRendererSource(pluginId, generation, requestPath),
     );
+    installVisualizeFrameProtocol();
     // Load the close-behavior preference before the first window exists: the
     // close handler reads `closeBehavior` synchronously, and a window created
     // while it still held the "ask" default would prompt a user who already
@@ -306,14 +311,18 @@ export function registerApplicationStartup(deps: StartupDependencies): void {
     });
     scheduledRunner.start();
     app.once("before-quit", () => scheduledRunner.stop());
+    let agentHostRestored = false;
     if (!bootError && state.agentHostBridge) {
       // Restore the persisted turn queue now that host-core answers. Restored
       // entries stay held until a controller attaches (D375).
-      state.agentHostBridge.agentHost.start().catch((error) => {
+      try {
+        await state.agentHostBridge.agentHost.start();
+        agentHostRestored = true;
+      } catch (error) {
         logger.app("runtime", "warn", "agent host queue restore failed", {
           data: String(error),
         });
-      });
+      }
     }
     const host = getHost();
     if (host) {
@@ -344,6 +353,10 @@ export function registerApplicationStartup(deps: StartupDependencies): void {
       // If the backend never started, retain the default focused/global path.
       applyPluginLauncherShortcut();
       applyToggleWindowShortcut();
+    }
+    if (agentHostRestored) {
+      try { await deps.startProjectWorkflow?.(); }
+      catch (error) { logger.app("runtime", "error", "project workflow reconciliation failed", { data: String(error) }); }
     }
     await ensureWindow();
     if (process.env.PI_DESKTOP_MCP_CONTROL === "1") {

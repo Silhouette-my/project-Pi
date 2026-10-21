@@ -21,6 +21,7 @@ import {
 export const JEV_SERVICE = "jev";
 
 export const CUSTOM_SERVICE = "custom";
+export const CHATGPT_CHAT_SERVICE = "chatgpt-chat";
 
 type Translate = (key: string) => string;
 
@@ -74,6 +75,17 @@ export function customServiceOption(translate: Translate): ServiceOption {
     label,
     endpoint: "",
     haystack: `${label} custom endpoint`.toLowerCase(),
+  };
+}
+
+/** Chat uses the browser account, independently of the Codex OAuth service. */
+export function chatServiceOption(translate: Translate): ServiceOption {
+  const label = translate("settings.apiStyleChatGPTConversation");
+  return {
+    id: CHATGPT_CHAT_SERVICE,
+    label,
+    endpoint: translate("settings.chatgptChatLogin"),
+    haystack: `${label} chatgpt chat conversation browser subscription chatgpt.com`.toLowerCase(),
   };
 }
 

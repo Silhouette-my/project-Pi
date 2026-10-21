@@ -9,6 +9,55 @@
 
 ---
 
+### E2E-PROVIDER-chatgpt-chat-login-and-stream
+
+- **前提：** 隔离 worktree 和已构建桌面端；自动化仅使用合成 page/host/SSE。
+  真实登录验收需用户授权的 ChatGPT 订阅账号。
+- **步骤：** 添加 `chatgpt_conversation` 自定义服务，确认无 API key 输入；
+  完成登录，确认窗口关闭且PI显示已登录。刷新消费者账号目录，选中实际返回的
+  模型（账号返回Pro时一并选择），明确保存服务。先发两轮普通聊天，再测Pro；
+  取消另一轮，重启后继续；测试已启用的connector，最后退出登录。
+- **预期：** 原生界面流式回复，远端 parent 连续，取消/关闭/退出不遗留请求；重启
+  保留登录并重放历史至新远端会话；connector 活动可见但不执行本地 agent 工具；
+  退出仅清除独立分区。
+- **登录及目录预期：** CF HTML200不算登录；验证、跳转和网络失败可见，等待有界。
+  登录成功刷新真实模型slug/default effort，无猜测Pro slug或Codex兜底。
+- **规格：** `03-runtime/11-provider-model-system.md` 及
+  `chatgpt-conversation-browser-transport` ADR。
+- **验收：** B / C / Security / Quality，post-MVP。
+- **覆盖：** `chatgpt-chat*.test.mjs`、`chatgpt-conversation.test.ts`、
+  `chatgpt-sidecar.test.ts` 和 shared `chatgpt-chat.test.ts`。
+  原生 `chatgpt-browser-lifecycle.test.mjs` 覆盖离屏 iframe 调度、临时交互登录
+  视图销毁，以及无传输宿主窗口时跨进程重启的合成登录状态共享。
+- **状态：** 用户已实测登录、消费端目录（含 `gpt-6-pro`）、保存服务及测试连接
+  成功，但生成在对话 POST 前的 Sentinel 授权步骤超时。原生合成测试复现了普通
+  未挂载视图的调度问题并验证离屏生命周期修复。修复后的真实生成、connector及
+  额度归属仍由用户验收；实现者不代发账号侧测试消息。
+
+### E2E-PROVIDER-chatgpt-chat-instruction-presets
+
+- **前提：** 已保存并登录的 `chatgpt_conversation` 服务；
+  `<workspace>/.pi/chat-instructions/` 与 `~/.pi/agent/chat-instructions/`
+  下均有预设文件，且存在同名 id。自动化仅使用合成 fs/runtime 边界，
+  CI 不使用真实账号。
+- **步骤：** 打开 ChatGPT 模型聊天会话，打开「聊天指令」按钮；依次选择
+  默认、无、覆盖全局的工作区预设，每次选择后发送一轮。重启应用确认选择
+  保留。删除预设文件后再发送。打开非聊天会话确认按钮不出现。
+- **预期：** 按钮仅对本地会话的 `chatgpt_conversation` 模型显示。默认发送
+  内置聊天人格（无工具规则）；完全不发送任何系统提示词；预设按文件内容
+  原文发送，工作区优先于全局。选择随会话记录跨重启保留；预设被删除后
+  静默回退内置人格。菜单只列出 id，不出现文件内容，也不把保留 id `none`
+  作为文件提供。
+- **规格：** `03-runtime/11-provider-model-system.md`。
+- **验收：** B / C / Quality，聊天模式提示词控制。
+- **覆盖：** agent-runtime `chat-instructions.test.ts`、
+  `chat-instructions-runtime.test.ts`、`chatgpt-conversation.test.ts`；
+  desktop `chat-instruction-presets.test.mjs`、
+  `composer-chat-instructions.test.mjs`；host-core `prompt_preset`
+  迁移与 configure 测试。
+- **状态：** 已实现并有原生合成覆盖；各选项下的真实账号生成与
+  `E2E-PROVIDER-chatgpt-chat-login-and-stream` 一并进行用户验收。
+
 ### E2E-PI-130-kernel-upgrade
 
 - **Preconditions:** Pi 1.3.0 with migrated patches, isolated fixture state, and
@@ -5792,7 +5841,9 @@ eleven-tool-round desktop paths are verified by
 ## 8. 可追溯性矩阵
 | 验收 | 应用场景 |
 |---|---|
+| B / C / Security / Quality — ChatGPT 订阅聊天 | E2E-PROVIDER-chatgpt-chat-login-and-stream |
 | B / Security / Quality — Optional provider client certificate requests | E2E-PROVIDER-optional-client-certificate |
+| B / C / Quality — ChatGPT 聊天指令预设 | E2E-PROVIDER-chatgpt-chat-instruction-presets |
 | C / E / F / Quality / Security — Session Todo checklist | E2E-CHAT-session-todo-checklist |
 | C / E / Security / Quality — Live Voice 四阶段交互 | E2E-LIVE-VOICE-four-stage-ui |
 | C / F — Hourly task updates | E2E-SCHEDULED-manual-to-hourly |
@@ -5863,6 +5914,7 @@ eleven-tool-round desktop paths are verified by
 | G — 插件（独立会话通信） | E2E-SESSION-independent-top-level-communication |
 | 品质（独立会话通信） | E2E-SESSION-independent-top-level-communication、E2E-SESSION-hover-card-model-and-links |
 | C — 对话与流式（hover 卡片模型和链接） | E2E-SESSION-hover-card-model-and-links |
+| 项目工作流 MVP — AC01–AC12 | E2E-PROJECT-workflow-durable-loop |
 | D — 工作区（删除项目） | E2E-PROJECT-delete-removes-project-and-owned-sessions |
 | F — 持久化（删除项目） | E2E-PROJECT-delete-removes-project-and-owned-sessions |
 | 品质（删除项目） | E2E-PROJECT-delete-removes-project-and-owned-sessions |
@@ -5909,6 +5961,7 @@ eleven-tool-round desktop paths are verified by
 | 受信任扩展（R7 v1 npm 恢复） | E2E-PLUGIN-import-extension-recovers-missing-npm |
 | Post-MVP 回归覆盖（插件工具调度） | E2E-PLUGIN-slow-tool-is-not-cut-off-by-host-dispatch |
 | M6+（删除项目） | E2E-PROJECT-delete-removes-project-and-owned-sessions |
+| 项目工作流 MVP | E2E-PROJECT-workflow-durable-loop |
 | M6+（两步删除） | E2E-SESSION-two-click-delete-arms-first |
 | C — 对话和直播（模型回退） | E2E-SUBAGENT-ordered-model-fallback-preserves-work |
 | 品质（模型回退隔离） | E2E-SUBAGENT-ordered-model-fallback-preserves-work |
@@ -6452,6 +6505,33 @@ eleven-tool-round desktop paths are verified by
   恢复它。成绩单和项目绑定保持不变。
 - 传统的 `manual` 首选项加载时不会出现拖动重新排序
   可供性。
+
+### E2E-PROJECT-workflow-durable-loop
+
+- **前提条件**：任务候选构建、隔离的 profile 与 SQLite 数据库，其中已有 ProjectGroup、Chat 会话和本地项目根目录。使用合成 runtime/provider 边界；不使用真实账户、付费模型调用、已安装应用或用户 profile。
+- **步骤**：将普通 Chat 归入文件夹，移动一个会话并移除一个文件夹；重启后继续已有 Chat。未选中任何会话时打开 Project Console，检查真实 workstream、负责人、阻塞项、下一步和候选产物。采纳带来源的决策并授予明确用户授权，然后开始工作。创建具有独立上下文/写回策略的 Ask 和 Explore 分支，确认未采纳的提案不会影响 Work。在 Chat 讨论执行证据、采纳新决策，并在同一 workstream 中继续。发布侧会话结果，关闭其父会话，再在 workstream 中消费并集成。让旧 run 结果与较新的已采纳决策竞争，并把用户反例附加到精确候选和验收项。搜索消息与 artifact，通过 breadcrumb 跳转，并确认后台活动不改变手动导航顺序。工作期间暂停并重启；协调实际 run 状态，保留未知外部副作用但不重放，并保持无关工作可用。没有活动会话时打开精确记录的候选和资源，写入绑定 revision/environment 的反馈，并确认本地测试不会被标成线上部署。拒绝项目根目录之外的本地引用，以及被现有 URL gate 拒绝的 HTTP(S) 引用。最后验证现有 Agent/Plan、Chat 转录、项目指令/记忆、权限、session fork 和历史入口仍可使用。
+- **预期**：文件夹操作无损且重启后仍有效；项目身份与转录语义不变。Console 和搜索读取持久化 host 状态，不显示伪造进度。用户命令与 runtime 观察按能力分离并使用 revision 控制。只有明确用户授权才能启动工作；采纳会推进决策 fence。Run 完成、交付、消费和验收互不混同。过期结果只保留为证据，不覆盖有效状态。打开引用须通过既有 host 路径/URL gate，并返回记录的 revision。未知副作用不会重放。
+- **Shell 边界**：在已有 Bash 会话授权的 Auto 工作流中请求两条前台命令。检查完整参数和超出可写路径的警示；每条均独立等待“仅允许一次”，不提供“允许本会话”。批准一条、拒绝另一条，并取消另一项待审批请求：只有获批命令执行一次。待审批时撤销工作流授权，确认迟到的批准不能启动命令。使用真实命令验证 implementation/check/fix/document 续跑，不扩大文件授权。
+- **产品验收映射**：
+
+  | AC | 所需场景证据 |
+  |---|---|
+  | AC01 | 文件夹移动/移除、继续已有 Chat 并重启 |
+  | AC02 | 不依赖活动会话的 Project Console 显示真实工作、负责人、阻塞项与候选产物 |
+  | AC03 | 新会话使用有效项目上下文及资源引用 |
+  | AC04 | Discuss → Work → 新证据 → Chat → 采纳 → 在同一 workstream 继续 |
+  | AC05 | 授权范围内继续工作；越权边界只请求一次具体决定 |
+  | AC06 | Ask 上下文隔离，Explore 结果须采纳后才能生效 |
+  | AC07 | 父会话关闭后，侧结果仍可交付并由持久 workstream 消费 |
+  | AC08 | 决策 revision 隔离过期 run；反例指向精确候选/条件 |
+  | AC09 | 搜索结果通过 breadcrumb 跳转；后台活动不重排导航且历史可达 |
+  | AC10 | 暂停/重启协调、不重放未知副作用、无关工作仍可运行 |
+  | AC11 | 打开精确候选/资源并记录反馈；unit/local test 不等于 live/deployment evidence |
+  | AC12 | 现有 Agent/Plan、Chat、项目记忆、权限、fork 与历史仍可用 |
+
+- **关联规格**：[项目工作流状态](/zh-CN/spec/02-architecture/project-workflow-state)、`docs/project-workflow-mvp/PRODUCT.md`、[ADR](/adr/project-workflow-durable-state)。
+- **验收范围**：项目工作流 MVP AC01–AC12。
+- **状态**：已定义，尚未验收。shared schema、Host 和 IPC 测试只是组件级证据，不能证明渲染旅程、runtime 生命周期、重启恢复或集成验收。完成这些路径后，按精确任务候选记录结果。
 
 ### E2E-PROJECT-delete-removes-project-and-owned-sessions
 

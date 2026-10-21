@@ -5,6 +5,9 @@ export const esEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Visualizaciones interactivas en la conversación: los fragmentos HTML que escribe el asistente se muestran como tarjetas aisladas con las que puedes interactuar y hacer preguntas de seguimiento.",
+      "El inicio de sesión de ChatGPT muestra la verificación y los errores y después carga los modelos de tu cuenta, sin una lista fija.",
+      "Chatea con tu suscripción de ChatGPT en la interfaz nativa tras iniciar sesión una vez en el navegador.",
       "Los plugins instalados aparecen como tarjetas en una cuadrícula autoajustable, cada una con una acción clara y su estado de confianza, actualización y alcance a la vista.",
       "Lee valoraciones y reseñas públicas de los plugins del mercado y abre el centro de plugins para escribir una: la aplicación de escritorio nunca inicia sesión.",
       "Los comandos Bash largos continúan como tareas en segundo plano cuando termina el turno, y puedes consultar su salida después.",
@@ -20,6 +23,8 @@ export const esEntries: ChangelogEntry[] = [
       "Abre artefactos HTML locales dentro de la sesión que los creó.",
       "Desplázate por tablas Markdown anchas sin alterar el diseño de la conversación.",
       "Las conversaciones siguen funcionando si una herramienta devuelve una imagen demasiado grande.",
+      "Compila proyectos LaTeX con una skill integrada y diagnostica o instala cadenas de herramientas TeX.",
+      "Delega la investigación profunda con múltiples fuentes a un subagente dedicado y obtén un informe Markdown citado con su registro de fuentes.",
     ],
   },
   {

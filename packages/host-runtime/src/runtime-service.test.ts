@@ -233,6 +233,29 @@ describe("RuntimeService prompt lifecycle", () => {
     expect(host.messages.get("s1")?.[0]?.id).toBe(id);
   });
 
+  it("preserves a workflow assignment identity through durable persistence and sidecar launch", async () => {
+    const { host, sidecar, service } = build();
+    const id = "workflow-run:workflow:manual:workstream-1:step-4";
+    await service.prompt({ sessionId: "s1", content: "Run the assigned step", userMessageId: id,
+      workflowRunId: "workflow:manual:workstream-1:step-4", effectivePermissionMode: "ask", principal: owner });
+
+    expect(host.messages.get("s1")?.[0]?.id).toBe(id);
+    expect(host.calls.find((call) => call.method === "session.beginTurn")?.params.workflowRunId).toBe("workflow:manual:workstream-1:step-4");
+    expect(sidecar.calls.find((call) => call.method === "agent.prompt")?.params).toMatchObject({
+      userMessageId: id,
+      workflowRunId: "workflow:manual:workstream-1:step-4",
+    });
+  });
+
+  it("does not trust a workflow-shaped message id without its matching workflow identity", async () => {
+    const { host, service } = build();
+    const requested = "workflow-run:workflow:other";
+    await service.prompt({ sessionId: "s1", content: "ordinary prompt", userMessageId: requested,
+      workflowRunId: "workflow:current", effectivePermissionMode: "ask", principal: owner });
+
+    expect(host.messages.get("s1")?.[0]?.id).not.toBe(requested);
+  });
+
   it("refuses a second prompt while the turn runs and settles the turn on agent_end", async () => {
     const { host, sidecar, service, ended } = build();
     await service.prompt({ sessionId: "s1", content: "hello", effectivePermissionMode: "ask", principal: owner });
@@ -330,12 +353,13 @@ describe("RuntimeService prompt lifecycle", () => {
       argsPreview: "rm",
       risk: "high",
       reason: "shell",
+      approvalScope: "workflow-shell",
     });
     expect(events).toHaveLength(1);
     expect(events[0]?.turnId).toBe("turn-1");
     expect(events[0]?.event).toMatchObject({
       type: "tool_permission_request",
-      request: { requestId: "req-1", agentName: "reviewer", parentToolCallId: "task-1" },
+      request: { requestId: "req-1", approvalScope: "workflow-shell", agentName: "reviewer", parentToolCallId: "task-1" },
     });
   });
 

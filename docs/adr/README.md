@@ -20,11 +20,14 @@ Each ADR includes:
 
 | ID | Title | Status |
 |---|---|---|
+| isolated-visualize-frame-document | [Isolated visualization frame documents](isolated-visualize-frame-document.md) | Accepted for implementation |
+| chatgpt-conversation-browser-transport | [ChatGPT conversation browser transport](chatgpt-conversation-browser-transport.md) | Accepted for implementation |
 | provider-metadata-client-certificate-retry | [Provider metadata recovery from optional client certificates](provider-metadata-client-certificate-retry.md) | Implemented candidate |
 | device-local-project-lists-in-config-sync | [Device-local project lists in configuration sync](device-local-project-lists-in-config-sync.md) | Accepted |
 | s3-only-configuration-backup-sync | [S3-only encrypted configuration backup and synchronization](s3-only-configuration-backup-sync.md) | Accepted; supersedes WebDAV decisions in 0300 / 0301 |
 | remote-provider-import | [Explicit provider import into a running remote Host](remote-provider-import.md) | Accepted for the experimental SSH MVP |
 | remote-project-home-workflow | [Remote projects in the shared Chat home workflow](remote-project-home-workflow.md) | Accepted |
+| project-workflow-durable-state | [Project Workflow durable state](project-workflow-durable-state.md) | Accepted for local MVP implementation |
 | composer-mcp-invocations | [Composer MCP Invocations](composer-mcp-invocations.md) | Accepted |
 | chronological-system-transcript | [Preserve chronological model system state](chronological-system-transcript.md) | Accepted |
 | mcp-tool-approval-risk | [User MCP tools keep the normal approval path](mcp-tool-approval-risk.md) | Accepted |

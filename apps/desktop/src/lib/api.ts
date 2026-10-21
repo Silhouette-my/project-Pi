@@ -1,4 +1,5 @@
 import { projectPlanHistory } from "./plan-history";
+import { createProjectWorkflowApi } from "./project-workflow-api";
 import { guardRemoteInvocation } from "./remote-ipc-safety";
 import { isRemoteSession, safeSessionSummary } from "./remote-session-safety";
 import type {
@@ -153,6 +154,7 @@ import type {
   TrustedExtensionUiPromptResponse,
   SessionTodoSnapshot,
   StorageInfo,
+  ChatGptChatStatus,
 } from "@pi-desktop/shared";
 import {
   defaultCommandShellForPlatform,
@@ -662,6 +664,14 @@ function normalizePlansChangedEvent(value: unknown): PlanningStateEvent {
 }
 
 export const api = {
+  projectWorkflow: createProjectWorkflowApi(invoke, (channel, listener) => {
+    if (!window.piDesktop) throw new Error("piDesktop preload bridge unavailable");
+    return window.piDesktop.on(channel, listener);
+  }),
+  chatgptChatStatus: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatStatus),
+  chatgptChatLogin: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatLogin),
+  chatgptChatImportLogin: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatImportLogin),
+  chatgptChatLogout: () => invoke(IPC.invoke.chatgptChatLogout),
   getVersion: () => invoke<AppVersionInfo>(IPC.invoke.appGetVersion),
   health: () => invoke<HostHealth>(IPC.invoke.appHealth),
   getOnboarding: () => invoke<OnboardingState>(IPC.invoke.appGetOnboarding),
@@ -783,7 +793,10 @@ export const api = {
   configureSession: (
     id: string,
     config: Pick<SessionSummary, "mode" | "providerId" | "modelId"> &
-      Partial<Pick<SessionSummary, "thinkingLevel" | "permissionMode">>,
+      Partial<Pick<SessionSummary, "thinkingLevel" | "permissionMode">> & {
+        /** Chat instruction preset id; null clears it (spec 03-runtime/11). */
+        promptPreset?: string | null;
+      },
   ) =>
     invoke<{ session: SessionSummary }>(
       IPC.invoke.sessionConfigure,
@@ -1163,6 +1176,12 @@ export const api = {
       content,
       ...(projectPath === undefined ? {} : { projectPath }),
     }),
+  /** ChatGPT chat-mode instruction preset ids (spec 03-runtime/11). */
+  listPromptPresets: (projectPath?: string) =>
+    invoke<{ presets: Array<{ id: string }> }>(
+      IPC.invoke.promptPresetList,
+      projectPath === undefined ? {} : { projectPath },
+    ),
   resolvePermission: (resolution: ToolPermissionResolution) =>
     invoke(IPC.invoke.toolResolvePermission, resolution),
   resolveAskTool: (resolution: AskToolResolution) =>

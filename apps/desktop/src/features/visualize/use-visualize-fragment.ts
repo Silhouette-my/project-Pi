@@ -1,0 +1,100 @@
+import { useEffect, useState } from "react";
+import { sessionAllows } from "../../lib/remote-session-safety";
+import { useSlotSessionId } from "../../plugins/renderer-slots/use-slots";
+import { api } from "../../lib/api";
+import { useAppStore } from "../../stores/app-store";
+
+/*
+ * Reads the HTML fragment a visualize fence points at. The renderer never
+ * touches the filesystem directly, so this rides the existing `fsRead`
+ * channel — the same contained read the file preview uses (workspace,
+ * scratch, and attachment roots; the host's text-size cap applies).
+ *
+ * A module cache keyed by session + message/card + path keeps revisiting a message from
+ * re-reading the file, mirroring `useReferencedImageDataUrl`.
+ */
+
+export type VisualizeFragment =
+  | { kind: "loading" }
+  | { kind: "text"; content: string }
+  | { kind: "too-large" }
+  | { kind: "error" };
+
+const fragmentCache = new Map<string, string>();
+const FRAGMENT_CACHE_ENTRIES = 30;
+
+function remember(key: string, content: string) {
+  fragmentCache.set(key, content);
+  while (fragmentCache.size > FRAGMENT_CACHE_ENTRIES) {
+    const oldest = fragmentCache.keys().next().value;
+    if (oldest === undefined) break;
+    fragmentCache.delete(oldest);
+  }
+}
+
+export function useVisualizeFragment(path: string | null, cardId: string): VisualizeFragment {
+  const paneSessionId = useSlotSessionId();
+  const sessionId = useAppStore((s) => paneSessionId || s.activeSessionId);
+  const localToolsAllowed = useAppStore((s) => {
+    const id = paneSessionId || s.activeSessionId;
+    return sessionAllows(
+      s.sessions.find((item) => item.id === id) ??
+        (id?.startsWith("remote:") ? { id } : undefined),
+      "canUseLocalTools",
+    );
+  });
+  const requestedKey =
+    localToolsAllowed && path ? `${sessionId ?? ""}\0${cardId}\0${path}` : null;
+  const [resolved, setResolved] = useState<{
+    key: string;
+    fragment: VisualizeFragment;
+  }>({ key: "", fragment: { kind: "loading" } });
+
+  useEffect(() => {
+    if (!requestedKey || !path) {
+      setResolved({ key: "", fragment: { kind: "error" } });
+      return;
+    }
+    const cached = fragmentCache.get(requestedKey);
+    if (cached !== undefined) {
+      setResolved({
+        key: requestedKey,
+        fragment: { kind: "text", content: cached },
+      });
+      return;
+    }
+    let current = true;
+    setResolved({ key: requestedKey, fragment: { kind: "loading" } });
+    void api
+      .fsRead(path, undefined, sessionId ?? undefined)
+      .then((result) => {
+        if (!current) return;
+        if (result.kind === "text" && typeof result.content === "string") {
+          remember(requestedKey, result.content);
+          setResolved({
+            key: requestedKey,
+            fragment: { kind: "text", content: result.content },
+          });
+        } else if (result.kind === "tooLarge") {
+          setResolved({ key: requestedKey, fragment: { kind: "too-large" } });
+        } else {
+          setResolved({ key: requestedKey, fragment: { kind: "error" } });
+        }
+      })
+      .catch(() => {
+        if (current) {
+          setResolved({ key: requestedKey, fragment: { kind: "error" } });
+        }
+      });
+    return () => {
+      current = false;
+    };
+  }, [path, requestedKey, sessionId]);
+
+  if (!requestedKey) return { kind: "error" };
+  const cached = fragmentCache.get(requestedKey);
+  if (cached !== undefined) return { kind: "text", content: cached };
+  return resolved.key === requestedKey
+    ? resolved.fragment
+    : { kind: "loading" };
+}

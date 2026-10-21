@@ -7,6 +7,8 @@ import { parseMcpServerIds, parseMcpToolNames } from "./mcp-tool-selection.js";
 import { randomUUID } from "node:crypto";
 import type { ModelAuth } from "@earendil-works/pi-ai";
 import { ParentHostProxy } from "./parent-host-proxy.js";
+import { createChatGptConversationStreams } from "./chatgpt-conversation.js";
+import type { ProviderStreams } from "@earendil-works/pi-ai";
 import { visionFromModelConfig } from "./model-capabilities.js";
 import { hydrateAttachmentHistory } from "./attachment-history.js";
 import { classifyAgentError } from "./agent-errors.js";
@@ -17,6 +19,7 @@ import {
   type RuntimePrompt,
   type RuntimePromptAttachment,
   type RuntimeProviderConfig,
+  workflowSetupDenial,
 } from "./runtime.js";
 import type { PluginSkillDef } from "./plugin-skills-prompt.js";
 import type { SessionMessageOrigin, TrustedExtensionSpec } from "@pi-desktop/shared";
@@ -69,6 +72,7 @@ function nativeProjectPaths(params: { projectPaths?: unknown } | undefined): str
 
 const runtimes: RuntimeMap = new Map();
 const hostProxy = new ParentHostProxy();
+const chatGptStreams = new Map<string, ProviderStreams>();
 const testRuntimeIds = new WeakMap<DesktopAgentRuntime, string>();
 function testRuntimeIdentity(sessionId: string) {
   if (process.env.PI_DESKTOP_PLAN_UI_PROBE !== "1") {
@@ -106,6 +110,8 @@ function testRuntimeIdentity(sessionId: string) {
 
 type RuntimeParams = {
   sessionId: string;
+  /** Trusted Main projection of the immutable Host-owned project Agent link. */
+  discussionOnly?: boolean;
   mode?: Mode;
   /** Durable host turn ID for the prompt currently being executed. */
   turnId?: string;
@@ -132,11 +138,23 @@ type RuntimeParams = {
   /** An isolated session's worktree root, supplied by Electron main (ADR 0329). */
   workspaceRoot?: string;
   customSystemPrompt?: CustomSystemPrompt;
+  /**
+   * ChatGPT chat-mode system prompt content (spec 03-runtime/11). Encoding:
+   * `undefined` = built-in chat persona (also the fallback for a stale preset
+   * id); `""` = the "None" selection, send no system prompt at all; any other
+   * string = that preset's file content. Only consulted for
+   * `apiStyle: "chatgpt_conversation"` providers.
+   */
+  chatInstructions?: string;
+  /** Host-selected project workflow reference data; not repository instructions. */
+  chatWorkflowContext?: string;
   projectInstructions?: ProjectInstructions;
   projectMemory?: string;
   compactionSettings?: ContextCompactionSettings;
   attachmentsDir?: string;
   userMessageId?: string;
+  /** Trusted binding for one workflow turn; never copied into RuntimeParams state. */
+  workflowRunId?: string;
   sessionMessage?: SessionMessageOrigin;
   attachments?: RuntimePromptAttachment[];
 };
@@ -157,6 +175,15 @@ function withVendorAuth<T extends RuntimeProviderConfig>(
   sessionId: string,
   provider: T,
 ): T {
+  if (provider?.apiStyle === "chatgpt_conversation") {
+    const key = `${sessionId}:${provider.id}:${provider.modelId}`;
+    let streams = chatGptStreams.get(key);
+    if (!streams) {
+      streams = createChatGptConversationStreams(hostProxy, (activity) => runtimes.get(sessionId)?.emitHostedToolActivity(activity));
+      chatGptStreams.set(key, streams);
+    }
+    return { ...provider, authKind: "none", chatGptStreams: streams };
+  }
   if (provider?.authKind !== OAUTH_AUTH_KIND) return provider;
   return {
     ...provider,
@@ -242,7 +269,10 @@ async function runtimeFor(
     jevApiKey: params.jevApiKey,
     projectInstructions: params.projectInstructions,
     customSystemPrompt: params.customSystemPrompt,
+    chatInstructions: params.chatInstructions,
+    chatWorkflowContext: params.chatWorkflowContext,
     projectMemory: params.projectMemory,
+    discussionOnly: params.discussionOnly,
     projectPath: params.projectPath,
     remoteWorkspace: params.remoteWorkspace,
     workspaceRoot: params.workspaceRoot,
@@ -320,8 +350,11 @@ async function runtimeFor(
     remoteWorkspace: params.remoteWorkspace,
     workspaceRoot: params.workspaceRoot,
     customSystemPrompt: params.customSystemPrompt,
+    chatInstructions: params.chatInstructions,
+    chatWorkflowContext: params.chatWorkflowContext,
     projectInstructions: params.projectInstructions,
     projectMemory: params.projectMemory,
+    discussionOnly: params.discussionOnly,
     scratchDir:
       typeof params.scratchDir === "string" && params.scratchDir
         ? params.scratchDir
@@ -451,6 +484,18 @@ async function handle(method: string, params: any): Promise<unknown> {
       const attachments = Array.isArray(params.attachments)
         ? (params.attachments as RuntimePromptAttachment[])
         : undefined;
+      const workflowRunId = typeof params.workflowRunId === "string" && params.workflowRunId.trim()
+        ? params.workflowRunId.trim()
+        : undefined;
+      const extensionDenial = workflowSetupDenial(
+        workflowRunId,
+        Array.isArray(params.trustedExtensions) ? params.trustedExtensions : undefined,
+      );
+      if (extensionDenial) {
+        throw Object.assign(new Error(extensionDenial), {
+          errorCode: "WORKFLOW_RESOURCE_DENIED",
+        });
+      }
       const runtime = await runtimeFor(params, content);
       const userMessageId =
         typeof params.userMessageId === "string" && params.userMessageId
@@ -474,7 +519,7 @@ async function handle(method: string, params: any): Promise<unknown> {
         attachments,
         ...(params.sessionMessage ? { sessionMessage: params.sessionMessage as SessionMessageOrigin } : {}),
       };
-      void runtime.prompt(prompt, userMessageId, turnId).catch((err) => {
+      void runtime.prompt(prompt, userMessageId, turnId, workflowRunId).catch((err) => {
         // Rejected-prompt path (pre-flight/transport failures). Streamed
         // provider errors surface via stopReason "error" and are classified
         // and emitted by the runtime itself.
@@ -621,6 +666,9 @@ async function handle(method: string, params: any): Promise<unknown> {
       if (runtime) {
         await runtime.dispose();
         runtimes.delete(sessionId);
+      }
+      for (const key of chatGptStreams.keys()) {
+        if (key.startsWith(`${sessionId}:`)) chatGptStreams.delete(key);
       }
       return { ok: true };
     }

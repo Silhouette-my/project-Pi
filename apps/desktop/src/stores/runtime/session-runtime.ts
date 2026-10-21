@@ -43,12 +43,17 @@ export type SessionConfiguration = Pick<
   SessionSummary,
   "mode" | "providerId" | "modelId" | "thinkingLevel"
 > &
-  Partial<Pick<SessionSummary, "permissionMode">>;
+  Partial<Pick<SessionSummary, "permissionMode">> & {
+    // ChatGPT chat-mode instruction preset id (spec 03-runtime/11). null
+    // clears it back to the built-in chat persona; mergeSessionConfiguration
+    // forwards null while skipping only undefined.
+    promptPreset?: string | null;
+  };
 
 export type SessionSelection = { id: string; intent: number };
 
 export type SessionRuntime = {
-  readonly pendingNewSessionRequests: Map<string, Promise<void>>;
+  readonly pendingNewSessionRequests: Map<string, Promise<string | void>>;
   readonly sessionTranscriptCache: Map<string, UiMessage[]>;
   readonly liveSessionTranscripts: Set<string>;
   readonly sessionHistoryCache: Map<string, SessionHistoryWindow>;
@@ -126,7 +131,7 @@ export function createSessionRuntime({ get, set }: StoreAccess): SessionRuntime 
   let pendingSessionSelection: SessionSelection | null = null;
   let sessionWorkspaceQueue: Promise<unknown> = Promise.resolve();
 
-  const pendingNewSessionRequests = new Map<string, Promise<void>>();
+  const pendingNewSessionRequests = new Map<string, Promise<string | void>>();
   const sessionTranscriptCache = new Map<string, UiMessage[]>();
   const liveSessionTranscripts = new Set<string>();
   const sessionHistoryCache = new Map<string, SessionHistoryWindow>();

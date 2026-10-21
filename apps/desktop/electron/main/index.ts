@@ -75,6 +75,8 @@ import { createPluginServices } from "./services/plugin-services";
 import type { ComposerSuggestionAnswer } from "./services/composer-suggestion";
 import { wirePluginThemeRuntimeServices } from "./plugin-theme-services";
 import { createSessionCollaborationService } from "./services/session-collaboration";
+import { createProjectWorkflowHostPort } from "./services/project-workflow-host";
+import { createDesktopProjectWorkflow } from "./services/project-workflow-desktop";
 import {
   createApplicationLifecycle,
 } from "./bootstrap/app-lifecycle";
@@ -388,6 +390,8 @@ const createdSessionLaunchRuntime = createSessionLaunchRuntime({
   bindingForModel,
   effectiveSubagentModelConfig,
   normalizeThinkingLevel,
+  workflowContextForSession: (sessionId) => projectWorkflow.contextForSession(sessionId),
+  isProjectAgentSession: (sessionId) => projectWorkflow.isProjectAgentSession(sessionId),
 });
 sessionLaunchRuntime = createdSessionLaunchRuntime;
 const {
@@ -679,6 +683,26 @@ const planUiProbe = createPlanUiProbe({
 });
 
 let emitAgentEvent: (envelope: AgentEventEnvelope) => void = () => undefined;
+const projectWorkflowHost = createProjectWorkflowHostPort(getHost, (event) => {
+  sendToRenderer(IPC.event.projectWorkflowChanged, event);
+  Promise.resolve().then(() => projectWorkflow.runtime?.onHostChanged?.(event)).catch((error) =>
+    logger.app("runtime", "error", "Workflow update failed", { data: { error: describeError(error) } }));
+});
+const projectWorkflow = createDesktopProjectWorkflow({
+  host: projectWorkflowHost,
+  getHost: () => {
+    const host = getHost();
+    if (!host) throw Object.assign(new Error("Host unavailable"), { errorCode: "HOST_UNAVAILABLE" });
+    return host;
+  },
+  getAgentHost: () => {
+    const bridge = mainState.agentHostBridge;
+    if (!bridge) throw Object.assign(new Error("Agent Host unavailable"), { errorCode: "AGENT_UNAVAILABLE" });
+    return bridge.agentHost;
+  },
+  flushTranscript: async () => { await eventPersistence.flush(); await persistenceOutbox.flush(getHost); return persistenceOutbox.size() === 0; },
+  onSessionsChanged: () => sendToRenderer(IPC.event.sessionsChanged, { reason: "project.workflow" }),
+});
 
 const sessionCollaboration = createSessionCollaborationService({
   getHost,
@@ -717,7 +741,9 @@ const planRuntime = createPlanRuntime({
   acquireSessionOperation,
   resolveAgentRuntimeLaunch,
   isQuitting: () => mainState.quitting,
-  onTurnSettled: sessionCollaboration.settle,
+  onTurnSettled: async (sessionId, turnId) => {
+    await Promise.all([sessionCollaboration.settle(sessionId, turnId), projectWorkflow.onTurnSettled(sessionId)]);
+  },
 });
 const {
   finishTurn,
@@ -882,6 +908,8 @@ function registerIpc() {
     getHost,
     getSidecar,
     getAgentHostBridge: () => mainState.agentHostBridge,
+    projectWorkflowHost,
+    getProjectWorkflowRuntime: () => projectWorkflow.runtime,
     getBackendRouter: () => startupState.backendRouter,
     getNotificationViewingSessionId: () => mainState.notificationViewingSessionId,
     setNotificationViewingSessionId: (sessionId: string | null) => {
@@ -1065,6 +1093,7 @@ registerApplicationStartup({
       logger.app("runtime", "warn", "session callback drain failed", { data: String(error) });
     });
   },
+  startProjectWorkflow: () => projectWorkflow.initialize(),
 });
 
 registerShutdownHandlers({
@@ -1090,6 +1119,7 @@ registerShutdownHandlers({
   disposePowerSaveBlockers,
   liveCallService,
   disposeSystemProxyRelay,
+  disposeProjectWorkflow: () => projectWorkflow.dispose(),
 });
 
 registerApplicationActivation({

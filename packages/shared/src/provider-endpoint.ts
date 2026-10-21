@@ -210,6 +210,7 @@ export function canonicalEndpointUrl(value: string | undefined): string {
  * only says the user pasted a discovery URL rather than a base URL.
  */
 const OPERATION_SUFFIXES: ReadonlyArray<{ suffix: string; apiStyle?: CatalogApiStyle }> = [
+  { suffix: "/conversation", apiStyle: "chatgpt_conversation" },
   { suffix: "/chat/completions", apiStyle: "chat_completions" },
   { suffix: "/responses", apiStyle: "responses" },
   { suffix: "/messages", apiStyle: "anthropic_messages" },

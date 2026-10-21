@@ -5,6 +5,9 @@ export const ptBREntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Visualizações interativas na conversa: fragmentos HTML escritos pelo assistente são exibidos como cards isolados em sandbox, com os quais você interage e faz perguntas de acompanhamento.",
+      "O login do ChatGPT mostra a verificação e os erros e depois carrega os modelos da sua conta, sem uma lista fixa.",
+      "Converse com sua assinatura do ChatGPT na interface nativa após um único login no navegador.",
       "Os plugins instalados aparecem como cartões em uma grade de preenchimento automático, cada um com uma ação clara e o estado de confiança, atualização e escopo à vista.",
       "Leia notas e avaliações públicas dos plugins do mercado e abra o centro de plugins para escrever uma — o aplicativo de desktop nunca faz login.",
       "Comandos Bash longos continuam em tarefas em segundo plano após o turno, e você pode consultar a saída depois.",
@@ -20,6 +23,8 @@ export const ptBREntries: ChangelogEntry[] = [
       "Abra artefatos HTML locais na conversa que os criou.",
       "Role tabelas Markdown largas sem afetar o layout da conversa.",
       "A conversa continua utilizável quando uma ferramenta retorna uma imagem grande demais.",
+      "Compile projetos LaTeX com uma skill integrada e diagnostique ou instale cadeias de ferramentas TeX.",
+      "Delegue pesquisa profunda com várias fontes a um subagente dedicado e receba um relatório em Markdown citado com um registro de fontes.",
     ],
   },
   {

@@ -19,7 +19,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "apps" / "desktop" / "build"
@@ -56,30 +56,22 @@ def main() -> None:
     package_icon = BUILD / "icon.png"
     master.resize((512, 512), Image.LANCZOS).save(package_icon)
 
-    # macOS menu bar icons are template images: the opaque pixels are tinted
-    # by the system. The application icon has an opaque light tile, so using
-    # it directly would turn that tile into the tray silhouette. Derive the
-    # dark PI mark as a transparent, monochrome image instead.
-    tray_icon = master.convert("L")
+    # Pi's official mark has three brand colors on a neutral application
+    # tile. Extract color, not darkness: a luminance mask would discard the
+    # coral and gold paths and turn the tile into part of the tray icon.
+    red, green, blue, alpha = master.split()
+    brightest = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+    darkest = ImageChops.darker(ImageChops.darker(red, green), blue)
+    chroma = ImageChops.subtract(brightest, darkest)
     tray_alpha = ImageChops.multiply(
-        tray_icon.point(
-            lambda luminance: max(0, min(255, (160 - luminance) * 255 // 80))
-        ),
-        master.getchannel("A"),
+        chroma.point(lambda value: max(0, min(255, (value - 8) * 255 // 32))),
+        alpha,
     )
-    # The source artwork also contains a soft outline around its light app
-    # tile. Keep the known PI mark area so that outline cannot leak into the
-    # menu bar template silhouette.
-    mark_clip = Image.new("L", master.size, 0)
-    mark_draw = ImageDraw.Draw(mark_clip)
-    mark_draw.rectangle((120, 115, 850, 800), fill=255)
-    mark_draw.rectangle((120, 115, 250, 250), fill=0)
-    tray_alpha = ImageChops.multiply(tray_alpha, mark_clip)
     tray_icon_mac = Image.new("RGBA", master.size, (0, 0, 0, 0))
     tray_icon_mac.putalpha(tray_alpha)
     mark_bounds = tray_alpha.getbbox()
     if mark_bounds is None:
-        raise ValueError("canonical logo does not contain a dark PI mark")
+        raise ValueError("canonical logo does not contain the colored Pi mark")
     mark = tray_icon_mac.crop(mark_bounds).resize((768, 768), Image.LANCZOS)
     tray_icon_mac = Image.new("RGBA", master.size, (0, 0, 0, 0))
     tray_icon_mac.paste(mark, (128, 128), mark)

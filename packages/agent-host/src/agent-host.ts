@@ -84,6 +84,7 @@ export type QueueEntryView = {
   content: string;
   sessionMessageId?: string;
   userMessageId?: string;
+  workflowRunId?: string;
   voiceOrigin?: VoiceOrigin;
   attachments?: AgentPromptAttachment[];
   /** Set only for promoted entries; entries are already in delivery order. */
@@ -92,6 +93,10 @@ export type QueueEntryView = {
 
 export type StartTurnParams = {
   sessionId: string;
+  /** Host-owned work scope may narrow, never widen, the ordinary session grant. */
+  permissionCeiling?: RacpPermissionMode;
+  /** Trusted workflow assignment, checked against Host state before execution. */
+  workflowRunId?: string;
   idempotencyKey?: string;
   /** Main-private identity captured when authorizing a Live work scope. */
   expectedWorkspaceIdentity?: string | null;
@@ -142,6 +147,7 @@ type TurnRecord = RacpTurn & {
   /** The runtime's own turn id when it differs from the RACP id (queued turns). */
   runtimeTurnId?: string;
   principalSubject?: string;
+  workflowRunId?: string;
 };
 
 type SessionState = {
@@ -491,7 +497,7 @@ export class AgentHost {
     }
     const state = this.state(summary.id);
     state.permissionMode = summary.permissionMode;
-    const inputHash = hashInput(params.input);
+    const inputHash = hashInput(params.input, params.permissionCeiling, params.workflowRunId);
     const idempotencyKey = params.idempotencyKey ?? params.context.idempotencyKey;
     if (idempotencyKey) {
       const remembered = this.idempotency.get(`${principal.subject}|${idempotencyKey}`);
@@ -509,12 +515,16 @@ export class AgentHost {
         details: { expectedRevision: expected, revision: state.revision },
       });
     }
-    const effectivePermissionMode = effectiveRemotePermissionMode({
+    const sessionPermissionMode = effectiveRemotePermissionMode({
       sessionMode: summary.permissionMode,
       policy: this.policy,
       pairedDevice: principal.pairedDevice ?? false,
       approverOverride: principal.approverOverride ?? false,
     });
+    const permissionRank = { ask: 0, "accept-edits": 1, auto: 2 } as const;
+    const effectivePermissionMode = params.permissionCeiling !== undefined
+      && permissionRank[params.permissionCeiling] < permissionRank[sessionPermissionMode]
+      ? params.permissionCeiling : sessionPermissionMode;
     const admission: RacpTurnAdmission = forceQueue ? "queue" : params.admission ?? "reject_if_busy";
     const busy = this.isBusy(state);
     let turn: TurnRecord;
@@ -532,6 +542,7 @@ export class AgentHost {
         ...(params.input.voiceOrigin ? { voiceOrigin: params.input.voiceOrigin } : {}),
         ...(params.input.attachments ? { attachments: params.input.attachments } : {}),
         effectivePermissionMode,
+        ...(params.workflowRunId ? { workflowRunId: params.workflowRunId } : {}),
         ...(idempotencyKey ? { idempotencyKey } : {}),
         inputHash,
         createdAt: this.clock.now(),
@@ -544,6 +555,7 @@ export class AgentHost {
       turn.effectivePermissionMode = effectivePermissionMode;
       turn.idempotencyKey = idempotencyKey;
       turn.principalSubject = principal.subject;
+      turn.workflowRunId = params.workflowRunId;
       this.emit(state, "turn.queued", { turn: this.toRacpTurn(state, turn) }, { turnId: turn.id });
       this.notifyQueue(state.id);
     } else {
@@ -555,6 +567,7 @@ export class AgentHost {
         ...(params.input.voiceOrigin ? { voiceOrigin: params.input.voiceOrigin } : {}),
         ...(params.input.attachments ? { attachments: params.input.attachments } : {}),
         effectivePermissionMode,
+        ...(params.workflowRunId ? { workflowRunId: params.workflowRunId } : {}),
         ...(idempotencyKey ? { idempotencyKey } : {}),
         principal,
       });
@@ -564,6 +577,7 @@ export class AgentHost {
       turn.effectivePermissionMode = effectivePermissionMode;
       turn.idempotencyKey = idempotencyKey;
       turn.principalSubject = principal.subject;
+      turn.workflowRunId = params.workflowRunId;
       state.activeTurnId = turn.id;
       state.status = "running";
     }
@@ -665,6 +679,32 @@ export class AgentHost {
     if (turn.status === "queued") return this.cancelTurn(principal, turnId);
     if (isActive(turn.status)) await this.runtime.stop(state.id);
     return this.toRacpTurn(state, turn);
+  }
+
+  /** Stop one active workflow turn, then deny only its still-pending workflow Shell calls. */
+  async stopWorkflowTurn(principal: Principal, turnId: string): Promise<{ deniedToolCallIds: string[] }> {
+    this.requireRole(principal, "turn/stop");
+    const state = this.stateForTurn(turnId);
+    const turn = state.turns.get(turnId)!;
+    if (state.activeTurnId !== turnId || !isActive(turn.status)) return { deniedToolCallIds: [] };
+
+    await this.runtime.stop(state.id);
+    const isCurrentTurn = () => state.activeTurnId === turnId && isActive(turn.status);
+    if (!isCurrentTurn()) return { deniedToolCallIds: [] };
+    const resolutions = await this.approvals.denyWorkflowShellForTurn({
+      sessionId: state.id,
+      turnId,
+      revision: () => state.revision + 1,
+      lifetimeMs: this.approvalLifetime(state),
+      isCurrentTurn,
+      onResolved: (result) => {
+        this.afterApproval(state, turnId);
+        this.emit(state, "approval.resolved", result, { turnId });
+      },
+    });
+    return { deniedToolCallIds: resolutions.flatMap((resolution) =>
+      resolution.deniedToolCallId ? [resolution.deniedToolCallId] : []),
+    };
   }
 
   async interruptTurn(principal: Principal, turnId: string): Promise<RacpTurn> {
@@ -872,6 +912,7 @@ export class AgentHost {
       content: record.content,
       ...(record.sessionMessageId ? { sessionMessageId: record.sessionMessageId } : {}),
       ...(record.userMessageId ? { userMessageId: record.userMessageId } : {}),
+      ...(record.workflowRunId ? { workflowRunId: record.workflowRunId } : {}),
       ...(record.voiceOrigin ? { voiceOrigin: record.voiceOrigin } : {}),
       ...(record.attachments ? { attachments: record.attachments } : {}),
       ...(record.priority !== undefined ? { priority: record.priority } : {}),
@@ -981,6 +1022,7 @@ export class AgentHost {
         const record = await this.queue.shift(sessionId);
         if (!record) return;
         const turn = this.ensureTurn(state, record.id);
+        turn.workflowRunId = record.workflowRunId;
         this.startingQueuedTurns.set(sessionId, turn);
         try {
           const started = await this.runtime.prompt({
@@ -991,6 +1033,7 @@ export class AgentHost {
             ...(record.voiceOrigin ? { voiceOrigin: record.voiceOrigin } : {}),
             ...(record.attachments ? { attachments: record.attachments } : {}),
             effectivePermissionMode: record.effectivePermissionMode,
+            ...(record.workflowRunId ? { workflowRunId: record.workflowRunId } : {}),
             ...(record.idempotencyKey ? { idempotencyKey: record.idempotencyKey } : {}),
             principal: { subject: record.principalSubject, roles: ["controller"] },
           });
@@ -1059,8 +1102,12 @@ export class AgentHost {
       const head = await this.withAdmission(state.id, async () => {
         const record = this.queue.peek(state.id);
         if (!record || record.priority === undefined) return undefined;
+        // A bounded workflow is a separate execution/receipt boundary. Neither
+        // its input nor ordinary promoted input may be injected into that turn.
+        if (record.workflowRunId) return undefined;
         if (this.activeRuntimeTurnId(state) !== runtimeTurnId) return undefined;
         const active = state.turns.get(state.activeTurnId!);
+        if (active?.workflowRunId) return undefined;
         const externalDesktopTurn = active?.principalSubject === undefined && active?.runtimeTurnId === undefined;
         // Immediate delivery accepts only the paired caller's own input.
         if (principal && (!principal.pairedDevice || record.principalSubject !== principal.subject)) return undefined;
@@ -1527,11 +1574,13 @@ function requireSessionId(sessionId: string | undefined): string {
 }
 
 /** Small stable hash so a reused idempotency key with other input is detected. */
-export function hashInput(input: StartTurnParams["input"]): string {
+export function hashInput(input: StartTurnParams["input"], permissionCeiling?: RacpPermissionMode, workflowRunId?: string): string {
   const encoded = JSON.stringify({
     text: input.text,
     attachments: input.attachments ?? [],
     ...(input.sessionMessageId ? { sessionMessageId: input.sessionMessageId } : {}),
+    ...(permissionCeiling !== undefined ? { permissionCeiling } : {}),
+    ...(workflowRunId !== undefined ? { workflowRunId } : {}),
   });
   let hash = 5381;
   for (let index = 0; index < encoded.length; index += 1) {

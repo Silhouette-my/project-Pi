@@ -143,6 +143,7 @@ export function createAgentHostBridge(options: AgentHostBridgeOptions) {
             content: request.content,
             ...(request.sessionMessageId ? { sessionMessageId: request.sessionMessageId } : {}),
             ...(request.userMessageId ? { messageId: request.userMessageId } : {}),
+            ...(request.workflowRunId ? { workflowRunId: request.workflowRunId } : {}),
             ...(request.voiceOrigin ? { voiceOrigin: request.voiceOrigin } : {}),
             ...(request.attachments ? { attachments: request.attachments } : {}),
             ...(permissionModeOverride ? { permissionMode: permissionModeOverride } : {}),
@@ -280,7 +281,8 @@ export function createAgentHostBridge(options: AgentHostBridgeOptions) {
         agentHost.startTurn(DESKTOP_PRINCIPAL, {
           sessionId: request.sessionId,
           admission: "queue",
-            ...(request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : {}),
+          ...(request.workflowRunId ? { workflowRunId: request.workflowRunId } : {}),
+          ...(request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : {}),
           input: {
             text: request.content,
             ...(request.sessionMessageId ? { sessionMessageId: request.sessionMessageId } : {}),
@@ -298,6 +300,7 @@ export function createAgentHostBridge(options: AgentHostBridgeOptions) {
             id: result.turn.id,
             sessionId: request.sessionId,
             content: request.content,
+            ...(request.workflowRunId ? { workflowRunId: request.workflowRunId } : {}),
             ...(request.sessionMessageId ? { sessionMessageId: request.sessionMessageId } : {}),
             ...(request.userMessageId ? { userMessageId: request.userMessageId } : {}),
             ...(request.voiceOrigin ? { voiceOrigin: request.voiceOrigin } : {}),
@@ -567,6 +570,7 @@ function toQueueSummary(entry: QueueEntryView): QueuedTurnSummary {
     content: entry.content,
     ...(entry.sessionMessageId ? { sessionMessageId: entry.sessionMessageId } : {}),
     ...(entry.userMessageId ? { userMessageId: entry.userMessageId } : {}),
+    ...(entry.workflowRunId ? { workflowRunId: entry.workflowRunId } : {}),
     ...(entry.voiceOrigin ? { voiceOrigin: entry.voiceOrigin } : {}),
     ...(entry.attachments ? { attachments: entry.attachments } : {}),
     position: entry.turn.queuePosition ?? 0,

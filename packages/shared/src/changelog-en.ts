@@ -5,6 +5,9 @@ export const enEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "See interactive visualizations inline: HTML fragments the assistant writes render as sandboxed cards you can explore and ask follow-up questions from.",
+      "ChatGPT login now reports verification and failures, then loads your account’s model choices without a static model list.",
+      "Chat with your ChatGPT subscription in the native transcript after a one-time browser login.",
       "Browse installed plugins as cards in an auto-filling grid, each with one clear action and its trust, update, and scope state at a glance.",
       "Read public ratings and reviews for marketplace plugins, and open the plugin center to write one — the desktop never signs in.",
       "Keep long-running Bash commands going after a turn ends, then review their output as background tasks.",
@@ -20,6 +23,8 @@ export const enEntries: ChangelogEntry[] = [
       "Open local HTML artifacts within the session that created them.",
       "Scroll wide Markdown tables without losing the conversation layout.",
       "Keep conversations usable when a tool returns an oversized image.",
+      "Compile LaTeX projects and diagnose or install TeX toolchains from a built-in LaTeX skill.",
+      "Delegate deep multi-source research to a dedicated subagent and get a cited Markdown report with a source ledger.",
     ],
   },
   {

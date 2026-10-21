@@ -57,6 +57,11 @@ export type LifecycleDialogRequest = {
 export type LifecycleDialogDismiss = { requestId: string };
 export const IPC = {
   invoke: {
+    projectWorkflowSnapshot: "pi-desktop/projectWorkflow/snapshot",
+    projectWorkflowMutate: "pi-desktop/projectWorkflow/mutate",
+    projectWorkflowAction: "pi-desktop/projectWorkflow/action",
+    projectWorkflowSearch: "pi-desktop/projectWorkflow/search",
+    projectWorkflowOpenReference: "pi-desktop/projectWorkflow/openReference",
     storageGet: "pi-desktop/storage/get",
     storageChoose: "pi-desktop/storage/choose",
     storageMigrate: "pi-desktop/storage/migrate",
@@ -89,6 +94,10 @@ export const IPC = {
     notificationShowNative: "pi-desktop/notification/showNative",
     notificationSetViewingSession: "pi-desktop/notification/setViewingSession",
     agentPrompt: "pi-desktop/agent/prompt",
+    chatgptChatStatus: "pi-desktop/chatgptChat/status",
+    chatgptChatLogin: "pi-desktop/chatgptChat/login",
+    chatgptChatImportLogin: "pi-desktop/chatgptChat/importLogin",
+    chatgptChatLogout: "pi-desktop/chatgptChat/logout",
     agentSteer: "pi-desktop/agent/steer",
     speechTranscribe: "pi-desktop/speech/transcribe",
     speechSynthesize: "pi-desktop/speech/synthesize",
@@ -132,6 +141,8 @@ export const IPC = {
     agentGetStatus: "pi-desktop/agent/getStatus",
     agentInstructionsGet: "pi-desktop/agent/instructions/get",
     agentInstructionsSave: "pi-desktop/agent/instructions/save",
+    /** ChatGPT chat-mode instruction presets on disk (spec 03-runtime/11). */
+    promptPresetList: "pi-desktop/promptPreset/list",
     sessionList: "pi-desktop/session/list",
     sessionCreate: "pi-desktop/session/create",
     sessionFork: "pi-desktop/session/fork",
@@ -439,6 +450,7 @@ export const IPC = {
     nativeMenuAction: "pi-desktop/menu/nativeAction",
   },
   event: {
+    projectWorkflowChanged: "pi-desktop/projectWorkflow/event/changed",
     pluginChanged: "pi-desktop/event/pluginChanged",
     /** Progress of an install or update, while it is still running. */
     pluginInstallProgress: "pi-desktop/plugin/event/installProgress",

@@ -1,4 +1,5 @@
 import { IPC, type AgentEventEnvelope, type UiMessage } from "@pi-desktop/shared";
+import { getChatGptChatView } from "../chatgpt-chat-view";
 import {
   findSubagentProviderSource,
   modelConfigWithBinding,
@@ -363,6 +364,15 @@ export function createSidecarRuntime({
   const startSidecar = async (): Promise<void> => {
 
   const s = new AgentSidecar((text) => logger.child("agent", text));
+  s.setChatGptConversationTransport({
+    open: (params: Record<string, unknown>) => getChatGptChatView().open(params, (method, payload) => s.notifyHost(method, payload)),
+    cancel: (params: Record<string, unknown>) => getChatGptChatView().cancel(params),
+  });
+  s.onExit(() => {
+    void getChatGptChatView().cancelAll().catch((error) => {
+      logger.child("agent", `ChatGPT transport cancellation failed: ${String(error)}`);
+    });
+  });
   wireSidecar(s);
   // The directory a session's file tools work in: its isolated worktree
   // (ADR 0329), resolved by host-core from its own registry, or its project.

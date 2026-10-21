@@ -26,6 +26,9 @@ export type OptimisticSessionConfiguration = {
   thinkingLevel?: SessionThinkingLevel;
   mode?: unknown;
   permissionMode?: unknown;
+  // null clears the chat instruction preset back to the built-in persona; the
+  // host response replaces this transient value with the persisted state.
+  promptPreset?: string | null;
 };
 
 export type ThinkingProviderLike = {
@@ -97,7 +100,10 @@ export function applyOptimisticSessionConfiguration<T extends SessionThinkingSna
     config.providerId !== undefined && config.providerId !== session.providerId;
   const modelChanged =
     config.modelId !== undefined && config.modelId !== session.modelId;
-  const next = { ...session, ...config };
+  const next = { ...session };
+  for (const [key, value] of Object.entries(config)) {
+    if (value !== undefined) Object.assign(next, { [key]: value });
+  }
   if (!providerChanged && !modelChanged) return next;
   delete next.supportsReasoning;
   delete next.supportsVision;

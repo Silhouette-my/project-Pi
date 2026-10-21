@@ -47,6 +47,124 @@ Settings / UI
 
 ## 4. Provider types
 
+### ChatGPT subscription chat
+
+In Settings → Models → Add service, choose **ChatGPT (subscription chat)**
+from the subscription group, then **Log in to ChatGPT**. It is separate from
+the OpenAI Codex subscription entry. Complete login in the temporary native
+window; normal replies stream into the existing transcript. This style uses
+the dedicated persistent browser session, not an API key or Codex OAuth.
+After login, the form refreshes the account's consumer `/backend-api/models`
+catalog. Display names come from `title`; request IDs come unchanged from
+`slug`, with `default_model_slug` listed first. No static model fallback or
+Codex catalog is used. Save the service explicitly after selecting models.
+Logging out clears only this browser partition and aborts its active requests.
+
+For upgrades from the Pi Chat development build, **Import previous Pi Chat login**
+imports ChatGPT/OpenAI cookies from the existing `PI-Desktop Dev` Chat partition
+through Electron's session API. Close the old development build first. The action
+preserves an existing destination account and restores destination cookies if a
+write fails. It does not copy databases, tokens into renderer/Host messages, or
+replace the installed app's settings. The normal authentication probe and model
+catalog refresh determine whether the imported login is still usable.
+
+Login requires validated authenticated JSON from `/api/auth/session`, not a
+bare HTTP 200. The form shows challenge, checking, signed-out and error states
+while the login window is open. Initial navigation is bounded to 30 seconds;
+the login window waits at most three minutes and ends after three consecutive
+probe errors. `provider.chatgpt.auth.status` records only endpoint, HTTP status,
+content type and diagnostic reason, including an observational cookie-only
+`/backend-api/me` check. It does not log response bodies or account identity.
+
+Test connection uses the same authenticated browser session to fetch the consumer
+model catalog. It checks authentication and catalog reachability, not generation;
+an observational `/me` 401 alone does not invalidate a verified session. Login
+document diagnostics strip URL queries, fragments and credentials, and distinguish
+failed navigation, HTTP responses, rendering exits and denied popups.
+
+`chatgpt_conversation` runs its adapter in the agent sidecar. Electron owns an
+unattached, sandboxed, offscreen `WebContentsView` in `persist:chatgpt-chat` and performs
+the conversation fetch in the page context. Cookies, Sentinel credentials and
+the session Bearer token stay there. Consumer requests include cookies and a
+page-local Bearer token when available, matching the consumer client's fetch
+behavior. Host RPC carries request data and SSE chunks, not credentials.
+Request preparation loads the official same-origin Sentinel SDK when needed
+and requests its chat token directly, with bounded waits for loading and token
+generation. It does not wait for the separate voice initialization flow.
+The transport has nonzero bounds and disables background throttling so that
+authorization iframe rendering can progress without a visible host window,
+including on the first send after restarting with an existing login. Login
+uses a separate, interactive view in the same partition; closing its temporary
+window destroys that view. Subsequent status/send operations recreate the
+offscreen transport and validate the shared session without copying credentials.
+The renderer can invoke status/login/logout and the explicit previous-Pi login import only. Local tools are not sent
+as ChatGPT tools; account-side connectors execute on the service and appear
+as activity in the transcript.
+
+Chat mode never sends the desktop agent system prompt. Its system prompt comes
+from a per-session chat instruction preset. The composer shows a **Chat
+instructions** chip next to the model picker, only for `chatgpt_conversation`
+models on local sessions: **Default** selects the built-in chat persona
+(answer in the user's language; concise, direct, actionable — no tool rules),
+**None** sends no system prompt at all. Casual chat, Exploration, Q&A, and
+Technical discussion are bundled with the application, so a fresh installation
+does not depend on files from a development profile. Their ids are `casual-chat`,
+`exploration`, `q-and-a`, and `technical-discussion`; their labels are localized.
+Additional presets are listed by id. Presets are Markdown files in `<workspace>/.pi/chat-instructions/` and
+`~/.pi/agent/chat-instructions/`; the id is the file stem, a workspace file
+shadows a global file with the same id; either overrides a bundled mode with
+that id. The reserved id `none` is never
+offered as a file. The selection persists as the session's `promptPreset`
+value through `session.configure` (null resets it to Default); a preset id
+that no longer resolves falls back to the built-in persona silently. Electron
+main resolves the id to content at launch and passes it to the sidecar as
+`chatInstructions` (`undefined` = built-in persona, `""` = no system prompt,
+any other string = the preset content verbatim); changing it retires the
+reusable runtime so the next turn recomposes. The preset list channel returns
+ids only; file content never reaches the renderer. Before a session exists,
+the chip displays the draft selection and retains it across model changes.
+The selected preset is configured on the new session before its first turn;
+an omitted selection keeps the existing default, while null explicitly resets it.
+For project discussions and work items, the host-selected workflow snapshot
+travels as explicit user-side reference data, separate from the preset. It
+includes shared constraints, progress, decisions and continuation context without
+importing ordinary repository instructions. None still sends no system persona.
+A changed snapshot retires the runtime before the next request.
+SQLite schema v27 adds the nullable preset column after workflow v25/v26.
+Upgrade also accepts the parallel Chat v25 preview: it preserves selected
+presets and sessions while adding the missing workflow tables.
+
+Pro is selectable only when returned by the account catalog. Its title never
+determines a slug or enables assumed Pro flags. The desktop thinking selector
+first maps to `low`, `medium`, `high`, or `extra_high`. The page preserves an
+exact match in the account's `thinking_efforts`; for catalogs using consumer
+labels, it maps `high` to `extended` and `medium` to `standard` only when the
+target is advertised. Other unsupported explicit efforts fail before POST,
+rather than silently using a lower default. "off" sends no explicit effort:
+the page prefers advertised `instant`, then `default_thinking_effort`; when
+neither exists it omits the field and the service applies its default. When
+the catalog is unavailable or advertises no effort list, an explicit effort
+is sent unchanged. Actual Pro
+availability and successful generation remain account-side acceptance
+checks. After page reload, first use of a model refreshes the account
+catalog before submitting, preserving account limits across restart.
+
+Continuity is scoped to a local session and provider. Subsequent turns send
+only new user messages with the last remote assistant ID. After restart,
+interruption, or changed history, the adapter creates a new remote conversation
+and replays text history. Text is supported in v1; local tool-result and image
+history is rejected rather than silently discarded. Protocol changes and
+account restrictions surface as errors without automatic retries. An HTTP 429
+surfaces as an account rate-limit error including any server-provided retry
+delay; the transport never re-sends it automatically. The stream also watches
+which model actually executed: when server STE metadata in the stream names an
+execution model other than the requested one, or reports an automatic reasoning
+switch, the assistant message carries a `chatgpt.model_route` diagnostic; the
+turn is not failed for it.
+
+See [the transport decision](../../adr/chatgpt-conversation-browser-transport.md)
+and `E2E-PROVIDER-chatgpt-chat-login-and-stream` in the delivery test plan.
+
 | type | description | examples |
 |---|---|---|
 | `native` | first-class vendor integration via pi-ai | openai, anthropic, google, bedrock, mistral, etc. |

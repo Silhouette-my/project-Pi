@@ -5,6 +5,9 @@ export const frEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Des visualisations interactives directement dans la conversation : les fragments HTML écrits par l'assistant s'affichent comme des cartes en bac à sable, interactives et propices aux questions de suivi.",
+      "La connexion ChatGPT affiche la vérification et les erreurs, puis charge les modèles de votre compte plutôt qu’une liste fixe.",
+      "Discutez avec votre abonnement ChatGPT dans l’interface native après une connexion dans le navigateur.",
       "Les plugins installés s'affichent en cartes dans une grille auto-adaptative, chacune avec une action claire et son état de confiance, de mise à jour et de portée visible.",
       "Consultez les notes et avis publics des plugins du marché et ouvrez le centre de plugins pour en écrire un — l'application de bureau ne se connecte jamais.",
       "Les longues commandes Bash continuent en tâche de fond à la fin du tour, et leur sortie reste consultable.",
@@ -20,6 +23,8 @@ export const frEntries: ChangelogEntry[] = [
       "Ouvrez les artefacts HTML locaux dans la conversation qui les a créés.",
       "Faites défiler les tableaux Markdown larges sans déformer la conversation.",
       "La conversation reste utilisable lorsqu’un outil renvoie une image trop volumineuse.",
+      "Compilez des projets LaTeX grâce à une compétence intégrée et diagnostiquez ou installez les chaînes d’outils TeX.",
+      "Confiez la recherche approfondie multi-sources à un sous-agent dédié et obtenez un rapport Markdown sourcé avec un registre des sources.",
     ],
   },
   {

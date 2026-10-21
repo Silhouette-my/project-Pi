@@ -40,6 +40,7 @@ import { useSidebarTransition } from "./useSidebarTransition";
 import { useStartupWatchdog } from "./useStartupWatchdog";
 import { useTraySessions } from "./useTraySessions";
 import { runLiveVoiceShortcut } from "../voice/live/live-voice-shortcuts";
+import { useUnfiledNewSession } from "../project-workflow/useUnfiledNewSession";
 
 const MODIFIER_ONLY_KEYS = new Set([
   "Alt",
@@ -52,6 +53,7 @@ const MODIFIER_ONLY_KEYS = new Set([
 const PLUGIN_THEME_STYLE_ID = "pi-plugin-theme";
 
 export function useAppShellRuntime() {
+  const newUnfiledSession = useUnfiledNewSession();
   const { t } = useTranslation();
   const platform = window.piDesktop?.platform ?? "darwin";
   const bootstrap = useAppStore((s) => s.bootstrap);
@@ -399,7 +401,7 @@ export function useAppShellRuntime() {
         switch (command) {
           case "newTask":
             if (workPanelMaximizedRef.current) setWorkPanelMaximized(false);
-            await store.newSession();
+            await newUnfiledSession();
             requestAnimationFrame(() =>
               document.querySelector<HTMLTextAreaElement>(".composer-input")?.focus(),
             );
@@ -440,7 +442,7 @@ export function useAppShellRuntime() {
         );
       }
     },
-    [showToast, toggleSidebar],
+    [showToast, toggleSidebar, newUnfiledSession],
   );
 
   useEffect(() => {

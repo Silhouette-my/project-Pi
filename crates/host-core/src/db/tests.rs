@@ -229,6 +229,134 @@ fn v23_database_gains_worktree_registry_without_losing_projects() {
     assert_eq!(worktrees, 0);
 }
 
+/// v27 adds the nullable `prompt_preset` column for ChatGPT chat-mode
+/// instruction presets (spec 03-runtime/11). A v24 database keeps its sessions,
+/// gains the column as NULL, and leaves a pre-migration backup.
+#[test]
+fn v24_database_gains_prompt_preset_without_losing_sessions() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("pi.sqlite");
+    let session_id = {
+        let db = Database::open(&path).unwrap();
+        let session =
+            crate::sessions::create_session(&db, Some("Kept".into()), None, None, None, None)
+                .unwrap();
+        db.conn()
+            .execute_batch("ALTER TABLE sessions DROP COLUMN prompt_preset;")
+            .unwrap();
+        db.conn().pragma_update(None, "user_version", 24).unwrap();
+        session.id
+    };
+
+    let db = Database::open(&path).unwrap();
+    assert_eq!(schema_version(db.conn()), SCHEMA_VERSION);
+    assert!(migration_backup_path(&path, 24).exists());
+    assert!(crate::sessions::get_session(&db, &session_id)
+        .unwrap()
+        .is_some());
+    let prompt_preset: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT prompt_preset FROM sessions WHERE id = ?1",
+            rusqlite::params![session_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(prompt_preset, None);
+}
+
+/// Both parallel previews used v25: one stored Chat presets, the other workflow.
+/// Their real table inventories, not just their version stamps, must upgrade.
+#[test]
+fn parallel_preview_schema_histories_upgrade_without_data_loss() {
+    for (version, has_chat, has_workflow) in [
+        (24, false, false),
+        (25, true, false),
+        (25, false, true),
+        (26, false, true),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pi.sqlite");
+        let session_id = {
+            let db = Database::open(&path).unwrap();
+            let session = crate::sessions::create_session(
+                &db,
+                Some("Preserved preview".into()),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            if has_chat {
+                db.conn()
+                    .execute(
+                        "UPDATE sessions SET prompt_preset = 'review' WHERE id = ?1",
+                        [&session.id],
+                    )
+                    .unwrap();
+            } else {
+                db.conn()
+                    .execute_batch("ALTER TABLE sessions DROP COLUMN prompt_preset;")
+                    .unwrap();
+            }
+            if !has_workflow {
+                db.conn()
+                    .execute_batch(
+                        "DROP TABLE project_workflow_commands; DROP TABLE project_workflow;",
+                    )
+                    .unwrap();
+            } else {
+                db.conn()
+                    .execute_batch("INSERT INTO project_workflow VALUES (1, 1, 4, '{}');")
+                    .unwrap();
+            }
+            if version < 26 {
+                db.conn().execute_batch("DROP TABLE workflow_turn_bindings; DROP TABLE workflow_run_scopes; ALTER TABLE turn_queue DROP COLUMN workflow_run_id;").unwrap();
+            }
+            db.conn().execute(
+                "INSERT INTO turn_queue (id, session_id, principal, input_hash, content, permission_mode, position, created_at) VALUES ('pending-preview', ?1, 'user', 'fixture-hash', 'Continue the pending task', 'ask', 1, ?2)",
+                rusqlite::params![session.id, now_ms()],
+            ).unwrap();
+            db.conn()
+                .pragma_update(None, "user_version", version)
+                .unwrap();
+            session.id
+        };
+        for _ in 0..2 {
+            let db = Database::open(&path).unwrap();
+            assert_eq!(schema_version(db.conn()), SCHEMA_VERSION);
+            let session = crate::sessions::get_session(&db, &session_id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(session.summary.title, "Preserved preview");
+            assert_eq!(
+                session.summary.prompt_preset.as_deref(),
+                if has_chat { Some("review") } else { None }
+            );
+            let workflow_rows: i64 = db
+                .conn()
+                .query_row("SELECT COUNT(*) FROM project_workflow", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(workflow_rows, if has_workflow { 1 } else { 0 });
+            let bound_rows: i64 = db
+                .conn()
+                .query_row("SELECT COUNT(*) FROM workflow_run_scopes", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(bound_rows, 0);
+            let queued: (String, String, Option<String>) = db.conn().query_row(
+                "SELECT content, permission_mode, workflow_run_id FROM turn_queue WHERE id = 'pending-preview' AND session_id = ?1",
+                [&session_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            ).unwrap();
+            assert_eq!(
+                queued,
+                ("Continue the pending task".into(), "ask".into(), None)
+            );
+            assert!(migration_backup_path(&path, version).exists());
+        }
+    }
+}
+
 /// Deleting a session through any path must keep the worktree row, with its
 /// session cleared, so the orphan cleanup can still remove the directory and
 /// branch that exist on disk.

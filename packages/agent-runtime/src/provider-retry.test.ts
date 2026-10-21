@@ -89,6 +89,23 @@ function successfulStream(): ReturnType<typeof createAssistantMessageEventStream
   return stream;
 }
 
+describe("consumer conversation failures", () => {
+  it.each(["429: too many requests", "503: service unavailable", "400 status code (no body)"])("never retries or repairs a pre-stream failure: %s", async (errorMessage) => {
+    const createStream = vi.fn(() => failedStream({ errorMessage }));
+    const claim = vi.fn(() => 1);
+    const stream = createProviderRetryStream(
+      { ...model, api: "chatgpt-conversation" }, context, {}, createStream,
+      { claim, headers: () => undefined },
+    );
+    const events = [];
+    for await (const event of stream) events.push(event);
+    expect((await stream.result()).errorMessage).toBe(errorMessage);
+    expect(events).toHaveLength(1);
+    expect(createStream).toHaveBeenCalledExactlyOnceWith({ maxRetries: 0 });
+    expect(claim).not.toHaveBeenCalled();
+  });
+});
+
 describe("local request failures", () => {
   const errorDetails = {
     code: "LOCAL_REQUEST_ERROR" as const,

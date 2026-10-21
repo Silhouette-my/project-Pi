@@ -15,10 +15,14 @@ import { getModuleDirectory } from "./module-path";
  */
 
 /** Bundled skill teaching the plugin-development loop. */
-export const PLUGIN_DEV_SKILL_FILE = "plugin-development.md";
 export const PLUGIN_DEV_SKILL_ID = "pi-desktop/plugin-development";
 export const IMAGE_GENERATION_SKILL_ID = "pi-desktop/imagegen";
-const IMAGE_GENERATION_SKILL_FILE = "image-generation.md";
+/** Bundled LaTeX toolchain skill (directory package with scripts/). */
+export const LATEX_SKILL_ID = "pi-desktop/latex";
+/** Bundled multi-pass research skill (directory package with references/). */
+export const DEEP_RESEARCH_SKILL_ID = "pi-desktop/deep-research";
+/** Bundled skill authoring in-conversation visualization fragments. */
+export const VISUALIZE_SKILL_ID = "pi-desktop/visualize";
 
 /** electron-builder copies `resources/skills` to `<resources>/skills`. */
 function resolveBuiltinSkillPath(fileName: string): string | null {
@@ -87,14 +91,23 @@ export type BuiltinSkillInput = {
   disabledIds?: readonly string[];
 };
 
-const BUILTIN_SKILL_FILES = [
-  [IMAGE_GENERATION_SKILL_ID, IMAGE_GENERATION_SKILL_FILE],
-  [PLUGIN_DEV_SKILL_ID, PLUGIN_DEV_SKILL_FILE],
-] as const;
+/**
+ * Every bundled skill: id to its document path under `resources/skills`.
+ * Directory-shaped packages (`<name>/SKILL.md`) are supported so a skill can
+ * ship sibling resources; the `Skill` tool tells the model the document's
+ * directory, which is where those resources live.
+ */
+const BUILTIN_SKILL_SOURCES: ReadonlyArray<readonly [string, string]> = [
+  [IMAGE_GENERATION_SKILL_ID, "image-generation.md"],
+  [PLUGIN_DEV_SKILL_ID, "plugin-development.md"],
+  [LATEX_SKILL_ID, "latex/SKILL.md"],
+  [DEEP_RESEARCH_SKILL_ID, "deep-research/SKILL.md"],
+  [VISUALIZE_SKILL_ID, "visualize.md"],
+];
 
 /** All bundled skill entries, including ones whose applicability is conditional. */
 export function builtinSkillCatalog(): PluginSkillDef[] {
-  return BUILTIN_SKILL_FILES.flatMap(([id, file]) => {
+  return BUILTIN_SKILL_SOURCES.flatMap(([id, file]) => {
     const raw = readBuiltinSkill(file);
     if (!raw?.raw.trim()) return [];
     const parsed = parseSkillFrontmatter(raw.raw);
@@ -107,7 +120,7 @@ export function builtinSkillCatalog(): PluginSkillDef[] {
  * fresh so a packaged update takes effect without a restart.
  */
 export function builtinSkills(input: BuiltinSkillInput): PluginSkillDef[] {
-  const ids = [IMAGE_GENERATION_SKILL_ID];
+  const ids = [IMAGE_GENERATION_SKILL_ID, LATEX_SKILL_ID, DEEP_RESEARCH_SKILL_ID, VISUALIZE_SKILL_ID];
   if (isPluginWorkspace(input.workspacePath, input.pluginPaths)) ids.push(PLUGIN_DEV_SKILL_ID);
   const activeIds = new Set(ids);
   const disabled = new Set(input.disabledIds ?? []);
@@ -121,7 +134,7 @@ export async function assertBuiltinSkillEnabled(
   id: string,
   loadDisabledIds: () => Promise<string[]>,
 ): Promise<void> {
-  if (id !== IMAGE_GENERATION_SKILL_ID && id !== PLUGIN_DEV_SKILL_ID) return;
+  if (!BUILTIN_SKILL_SOURCES.some(([skillId]) => skillId === id)) return;
   if ((await loadDisabledIds()).includes(id)) {
     throw new Error(`Built-in skill "${id}" is disabled in Settings`);
   }
@@ -132,10 +145,9 @@ export async function assertBuiltinSkillEnabled(
  * host does not ship, which is the caller's cue to try the plugin registry.
  */
 export function loadBuiltinSkillBody(id: string): LoadedSkillDocument | null {
-  if (id !== PLUGIN_DEV_SKILL_ID && id !== IMAGE_GENERATION_SKILL_ID) return null;
-  const raw = readBuiltinSkill(
-    id === IMAGE_GENERATION_SKILL_ID ? IMAGE_GENERATION_SKILL_FILE : PLUGIN_DEV_SKILL_FILE,
-  );
+  const source = BUILTIN_SKILL_SOURCES.find(([skillId]) => skillId === id);
+  if (!source) return null;
+  const raw = readBuiltinSkill(source[1]);
   if (!raw?.raw.trim()) return null;
   const parsed = parseSkillFrontmatter(raw.raw);
   if (!parsed.body) return null;

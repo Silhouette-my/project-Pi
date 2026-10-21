@@ -1463,6 +1463,22 @@ adjacent form inputs; dense surfaces may override that metric locally.
 
 ## Destination pages
 
+- **Project Console**: a compact project identity/header sits below the existing
+  46px native titlebar safe area. Window controls remain Electron-owned. Overview,
+  Workstreams, Outputs, and Context use a quiet underline navigation; Project Agent
+  is a persistent action here and in the project's sidebar, opening the real chat
+  surface rather than a second transcript implementation. Overview leads with a
+  discussion-only Composer plate, current work rows and recent recorded outputs.
+  A new project can discuss a goal without first creating a workstream. A work row
+  opens its detail; creation/editing uses the shared modal overlay and existing
+  validated form, keeping execution scope and acceptance controls intact.
+  Project instructions, memory and reload live in the project menu; search expands
+  from the header. Reuse the shared UI primitives, Composer plate/toolbar classes,
+  project instruction/memory dialogs and semantic theme tokens. Project drafts are
+  renderer-memory, keyed by project, retained on navigation/send failure, and
+  cleared only after a successful send. Ordinary chat display groups are disjoint:
+  Favorites first, then Recent, then remaining folder/Unfiled entries; this changes
+  presentation only, not folder ownership, access timestamps or stored ordering.
 - **Project archive**: the D066 Codex index table (search / expand / actions)
   is embedded in Settings with no duplicate page title or outer page padding;
   the earlier standalone Projects destination and card grid (D042) are

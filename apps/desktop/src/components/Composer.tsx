@@ -48,6 +48,7 @@ import { editorSelectionRange } from "../features/chat/composer/editor";
 import { useComposerAttachments } from "../features/chat/composer/hooks/useComposerAttachments";
 import { useComposerCompletions } from "../features/chat/composer/hooks/useComposerCompletions";
 import { useComposerDraft } from "../features/chat/composer/hooks/useComposerDraft";
+import { useChatInstructionMenu } from "../features/chat/composer/hooks/useChatInstructionMenu";
 import { useComposerInputHistory } from "../features/chat/composer/hooks/useComposerInputHistory";
 import { usePluginComposerBridge } from "../features/chat/composer/hooks/usePluginComposerBridge";
 import { useComposerSuggestion } from "../features/chat/composer/hooks/useComposerSuggestion";
@@ -71,9 +72,11 @@ export {
 export function Composer({
   variant = "docked",
   prefill,
+  discussionOnly = false,
 }: {
   variant?: "home" | "docked";
   prefill?: ComposerPrefill | null;
+  discussionOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const sendPrompt = useAppStore((s) => s.sendPrompt);
@@ -101,13 +104,13 @@ export function Composer({
   const capabilitySession = activeSessionSummary ?? (activeSessionId?.startsWith("remote:") ? { id: activeSessionId } : undefined);
   const composerTransforms = useMemo(
     () =>
-      (sessionAllows(capabilitySession, "canUseLocalTools") ? plugins : [])
+      (!discussionOnly && sessionAllows(capabilitySession, "canUseLocalTools") ? plugins : [])
         .filter((plugin) => plugin.enabled && plugin.status === "ready")
         .flatMap((plugin) => plugin.composerTransforms ?? []),
-    [plugins, activeSessionSummary, activeSessionId],
+    [plugins, activeSessionSummary, activeSessionId, discussionOnly],
   );
   const remoteSession = isRemoteSession(capabilitySession);
-  const localToolsAllowed = sessionAllows(capabilitySession, "canUseLocalTools");
+  const localToolsAllowed = !discussionOnly && sessionAllows(capabilitySession, "canUseLocalTools");
   const attachmentsAllowed = sessionAllows(capabilitySession, "canAttach");
   const promptAllowed = sessionAllows(capabilitySession, "canPrompt");
   const nativeSession = activeSessionSummary?.source === "pi-native";
@@ -405,6 +408,17 @@ export function Composer({
     thinkingLevel,
     controlsBlocked,
   });
+  // ChatGPT chat-mode instruction presets (spec 03-runtime/11) are a
+  // per-session setting on local sessions only.
+  const chatInstructionMenu = useChatInstructionMenu({
+    enabled: !nativeSession && !remoteSession && provider?.apiStyle === "chatgpt_conversation",
+    mode,
+    providerId: provider?.id,
+    modelId,
+    thinkingLevel,
+    controlsBlocked,
+    configureActiveSession,
+  });
   const modelReady = remoteSession ? promptAllowed : nativeSession
     ? activeSessionSummary.capabilities?.canPrompt === true
     : !!provider &&
@@ -610,6 +624,7 @@ export function Composer({
           />
           <ComposerToolbar
             t={t}
+            discussionOnly={discussionOnly}
             mode={mode}
             planningLive={planningLive}
             providerId={provider?.id}
@@ -629,6 +644,8 @@ export function Composer({
             configureActiveSession={configureActiveSession}
             showToast={showToast}
             modelMenu={modelMenu}
+            chatInstructionMenu={chatInstructionMenu}
+            chatInstructionPreset={(activeSession ?? draftConfiguration)?.promptPreset ?? null}
             modelLabel={modelLabel}
             thinkingLabel={thinkingLabel}
             contextUsage={composerContextUsage ?? null}
