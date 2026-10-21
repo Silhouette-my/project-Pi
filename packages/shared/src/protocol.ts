@@ -96,6 +96,7 @@ export const IPC = {
     agentPrompt: "pi-desktop/agent/prompt",
     chatgptChatStatus: "pi-desktop/chatgptChat/status",
     chatgptChatLogin: "pi-desktop/chatgptChat/login",
+    chatgptChatImportLogin: "pi-desktop/chatgptChat/importLogin",
     chatgptChatLogout: "pi-desktop/chatgptChat/logout",
     agentSteer: "pi-desktop/agent/steer",
     speechTranscribe: "pi-desktop/speech/transcribe",

@@ -2366,15 +2366,6 @@ export function Sidebar({
             );
           }}
         >
-          {workflowGroup ? <TooltipButton
-            type="button"
-            className="sidebar-toolbar-button"
-            ariaLabel={t("workflowNav.toggleProject")}
-            tooltip={t("workflowNav.toggleProject")}
-            aria-expanded={!collapsedProject}
-            aria-controls={`${projectId}-sessions`}
-            onClick={() => setCollapsed(entry.path, !collapsedProject)}
-          ><IconChevronDown size={13} className={`sidebar-disclosure-icon ${collapsedProject ? "collapsed" : ""}`} /></TooltipButton> : null}
           <TooltipButton
             type="button"
             id={projectId}
@@ -2384,8 +2375,8 @@ export function Sidebar({
             tooltipClassName="ui-tooltip-path"
             ariaLabel={entry.name}
             aria-describedby={`${projectId}-path-description`}
-            aria-expanded={workflowGroup ? undefined : !collapsedProject}
-            aria-controls={workflowGroup ? undefined : `${projectId}-sessions`}
+            aria-expanded={!collapsedProject}
+            aria-controls={`${projectId}-sessions`}
             aria-keyshortcuts="ArrowUp ArrowDown"
             aria-grabbed={draggingProjectKey === entry.key}
             data-action="toggle-project-collapse"
@@ -2398,7 +2389,7 @@ export function Sidebar({
                 return;
               }
               if (workflowGroup) {
-                setPage("project", { projectId: workflowGroup.id });
+                setCollapsed(entry.path, !collapsedProject);
                 return;
               }
               void (async () => {
@@ -2407,10 +2398,10 @@ export function Sidebar({
               })();
             }}
           >
-            {!workflowGroup ? <IconChevronDown
+            <IconChevronDown
               size={13}
               className={`sidebar-disclosure-icon ${collapsedProject ? "collapsed" : ""}`}
-            /> : null}
+            />
             {entry.meta.pinned ? (
               <IconStar
                 size={13}

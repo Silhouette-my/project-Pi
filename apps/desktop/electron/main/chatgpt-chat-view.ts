@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { getModuleDirectory } from "./module-path";
 import { authStatusScript, conversationScript, streamPayload, trustedChatGptUrl, type ChatGptAuthStatus } from "./chatgpt-chat-page";
 import { chatGptDocumentEndpoint, logChatGptDocumentEvent, logChatGptConversationEvent } from "./chatgpt-chat-diagnostics";
+import { importPreviousChatLogin } from "./chatgpt-login-import";
 
 type Notify = (method: string, params: Record<string, unknown>) => void;
 const STREAM_CHANNEL = "pi-desktop/chatgpt-chat/stream";
@@ -183,6 +184,7 @@ export class ChatGptChatView {
   }
 
   status(): Promise<ChatGptAuthStatus> {
+    if (this.loggingOut) return Promise.resolve({ loggedIn: false, state: "checking" });
     if (this.documentStatus?.state === "error" || this.documentStatus?.state === "challenge") return Promise.resolve(this.documentStatus);
     if (this.statusPromise) return this.statusPromise;
     this.statusPromise = this.probeStatus().finally(() => { this.statusPromise = null; });
@@ -238,6 +240,25 @@ export class ChatGptChatView {
     this.diagnosticChecks = undefined;
     this.loginPromise = this.showLogin().finally(() => { this.loginPromise = null; });
     return this.loginPromise;
+  }
+
+  async importLogin(): Promise<ChatGptAuthStatus> {
+    if (this.disposed || this.loggingOut || this.loginPromise || this.pending.size) {
+      throw new Error("Finish the current ChatGPT operation before importing a login.");
+    }
+    const current = await this.status();
+    if (current.loggedIn) return current;
+    if (this.disposed || this.loggingOut || this.loginPromise || this.pending.size) {
+      throw new Error("Finish the current ChatGPT operation before importing a login.");
+    }
+    this.loggingOut = true;
+    try {
+      this.retireBrowser();
+      await importPreviousChatLogin();
+    } finally {
+      this.loggingOut = false;
+    }
+    return this.status();
   }
 
   private async showLogin(): Promise<ChatGptAuthStatus> {

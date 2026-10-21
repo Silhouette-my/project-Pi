@@ -23,7 +23,7 @@ type UseChatInstructionMenuOptions = {
  *
  * The persisted value is the session's `promptPreset` id (null = built-in
  * chat persona, the reserved "none" id = no system prompt). Preset ids are
- * discovered from `<workspace>/.pi/chat-instructions` and
+ * bundled or discovered from `<workspace>/.pi/chat-instructions` and
  * `~/.pi/agent/chat-instructions` through the promptPresetList IPC; content
  * never reaches the renderer. Selection persists through
  * `configureActiveSession` exactly like the thinking level.

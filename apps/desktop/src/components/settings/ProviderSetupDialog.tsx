@@ -34,6 +34,7 @@ import { ServiceChooser } from "./ServiceChooser";
 import { PluginProviderKeySetupForm } from "./PluginProviderKeySetupForm";
 import {
   CUSTOM_SERVICE,
+  CHATGPT_CHAT_SERVICE,
   JEV_SERVICE,
   pluginProviderServiceOptions,
   type PluginProviderServiceOption,
@@ -283,6 +284,18 @@ export function ProviderSetupDialog({
   };
 
   const onServiceChange = (next: string) => {
+    if (next === CHATGPT_CHAT_SERVICE) {
+      setService(CUSTOM_SERVICE);
+      setName("ChatGPT Chat");
+      setBaseUrl(CHATGPT_CHAT_BASE_URL);
+      setApiStyle("chatgpt_conversation");
+      setApiStyleTouched(true);
+      setNoApiKeyRequired(true);
+      setHeaderPairs([]);
+      setModels([]);
+      setBaseUrlTouched(false);
+      return;
+    }
     const previous = namedPreset;
     setService(next);
     setBaseUrlTouched(false);
@@ -510,7 +523,7 @@ export function ProviderSetupDialog({
             custom={custom}
             editing={editing}
             saving={saving}
-            serviceLabel={namedPreset ? t(namedPreset.labelKey) : t("settings.presetCustomEndpoint")}
+            serviceLabel={resolvedApiStyle === "chatgpt_conversation" ? t("settings.apiStyleChatGPTConversation") : namedPreset ? t(namedPreset.labelKey) : t("settings.presetCustomEndpoint")}
             serviceBaseUrl={namedPreset?.baseUrl ?? ""}
             onChangeService={() => setChoosing(true)}
             apiKeyRef={apiKeyRef}
@@ -584,7 +597,7 @@ export function ProviderSetupDialog({
       </div>
       <ServiceChooser
         vendors={editing ? null : vendors}
-        current={service}
+        current={resolvedApiStyle === "chatgpt_conversation" ? CHATGPT_CHAT_SERVICE : service}
         onPickService={pickService}
         onPickSubscription={editing ? undefined : onPickSubscription}
         showClassifiers={!editing}

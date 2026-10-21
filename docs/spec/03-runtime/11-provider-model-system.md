@@ -49,8 +49,9 @@ Settings / UI
 
 ### ChatGPT subscription chat
 
-In Settings → Models → Add service → Custom, choose **ChatGPT (subscription
-chat)** and **Log in to ChatGPT**. Complete login in the temporary native
+In Settings → Models → Add service, choose **ChatGPT (subscription chat)**
+from the subscription group, then **Log in to ChatGPT**. It is separate from
+the OpenAI Codex subscription entry. Complete login in the temporary native
 window; normal replies stream into the existing transcript. This style uses
 the dedicated persistent browser session, not an API key or Codex OAuth.
 After login, the form refreshes the account's consumer `/backend-api/models`
@@ -58,6 +59,14 @@ catalog. Display names come from `title`; request IDs come unchanged from
 `slug`, with `default_model_slug` listed first. No static model fallback or
 Codex catalog is used. Save the service explicitly after selecting models.
 Logging out clears only this browser partition and aborts its active requests.
+
+For upgrades from the Pi Chat development build, **Import previous Pi Chat login**
+imports ChatGPT/OpenAI cookies from the existing `PI-Desktop Dev` Chat partition
+through Electron's session API. Close the old development build first. The action
+preserves an existing destination account and restores destination cookies if a
+write fails. It does not copy databases, tokens into renderer/Host messages, or
+replace the installed app's settings. The normal authentication probe and model
+catalog refresh determine whether the imported login is still usable.
 
 Login requires validated authenticated JSON from `/api/auth/session`, not a
 bare HTTP 200. The form shows challenge, checking, signed-out and error states
@@ -88,7 +97,7 @@ including on the first send after restarting with an existing login. Login
 uses a separate, interactive view in the same partition; closing its temporary
 window destroys that view. Subsequent status/send operations recreate the
 offscreen transport and validate the shared session without copying credentials.
-The renderer can invoke status/login/logout only. Local tools are not sent
+The renderer can invoke status/login/logout and the explicit previous-Pi login import only. Local tools are not sent
 as ChatGPT tools; account-side connectors execute on the service and appear
 as activity in the transcript.
 
@@ -97,10 +106,14 @@ from a per-session chat instruction preset. The composer shows a **Chat
 instructions** chip next to the model picker, only for `chatgpt_conversation`
 models on local sessions: **Default** selects the built-in chat persona
 (answer in the user's language; concise, direct, actionable — no tool rules),
-**None** sends no system prompt at all, and any discovered preset is listed by
-id. Presets are Markdown files in `<workspace>/.pi/chat-instructions/` and
+**None** sends no system prompt at all. Casual chat, Exploration, Q&A, and
+Technical discussion are bundled with the application, so a fresh installation
+does not depend on files from a development profile. Their ids are `casual-chat`,
+`exploration`, `q-and-a`, and `technical-discussion`; their labels are localized.
+Additional presets are listed by id. Presets are Markdown files in `<workspace>/.pi/chat-instructions/` and
 `~/.pi/agent/chat-instructions/`; the id is the file stem, a workspace file
-shadows a global file with the same id, and the reserved id `none` is never
+shadows a global file with the same id; either overrides a bundled mode with
+that id. The reserved id `none` is never
 offered as a file. The selection persists as the session's `promptPreset`
 value through `session.configure` (null resets it to Default); a preset id
 that no longer resolves falls back to the built-in persona silently. Electron

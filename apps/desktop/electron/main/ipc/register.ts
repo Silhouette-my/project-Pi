@@ -258,6 +258,7 @@ export function registerIpcHandlers(dependencies: RegisterIpcDependencies) {
   for (const [channel, action] of [
     [IPC.invoke.chatgptChatStatus, "status"],
     [IPC.invoke.chatgptChatLogin, "login"],
+    [IPC.invoke.chatgptChatImportLogin, "importLogin"],
     [IPC.invoke.chatgptChatLogout, "logout"],
   ] as const) {
     handleWithEvent(channel, async (event) => {

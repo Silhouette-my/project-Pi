@@ -31,12 +31,18 @@ export function ComposerChatInstructionPicker({
 }) {
   const { open, setOpen, presets, select } = controller;
   const selected = currentPreset ?? null;
+  const builtinLabels: Record<string, string> = {
+    "casual-chat": t("chat.chatModeCasual"),
+    exploration: t("chat.chatModeExploration"),
+    "q-and-a": t("chat.chatModeQA"),
+    "technical-discussion": t("chat.chatModeTechnical"),
+  };
   const labelOf = (id: string | null) =>
     id === null
       ? t("chat.chatInstructionsDefault")
       : id === CHAT_INSTRUCTION_NONE_ID
         ? t("chat.chatInstructionsNone")
-        : id;
+        : Object.hasOwn(builtinLabels, id) ? builtinLabels[id] : id;
   const options: Array<string | null> = [
     null,
     CHAT_INSTRUCTION_NONE_ID,

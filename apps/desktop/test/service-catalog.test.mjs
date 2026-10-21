@@ -8,6 +8,8 @@ import test from "node:test";
 import { NAMED_ENDPOINT_PRESETS } from "@pi-desktop/shared";
 import {
   CUSTOM_SERVICE,
+  CHATGPT_CHAT_SERVICE,
+  chatServiceOption,
   customServiceOption,
   filterServiceOptions,
   endpointLabel,
@@ -25,6 +27,15 @@ const labels = {
 const translate = (key) => labels[key] ?? key;
 const options = [customServiceOption(translate), ...namedServiceOptions(translate)];
 const ids = (query) => filterServiceOptions(options, query).map((option) => option.id);
+
+test("Chat subscription has its own searchable connection entry, separate from Codex", () => {
+  const chat = chatServiceOption(translate);
+  assert.equal(chat.id, CHATGPT_CHAT_SERVICE);
+  for (const query of ["ChatGPT", "conversation", "chatgpt.com"]) {
+    assert.deepEqual(filterServiceOptions([chat], query), [chat]);
+  }
+  assert.deepEqual(filterServiceOptions([chat], "Codex"), []);
+});
 
 test("every named preset is offered once, in the shared table's order", () => {
   assert.deepEqual(

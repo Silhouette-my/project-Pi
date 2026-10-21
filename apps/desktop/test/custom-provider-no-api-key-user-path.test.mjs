@@ -53,6 +53,10 @@ window.piDesktop = {
       chatgptLoginStarted = true;
       return new Promise((resolve) => { resolveChatgptLogin = resolve; });
     }
+    if (channel === "pi-desktop/chatgptChat/importLogin") {
+      chatgptAccountStatus = { loggedIn: true, state: "signed_in" };
+      return { ok: true, data: chatgptAccountStatus };
+    }
     if (channel === "pi-desktop/chatgptChat/logout") {
       chatgptAccountStatus = { loggedIn: false, state: "signed_out" };
       return { ok: true, data: undefined };
@@ -230,22 +234,11 @@ window.customProviderNoApiKeyProbe = async () => {
     onClose: () => mount(null),
     onSaved: () => { chatgptSaved = true; },
   }));
-  const chatgptCustomTile = await waitFor(
-    () => document.querySelector('[data-service-id="custom"]'),
-    "the custom service option was missing for ChatGPT",
+  const chatgptTile = await waitFor(
+    () => document.querySelector('[data-service-id="chatgpt-chat"]'),
+    "the direct ChatGPT Chat service option was missing",
   );
-  flushSync(() => chatgptCustomTile.click());
-  const apiStyleTrigger = await waitFor(
-    () => [...document.querySelectorAll('button[aria-label="API format"]')][0],
-    "the API format selector was missing",
-  );
-  flushSync(() => apiStyleTrigger.click());
-  const chatgptStyleOption = await waitFor(
-    () => [...document.querySelectorAll('[role="option"]')]
-      .find((option) => option.textContent.includes("ChatGPT (subscription chat)")),
-    "the ChatGPT conversation API format was not offered",
-  );
-  flushSync(() => chatgptStyleOption.click());
+  flushSync(() => chatgptTile.click());
   const chatgptBaseUrl = await waitFor(
     () => document.querySelector('input[type="url"]')?.value === "https://chatgpt.com/backend-api",
     "selecting the ChatGPT format did not fill its base URL",
@@ -335,11 +328,9 @@ window.customProviderNoApiKeyProbe = async () => {
   );
   const catalogCallsBeforeRelogin = chatgptCatalogCalls;
   const reloginButton = [...document.querySelectorAll("button")]
-    .find((button) => button.textContent.includes("Log in to ChatGPT"));
-  if (!reloginButton) throw new Error("the ChatGPT relogin action was missing");
+    .find((button) => button.textContent.includes("Import previous Pi Chat login"));
+  if (!reloginButton) throw new Error("the ChatGPT import action was missing");
   flushSync(() => reloginButton.click());
-  chatgptAccountStatus = { loggedIn: true, state: "signed_in" };
-  resolveChatgptLogin({ ok: true, data: chatgptAccountStatus });
   const chatgptLoginCompletionRefreshed = await waitFor(
     () => chatgptCatalogCalls > catalogCallsBeforeRelogin
       && document.querySelector('[role="status"]')?.textContent.includes("account connected"),

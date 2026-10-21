@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { CHAT_INSTRUCTION_NONE_ID } from "@pi-desktop/shared";
 import { DEFAULT_CHAT_SYSTEM_PROMPT } from "./mode-prompts.js";
+import { BUILTIN_CHAT_INSTRUCTIONS } from "./builtin-chat-instructions.js";
 import {
   chatInstructionDirs,
   chatSystemPromptContent,
@@ -15,6 +16,8 @@ import {
 let root: string | undefined;
 let projectDir: string | undefined;
 let globalDir: string | undefined;
+const builtinIds = [...BUILTIN_CHAT_INSTRUCTIONS.keys()];
+const builtinRows = builtinIds.map((id) => ({ id }));
 
 afterEach(async () => {
   for (const dir of [root, projectDir, globalDir]) {
@@ -67,6 +70,7 @@ describe("listChatInstructionPresets", () => {
       { id: "UPPER" },
       { id: "a-c" },
       { id: "b" },
+      ...builtinRows,
     ]);
   });
 
@@ -79,6 +83,7 @@ describe("listChatInstructionPresets", () => {
     expect(await listChatInstructionPresets(root, dirs)).toEqual([
       { id: "shared" },
       { id: "only-global" },
+      ...builtinRows,
     ]);
   });
 
@@ -89,24 +94,30 @@ describe("listChatInstructionPresets", () => {
       "real.md": "kept",
     });
     const presets = await listChatInstructionPresets(root, dirs);
-    expect(presets.map((preset) => preset.id)).toEqual(["real"]);
+    expect(presets.map((preset) => preset.id)).toEqual(["real", ...builtinIds]);
     expect(presets.map((preset) => preset.id)).not.toContain(
       CHAT_INSTRUCTION_NONE_ID,
     );
   });
 
-  it("returns an empty list when no preset directory exists", async () => {
+  it("offers bundled modes when no preset directory exists", async () => {
     const dirs = await fixture({});
     await expect(
       listChatInstructionPresets(root, {
         project: join(projectDir!, "missing"),
         global: join(globalDir!, "missing"),
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual(builtinRows);
   });
 });
 
 describe("resolveChatInstructions", () => {
+  it("resolves bundled modes without files and lets a project override them", async () => {
+    const dirs = await fixture({ "exploration.md": "Project-specific exploration." });
+    expect(await resolveChatInstructions(root, "exploration", dirs)).toBe("Project-specific exploration.");
+    expect(await resolveChatInstructions(root, "casual-chat", dirs)).toBe(BUILTIN_CHAT_INSTRUCTIONS.get("casual-chat"));
+    expect(await resolveChatInstructions(root, "toString", dirs)).toBeUndefined();
+  });
   it("maps absent, null, and empty ids to the built-in persona encoding", async () => {
     const dirs = await fixture({});
     for (const presetId of [undefined, null, ""]) {
@@ -180,6 +191,7 @@ describe("bundled chat instruction examples", () => {
     );
     for (const id of ids) {
       const content = (await readFile(join(examples, `${id}.md`), "utf8")).trim();
+      expect(BUILTIN_CHAT_INSTRUCTIONS.get(id)).toBe(content);
       expect(content.length).toBeGreaterThan(0);
       expect(await resolveChatInstructions(null, id, dirs)).toBe(content);
       expect(chatSystemPromptContent(content)).toBe(content);

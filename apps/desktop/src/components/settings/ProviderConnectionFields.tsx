@@ -169,12 +169,15 @@ export function ProviderConnectionFields({
     };
   }, [chatgptBusy, chatgptLoggedIn, chatgptStyle]);
 
-  const changeChatgptLogin = async () => {
+  const changeChatgptLogin = async (importPrevious = false) => {
     const requestId = chatgptRequest.current;
     setChatgptBusy(true);
     setChatgptError(null);
     try {
-      if (chatgptLoggedIn) {
+      if (importPrevious) {
+        const status = await api.chatgptChatImportLogin();
+        if (requestId === chatgptRequest.current) acceptChatgptStatus(status);
+      } else if (chatgptLoggedIn) {
         await api.chatgptChatLogout();
         if (requestId === chatgptRequest.current) {
           acceptChatgptStatus({ loggedIn: false, state: "signed_out" });
@@ -314,6 +317,12 @@ export function ProviderConnectionFields({
                         : t("settings.chatgptChatLogin")}
                   </Button>
                 </div>
+                {!chatgptLoggedIn ? <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={saving || chatgptBusy || chatgptLoggedIn === null}
+                  onClick={() => void changeChatgptLogin(true)}
+                >{t("settings.chatgptChatImportLogin")}</Button> : null}
                 {chatgptError || chatgptStatus?.message ? (
                   <p
                     className={`text-xs ${!chatgptError && chatgptStatus?.state === "checking" ? "text-text-secondary" : "text-error"}`}

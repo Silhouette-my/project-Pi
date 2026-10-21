@@ -236,6 +236,7 @@ export function WorkflowNavigation({ sessions, renderSessions }: Props) {
     <section className="workflow-navigation" aria-label={t("workflowNav.chats")}>
       <div className="sidebar-list-toolbar">
         <span className="sidebar-list-label">{t("workflowNav.chats")}</span>
+        <div className="sidebar-toolbar-actions">
         <TooltipButton
           className="sidebar-toolbar-button"
           tooltip={t("workflowNav.newChat")}
@@ -265,6 +266,7 @@ export function WorkflowNavigation({ sessions, renderSessions }: Props) {
         >
           <IconPencil size={14} />
         </TooltipButton>
+        </div>
       </div>
       {workflow.error ? (
         <p role="alert" className="workflow-navigation-error">

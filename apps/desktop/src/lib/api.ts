@@ -650,6 +650,7 @@ export const api = {
   }),
   chatgptChatStatus: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatStatus),
   chatgptChatLogin: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatLogin),
+  chatgptChatImportLogin: () => invoke<ChatGptChatStatus>(IPC.invoke.chatgptChatImportLogin),
   chatgptChatLogout: () => invoke(IPC.invoke.chatgptChatLogout),
   getVersion: () => invoke<AppVersionInfo>(IPC.invoke.appGetVersion),
   health: () => invoke<HostHealth>(IPC.invoke.appHealth),

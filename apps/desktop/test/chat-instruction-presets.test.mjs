@@ -40,6 +40,10 @@ test("preset discovery uses file stems, workspace first, and never the reserved 
     assert.deepEqual(await listChatInstructionPresets(root, dirs), [
       { id: "tone" },
       { id: "terse" },
+      { id: "casual-chat" },
+      { id: "exploration" },
+      { id: "q-and-a" },
+      { id: "technical-discussion" },
     ]);
     // The session-launch resolution the sidecar consumes: workspace content
     // wins, the reserved id encodes "no system prompt", stale ids fall back.

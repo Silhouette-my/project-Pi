@@ -3,8 +3,8 @@
  *
  * Chat mode (`apiStyle: "chatgpt_conversation"`) has no local tools, so the
  * desktop agent system prompt is replaced by a small, user-selectable chat
- * instruction. Presets are Markdown files discovered with the same precedence
- * as the pi-compatible custom system prompt files (project before global):
+ * instruction. Four modes ship with the runtime. Markdown files can override
+ * them with project-before-global precedence:
  *
  * - `<workspace>/.pi/chat-instructions/<id>.md` (project)
  * - `~/.pi/agent/chat-instructions/<id>.md` (global)
@@ -19,6 +19,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHAT_INSTRUCTION_NONE_ID } from "@pi-desktop/shared";
 import { DEFAULT_CHAT_SYSTEM_PROMPT } from "./mode-prompts.js";
+import { BUILTIN_CHAT_INSTRUCTIONS } from "./builtin-chat-instructions.js";
 import {
   MAX_PROMPT_BYTES,
   customSystemPromptDirs,
@@ -53,7 +54,7 @@ function isUsablePresetId(id: string): boolean {
   );
 }
 
-/** Preset ids, workspace first, deduplicated; the reserved id is excluded. */
+/** Preset ids, workspace then global then bundled, deduplicated; no reserved id. */
 export async function listChatInstructionPresets(
   workspaceRoot: string | null | undefined,
   dirs: ChatInstructionDirs = chatInstructionDirs(workspaceRoot),
@@ -76,6 +77,9 @@ export async function listChatInstructionPresets(
       seen.add(id);
       ids.push(id);
     }
+  }
+  for (const id of BUILTIN_CHAT_INSTRUCTIONS.keys()) {
+    if (!seen.has(id)) ids.push(id);
   }
   return ids.map((id) => ({ id }));
 }
@@ -124,5 +128,5 @@ export async function resolveChatInstructions(
   if (presetId === CHAT_INSTRUCTION_NONE_ID) return "";
   if (!isUsablePresetId(presetId)) return undefined;
   // A preset id that no longer resolves falls back to the built-in default.
-  return readPresetContent(dirs, presetId);
+  return (await readPresetContent(dirs, presetId)) ?? BUILTIN_CHAT_INSTRUCTIONS.get(presetId);
 }

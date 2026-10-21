@@ -17,6 +17,7 @@ import { IconPlus, IconSearch } from "../icons";
 import { ServiceMonogram } from "./ServiceMonogram";
 import {
   CUSTOM_SERVICE,
+  chatServiceOption,
   customServiceOption,
   filterServiceOptions,
   jevServiceOption,
@@ -86,6 +87,7 @@ export function ServiceChooser({
     () => filterServiceOptions(serviceOptions, query),
     [query, serviceOptions],
   );
+  const visibleChat = filterServiceOptions([chatServiceOption(t)], query);
   const visibleSubscriptions = useMemo(
     () => filterServiceOptions(subscriptionOptions, query),
     [query, subscriptionOptions],
@@ -109,6 +111,7 @@ export function ServiceChooser({
   }, [visiblePluginProviders]);
   const nothingMatches =
     visibleServices.length === 0 &&
+    visibleChat.length === 0 &&
     visibleSubscriptions.length === 0 &&
     visibleClassifiers.length === 0 &&
     visiblePluginProviders.length === 0;
@@ -122,6 +125,8 @@ export function ServiceChooser({
         ? `plugin:${visiblePluginProviders[0].id}`
         : visibleClassifiers[0]
         ? `service:${visibleClassifiers[0].id}`
+        : visibleChat[0]
+          ? `service:${visibleChat[0].id}`
         : visibleSubscriptions[0]
           ? `subscription:${visibleSubscriptions[0].vendor.vendorId}`
           : ""
@@ -142,6 +147,7 @@ export function ServiceChooser({
     if (visibleServices[0]) pickService(visibleServices[0].id);
     else if (visiblePluginProviders[0]) pickPluginProvider(visiblePluginProviders[0].id);
     else if (visibleClassifiers[0]) pickService(visibleClassifiers[0].id);
+    else if (visibleChat[0]) pickService(visibleChat[0].id);
     else if (visibleSubscriptions[0]) pickSubscription(visibleSubscriptions[0].vendor);
     else pickService(CUSTOM_SERVICE);
   };
@@ -228,12 +234,31 @@ export function ServiceChooser({
           </div>
         ) : null}
 
-        {visibleSubscriptions.length > 0 ? (
+        {visibleSubscriptions.length > 0 || visibleChat.length > 0 ? (
           <section className="service-chooser-group" aria-labelledby="service-chooser-subscriptions">
             <h4 id="service-chooser-subscriptions" className="service-chooser-group-title">
               {t("settings.chooserSubscriptions")}
             </h4>
             <div className="service-chooser-grid">
+              {visibleChat.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  data-service-tile
+                  data-service-id={option.id}
+                  className={cx("service-chooser-tile", enterTarget === `service:${option.id}` && "is-active")}
+                  aria-current={option.id === current ? "true" : undefined}
+                  disabled={disabled}
+                  onKeyDown={onTileKeyDown}
+                  onClick={() => pickService(option.id)}
+                >
+                  <ServiceMonogram name={option.label} />
+                  <span className="service-chooser-tile-copy">
+                    <span className="service-chooser-tile-name">{option.label}</span>
+                    <span className="service-chooser-tile-detail">{option.endpoint}</span>
+                  </span>
+                </button>
+              ))}
               {/* Every OAuth-capable vendor; existing accounts do not disable a
                   vendor, because one vendor can hold several accounts. */}
               {visibleSubscriptions.map(({ vendor }) => {

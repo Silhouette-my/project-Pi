@@ -60,7 +60,12 @@ window.projectNavigationProbe=async()=>{
  await until(()=>group.querySelector('[data-sidebar-session-row="completed-side"]')&&group.querySelector('[data-sidebar-session-row="archived-side"]'),"Folded side work became unreachable");
  check(group.querySelector('[data-sidebar-session-row="archived-side"] [data-action="session-menu"]'),"Archived side lost its existing restore action");
  flushSync(()=>group.querySelector('button.project-toggle').click());
- check(useAppStore.getState().page==="project"&&useAppStore.getState().projectConsoleId==="visible-group","Project title did not open independent Console");
+	 check(group.querySelector('button.project-toggle').getAttribute("aria-expanded")==="false","Project title did not collapse its children");
+	 check(useAppStore.getState().page==="chat","Collapsing a project unexpectedly navigated away");
+	 flushSync(()=>group.querySelector('button.project-toggle').click());
+	 check(group.querySelector('button.project-toggle').getAttribute("aria-expanded")==="true","Project title did not expand its children");
+	 flushSync(()=>[...group.querySelectorAll("button")].find(button=>button.textContent==="Project home").click());
+	 check(useAppStore.getState().page==="project"&&useAppStore.getState().projectConsoleId==="visible-group","Project home did not open independent Console");
  flushSync(()=>group.querySelector('[data-workflow-legacy] button').click());
  await until(()=>group.querySelector('[data-sidebar-session-row="legacy"]'),"Legacy conversation no longer reachable");
  check(group.querySelector('[data-sidebar-session-row="legacy"] [data-action="session-menu"]'),"Existing session actions were replaced");

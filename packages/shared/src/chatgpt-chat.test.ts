@@ -5,7 +5,7 @@ import { inferEndpointProfile } from "./provider-endpoint.js";
 
 describe("ChatGPT chat provider contract", () => {
   it("allows session management IPC without exposing the conversation transport to renderer", () => {
-    for (const channel of [IPC.invoke.chatgptChatStatus, IPC.invoke.chatgptChatLogin, IPC.invoke.chatgptChatLogout]) {
+    for (const channel of [IPC.invoke.chatgptChatStatus, IPC.invoke.chatgptChatLogin, IPC.invoke.chatgptChatLogout, IPC.invoke.chatgptChatImportLogin]) {
       expect(IPC_WHITELIST.has(channel)).toBe(true);
     }
     expect(IPC_WHITELIST.has("chatgpt.conversation.open")).toBe(false);

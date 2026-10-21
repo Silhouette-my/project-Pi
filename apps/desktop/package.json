@@ -167,6 +167,14 @@
       },
       "extraResources": [
         {
+          "from": "build/icon_1024.png",
+          "to": "icon_1024.png"
+        },
+        {
+          "from": "build/icon-dark_1024.png",
+          "to": "icon-dark_1024.png"
+        },
+        {
           "from": "../../target/release/pi-desktop-host-core",
           "to": "bin/pi-desktop-host-core"
         },
