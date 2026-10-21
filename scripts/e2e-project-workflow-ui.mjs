@@ -305,7 +305,7 @@ try {
     await page.evaluate(`document.documentElement.dataset.theme=${json(theme)}`);
     await until(() => page.evaluate(`document.documentElement.dataset.theme===${json(theme)}`), `${theme} theme`);
     await page.evaluate("window.scrollTo(0,0); document.querySelector('.workflow-console')?.scrollTo(0,0)"); await sleep(250);
-    layout[name] = await page.evaluate(`(() => { const actions=document.querySelector('.workflow-header .workflow-actions')?.getBoundingClientRect(); return {width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,consoleWidth:document.querySelector('[data-workflow="console"]')?.getBoundingClientRect().width,headerActions:actions?{top:actions.top,bottom:actions.bottom}:null,selectedConsoleControl:document.querySelector('[data-workflow="console"] [aria-pressed=true]')?.innerText || null} })()`);
+    layout[name] = await page.evaluate(`(() => { const actions=document.querySelector('.workflow-header .workflow-header-actions')?.getBoundingClientRect(); return {width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,consoleWidth:document.querySelector('[data-workflow="console"]')?.getBoundingClientRect().width,headerActions:actions?{top:actions.top,bottom:actions.bottom}:null,selectedConsoleControl:document.querySelector('[data-workflow="console"] [aria-pressed=true]')?.innerText || null} })()`);
     await capture(name);
   }
   for (const [name, metrics] of Object.entries(layout)) {
