@@ -454,8 +454,9 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
-  background: var(--ds-accent);
-  color: var(--ds-bg-primary);
+  /* Enabled send carries the user theme colour; disabled falls back below. */
+  background: var(--ds-theme-accent);
+  color: var(--ds-on-theme-accent);
   transition: opacity var(--motion-duration-fast) var(--motion-ease-out), transform var(--motion-duration-fast) var(--motion-ease-out);
 }
 

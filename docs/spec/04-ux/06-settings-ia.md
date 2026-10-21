@@ -133,6 +133,14 @@ Settings is a **full-window page** that replaces the app sidebar + main chrome (
     Light, and Dark at the top, then lists plugin themes after a divider with a
     "Provided by …" hint. Search matches labels, descriptions, ids, and plugin
     ids. Selection updates `settings.theme`.
+  - **Theme color** (D669): a radiogroup of seven preset swatches (Blue default,
+    Teal, Green, Amber, Rose, Violet, Graphite) plus a Custom swatch backed by a
+    native colour input. Arrow keys move the selection, the selected swatch has a
+    visible ring, and every swatch has a localized accessible name. Selection
+    persists as `AppSettings.accentColor` (absent means Blue) and applies without
+    a reload. It colours only primary buttons, switches, checkboxes, focus rings,
+    and the enabled send button; status colours are unaffected. `accentColor`
+    joins the portable application fields.
   - **Language**: a searchable picker row (not a card grid). The closed trigger
     sizes to the current label, capped by the settings control column, and
     shows the current native name, or Match system. The menu pins Auto at the

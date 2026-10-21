@@ -1,6 +1,7 @@
 import type { RecentModel } from "../lib/recent-models";
 import type { RemoteProjectTarget } from "../lib/remote-project-session";
 import type {
+  AccentPresetId,
   AgentEventEnvelope,
   BrowserState,
   AgentQueueChangedEvent,
@@ -335,6 +336,8 @@ export type AppState = {
   setShowArchived: (show: boolean) => void;
   renameProject: (path: string, name: string) => void;
   toggleProjectPinned: (path: string, pinned?: boolean) => void;
+  /** Set (or clear with undefined) a project's preset accent colour. */
+  setProjectColor: (path: string, color: AccentPresetId | undefined) => void;
   toggleProjectArchived: (path: string) => void;
   restoreProject: (path: string) => void;
   restoreProjects: (paths: string[]) => void;

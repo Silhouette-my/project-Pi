@@ -71,7 +71,9 @@ import {
   ProjectRunCount,
   ProjectRunRail,
 } from "./ProjectRunIndicator";
-import { ErrorCodes, formatSessionLink } from "@pi-desktop/shared";
+import { ACCENT_PRESET_IDS, ErrorCodes, formatSessionLink } from "@pi-desktop/shared";
+import { ProjectColorDot } from "./ProjectColorDot";
+import { ACCENT_PRESET_LABEL_KEYS, projectAccentStyle } from "../lib/project-accent";
 import type { SessionSummary } from "@pi-desktop/shared";
 import type {
   ProjectMeta,
@@ -80,6 +82,7 @@ import type {
 } from "../lib/sidebar-preferences";
 import {
   clampSidebarWidth,
+  projectMetaFor,
   SIDEBAR_WIDTH_MAX,
   SIDEBAR_WIDTH_MIN,
 } from "../lib/sidebar-preferences";
@@ -124,6 +127,7 @@ import {
   IconCircleAlert,
   IconNewSession,
   IconFolder,
+  IconPalette,
   IconMore,
   IconNewProject,
   IconNewFolder,
@@ -197,13 +201,6 @@ function timestamp(value?: string) {
 function optionalTimestamp(value?: string): number | null {
   const parsed = value ? Date.parse(value) : NaN;
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function projectMetaFor(
-  path: string,
-  projectMeta: Record<string, ProjectMeta>,
-): ProjectMeta {
-  return projectMeta[normalizeProjectPath(path) || path] ?? projectMeta[path] ?? {};
 }
 
 function projectDomId(path: string): string {
@@ -311,6 +308,7 @@ export function Sidebar({
   const moveSessionProject = useAppStore((s) => s.moveSessionProject);
   const setSessionArchiveVisibility = useAppStore((s) => s.setSessionArchiveVisibility);
   const toggleProjectPinned = useAppStore((s) => s.toggleProjectPinned);
+  const setProjectColor = useAppStore((s) => s.setProjectColor);
   const archiveProjectAction = useAppStore((s) => s.archiveProject);
   const restoreProject = useAppStore((s) => s.restoreProject);
   const setProjectCollapsed = useAppStore((s) => s.setProjectCollapsed);
@@ -1888,6 +1886,35 @@ export function Sidebar({
             icon: <IconPin size={14} />,
             onSelect: () => toggleProjectPin(entry),
           }),
+          sidebarMenuSubmenu({
+            id: "project-color",
+            label: t("project.color"),
+            icon: <IconPalette size={14} />,
+            items: [
+              sidebarMenuAction({
+                id: "project-color-theme",
+                label: t("project.colorFollowTheme"),
+                icon: <ProjectColorDot />,
+                checked: !entry.meta.color,
+                onSelect: () => {
+                  setProjectColor(entry.path, undefined);
+                  closeMenus();
+                },
+              }),
+              ...ACCENT_PRESET_IDS.map((id) =>
+                sidebarMenuAction({
+                  id: `project-color-${id}`,
+                  label: t(ACCENT_PRESET_LABEL_KEYS[id]),
+                  icon: <ProjectColorDot color={id} />,
+                  checked: entry.meta.color === id,
+                  onSelect: () => {
+                    setProjectColor(entry.path, id);
+                    closeMenus();
+                  },
+                }),
+              ),
+            ],
+          }),
           sidebarMenuAction({
             id: "toggle-project-archive",
             label: archived
@@ -1947,6 +1974,7 @@ export function Sidebar({
       setCollapsed,
       t,
       toggleProjectPin,
+      setProjectColor,
       workflow.snapshot,
       workflowGroups.groups,
     ],
@@ -2354,6 +2382,8 @@ export function Sidebar({
     return (
       <section
         key={entry.key}
+        data-project-color={entry.meta.color}
+        style={projectAccentStyle(entry.meta.color)}
         className={`sidebar-session-group project-group ${entry.meta.archived ? "archived" : ""} ${runIsLive ? "has-running-sessions" : ""} ${showRunRail ? "has-run-rail" : ""} ${collapsedProject ? "is-collapsed" : ""} ${dropProjectKey === entry.key ? "is-drop-target" : ""} ${draggingProjectKey === entry.key ? "is-dragging" : ""} ${dropIndicator?.key === entry.key ? (dropIndicator.insertAfter ? "is-drop-after" : "is-drop-before") : ""}`}
         aria-labelledby={projectId}
         data-sidebar-project-group={entry.key}

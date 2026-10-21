@@ -9,7 +9,7 @@
 
 ## Visual baseline (Codex-aligned)
 
-The desktop shell targets a 1:1 visual match with the local Codex desktop client (ChatGPT.app electron-dark): charcoal surfaces (`#181818`), neutral gray scale (not blue-slate), ~275px sidebar, 46px toolbar rhythm, and a floating pill composer. Semantic token names remain stable; values follow the Codex gray system with a **neutral gray accent** (no blue brand accent).
+The desktop shell targets a 1:1 visual match with the local Codex desktop client (ChatGPT.app electron-dark): charcoal surfaces (`#181818`), neutral gray scale (not blue-slate), ~275px sidebar, 46px toolbar rhythm, and a floating pill composer. Semantic token names remain stable; values follow the Codex gray system. Shell chrome keeps the **neutral gray accent** (`--ds-accent`); a user-chosen **theme colour** (default blue, D669) is applied only to the small set of primitives listed in the Theme colour section.
 
 ## 2. Non-goals
 
@@ -27,7 +27,7 @@ The desktop shell targets a 1:1 visual match with the local Codex desktop client
 | **Clarity over decoration** | No ornamental borders, gradients, or hero images. Every visual element carries information. |
 | **Developer density** | Compact spacing, small-but-readable type, minimal marketing whitespace. Information-rich, not sparse. |
 | **Dark-base defaults** | Dark theme is the primary theme for a coding agent. Light must be fully supported but is secondary. |
-| **Restraint** | One accent color family. No rainbow status colors — use semantic token names (success, warning, error). |
+| **Restraint** | Chrome is neutral gray. The user's theme colour (D669) is one accent family used only on primary actions, switches, checkboxes, focus rings, and the enabled send button; a per-project colour tints only the project glyph and the Project Console accent. No rainbow status colors — success, warning, error, and purple stay semantic and are never replaced by either colour. |
 | **Motion as feedback** | Animations convey state change (streaming, loading, expand/collapse). Never decorative. |
 | **Keyboard-first** | Focus rings, tab order, and shortcut labels are primary UX, not afterthoughts. |
 | **Continuous shell chrome** | Titlebars stay borderless and continuous with their surfaces; reserve faint separators for boundaries that clarify ownership, such as the window-control side seam. |
@@ -66,8 +66,8 @@ selection is suppressed for chrome by default. The selection contract is:
   allowed on shell surfaces.
 - `caret-color` and `accent-color` resolve to `--ds-text-primary` /
   `--ds-accent` so native carets and form accents stay on-theme.
-- Focus-visible rings use `color-mix(in oklab, var(--ds-accent) 80%, transparent)`
-  (no white wash that drifts off the neutral ramp).
+- Keyboard focus rings resolve through `--ds-focus`, which follows the theme colour
+  (`--ds-theme-accent`); the ring never washes toward white.
 
 ### 3.3 Locale-aware chrome labels
 
@@ -210,16 +210,50 @@ Neutral gray scale only — no blue-slate surfaces. Chrome components must consu
 | `--color-text-faint` | `#afafaf` (gray-300) | Placeholder |
 | `--color-border-default` | `color-mix(#1a1c1f 8%, transparent)` | Default borders |
 | `--color-border-subtle` | `color-mix(#1a1c1f 5%, transparent)` | Sidebar edge / dividers |
-| `--color-accent` | `#1a1c1f` | Primary accent, CTA, footer badge (neutral ink) |
+| `--color-accent` | `#1a1c1f` | Neutral accent: chrome ink, footer badge (not the CTA colour, see theme colour tokens) |
 | `--color-success` / warning / error | green-500 / orange-500 / red-500 | Status |
 
 **Invariant:** never paint chrome text with raw `gray-0` (`#fff`) under `data-theme="light"`. Use `--ds-text-primary` / `--ds-text-secondary`.
 
 Shared buttons must use semantic theme tokens for both their surface and ink:
-primary actions pair `--ds-accent` with `--ds-bg-primary`, while secondary
+primary actions pair `--ds-theme-accent` with `--ds-on-theme-accent`, while secondary
 actions sit on the `--ds-tile` fill with primary text and no stroke (D297).
 Hover states use the corresponding accent/tile-hover tokens rather than
 opacity-only changes, so actions remain legible in dark and light themes.
+
+#### Theme colour and project colour (D669)
+
+`AppSettings.accentColor` is a preset id (`blue` default, `teal`, `green`,
+`amber`, `rose`, `violet`, `graphite`) or a custom `#rrggbb`. The renderer
+publishes `--ds-theme-accent-light/-dark` and `--ds-on-theme-accent-light/-dark`
+on `:root` (`resolveAccentColor` in `@pi-desktop/shared`; a custom colour gets
+an OKLab-lifted dark variant and black or white ink chosen for at least 4.5:1).
+`tokens.css` maps them to `--ds-theme-accent` / `--ds-on-theme-accent` in each
+theme block, so no script tracks the active theme. `--ds-accent` stays neutral.
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--ds-theme-accent` | preset light value (blue `#2f6fed`) | preset dark value (blue `#5b93ff`) | the surfaces listed below |
+| `--ds-on-theme-accent` | black or white, >= 4.5:1 on the light value | black or white, >= 4.5:1 on the dark value | ink on those surfaces |
+| `--ds-project-accent` | project preset light value | project preset dark value | Project Console only, set on `.workflow-console` and `.workflow-context-sheet` when the project has a colour |
+
+Presets (light / dark): blue `#2f6fed` / `#5b93ff`, teal `#0f8b8d` / `#3cc3c4`,
+green `#1f8a4c` / `#4cc38a`, amber `#b86e00` / `#f0a33a`, rose `#c4365d` /
+`#ff6f93`, violet `#6d4ad8` / `#a68bff`, graphite `#3c3f44` / `#c9cbd0` (the
+former neutral look).
+
+The theme colour applies to exactly these primitives: primary `Button`
+(`.btn-primary`), `SettingsToggle` on-state, `Checkbox` checked/indeterminate
+fill, the keyboard focus ring (`--ds-focus`, plus the toggle focus ring), and
+the enabled composer send button. It never recolours text, links, borders,
+sidebar selection, segmented controls, or status colours; success, warning,
+error, and purple remain semantic.
+
+A project colour is a preset id only, stored in renderer sidebar preferences
+(`ProjectMeta.color`, keyed by project path). It tints the folder glyph in the
+sidebar project header and feeds `--ds-project-accent`, so the Project Console
+and its context sheet use it for `--workflow-accent`. Absent means follow the
+theme colour.
 
 Light-surface polish (D148):
 
@@ -1268,7 +1302,7 @@ Implementation: `components/ui.tsx → SettingsToggle`.
 | CSS class | `.settings-toggle` / `.settings-toggle.on` |
 | Role | `role="switch"` with `aria-checked` |
 | Variants | default, `busy` (`.is-busy`, `aria-busy`, disabled) |
-| Background | neutral accent when on (not green); theme-specific override in `theme-overrides.css` |
+| Background | theme colour (`--ds-theme-accent`) when on, knob `--ds-on-theme-accent` (not green) |
 
 Every boolean on/off control in Settings and editor sheets **must** use
 `SettingsToggle`. Inline `<button role="switch">` with manual class
@@ -1493,7 +1527,8 @@ adjacent form inputs; dense surfaces may override that metric locally.
   hovered or keyboard-focused, matching native sidebar rows. Status badges carry a
   leading dot in the semantic colours (ready/accepted success, executing warning,
   blocked error, awaiting user purple, others neutral). The project accent
-  (`--workflow-accent`) marks only the selected tab, list selection, primary
+  (`--workflow-accent`, resolved as `--ds-project-accent` when the project has a
+  colour, else `--ds-theme-accent`, else the neutral `--ds-accent`) marks only the selected tab, list selection, primary
   actions, acceptance segments and the project glyph. Project drafts are
   renderer-memory, keyed by project, retained on navigation/send failure, and
   cleared only after a successful send. Ordinary chat display groups are disjoint:

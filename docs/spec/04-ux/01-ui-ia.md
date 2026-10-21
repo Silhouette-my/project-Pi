@@ -274,6 +274,11 @@ destination, chat as the home surface, tools and permissions inline.
   delete remain separate actions. Rename edits the task label only; archive
   never removes the transcript. Open folder is a project action, not a
   conversation action.
+- **Project color** (D669): the project menu holds a **Project color** submenu
+  listing Follow theme color plus the seven presets, each with a color dot and a
+  check on the current choice. The choice is renderer-local sidebar preference
+  metadata keyed by project path. It tints only the project's folder glyph in
+  the sidebar and the Project Console accent; absent follows the theme color.
 - **Isolated sessions** (ADR 0329): the project menu offers **New isolated
   session**. Opening the menu probes the project: the item stays disabled
   until the answer arrives, and for an unsuitable project (not git, no

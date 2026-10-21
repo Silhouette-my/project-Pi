@@ -7,6 +7,9 @@ import { ProjectInstructionsDialog } from "../../components/ProjectInstructionsD
 import { ProjectMemoryDialog } from "../../components/ProjectMemoryDialog";
 import { api } from "../../lib/api";
 import { useAppStore } from "../../stores/app-store";
+import { normalizeAccentPresetId } from "@pi-desktop/shared";
+import { projectAccentStyle } from "../../lib/project-accent";
+import { projectMetaFor } from "../../lib/sidebar-preferences";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import { WorkstreamEditor } from "./WorkstreamEditor";
 import { WorkflowControls } from "./WorkflowControls";
@@ -174,10 +177,12 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
       })}
     </div>
   );
+  const projectColor = useAppStore((s) => group ? normalizeAccentPresetId(projectMetaFor(group.primaryPath, s.projectMeta).color) : undefined);
   const project = group ? { name: group.name, path: group.primaryPath, groupId: group.id } : null;
   const dockVisible = dockOpen && Boolean(snapshot);
   return (
     <div className="workflow-console" ref={root} data-workflow="console" data-project-id={projectId}
+      data-project-color={projectColor} style={projectAccentStyle(projectColor)}
       data-agent-dock={dockVisible ? (wide ? "docked" : "overlay") : "closed"}>
       <div className="workflow-page">
         <header className="workflow-header">
@@ -354,7 +359,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
       {contextOpen && snapshot ? (
         <ProjectContextSheet projectId={projectId} workstreams={workstreams} workstreamId={selectedId}
           onWorkstreamChange={(id) => selectWorkstream(id, false)}
-          onOpenReference={openReference} onClose={() => setContextOpen(false)} />
+          onOpenReference={openReference} onClose={() => setContextOpen(false)} color={projectColor} />
       ) : null}
       {project && contextEditor === "instructions" && (
         <ProjectInstructionsDialog

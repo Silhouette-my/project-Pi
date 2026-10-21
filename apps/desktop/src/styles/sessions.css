@@ -1146,3 +1146,36 @@
   outline: 1px dashed var(--ds-border-strong);
   outline-offset: -2px;
 }
+
+/*
+  Project colour: a per-project accent chosen from the preset palette. The row
+  carries `--project-accent-light/-dark`; CSS picks the variant for the active
+  theme. Only the folder glyph is tinted in the sidebar.
+*/
+.project-group[data-project-color] {
+  --project-accent: var(--project-accent-light);
+}
+:root[data-theme="dark"] .project-group[data-project-color] {
+  --project-accent: var(--project-accent-dark);
+}
+.project-group[data-project-color] .project-toggle > svg:not(.sidebar-disclosure-icon) {
+  color: var(--project-accent);
+}
+
+.project-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  margin: 0 2px;
+  border-radius: var(--radius-full);
+  background: var(--project-accent-light);
+}
+:root[data-theme="dark"] .project-color-dot {
+  background: var(--project-accent-dark);
+}
+.project-color-dot.is-theme,
+:root[data-theme="dark"] .project-color-dot.is-theme {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--ds-theme-accent);
+}

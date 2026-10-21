@@ -7,6 +7,15 @@
   marks selection, primary actions, focus and the project glyph only; status
   keeps the semantic success / warning / error / purple vocabulary.
 */
+/* A project colour arrives as light/dark variants; pick the one for the theme. */
+.workflow-console[data-project-color],
+.workflow-context-sheet[data-project-color] {
+  --ds-project-accent: var(--project-accent-light);
+}
+:root[data-theme="dark"] .workflow-console[data-project-color],
+:root[data-theme="dark"] .workflow-context-sheet[data-project-color] {
+  --ds-project-accent: var(--project-accent-dark);
+}
 .workflow-console,
 .workflow-context-sheet {
   --workflow-accent: var(--ds-project-accent, var(--ds-theme-accent, var(--ds-accent)));

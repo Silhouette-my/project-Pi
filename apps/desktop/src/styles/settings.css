@@ -1474,16 +1474,16 @@
   pale off fill, so only the knob would move.
 */
 .settings-toggle.on {
-  background: var(--ds-accent);
+  background: var(--ds-theme-accent);
 }
 
 .settings-toggle.on:hover {
-  background: var(--ds-accent-hover);
+  background: color-mix(in oklab, var(--ds-theme-accent) 86%, var(--ds-on-theme-accent));
 }
 
 .settings-toggle:focus-visible,
 .settings-toggle.on:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ds-accent) 24%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ds-theme-accent) 28%, transparent);
 }
 
 /*
@@ -1500,7 +1500,7 @@
 }
 
 .settings-toggle.on:disabled:hover {
-  background: var(--ds-accent);
+  background: var(--ds-theme-accent);
 }
 
 .settings-toggle.is-busy .settings-toggle-thumb {
@@ -1521,7 +1521,7 @@
 
 .settings-toggle.on .settings-toggle-thumb {
   transform: translateX(12px);
-  background: var(--ds-switch-knob-on);
+  background: var(--ds-on-theme-accent);
 }
 
 :root[data-theme="light"] .settings-toggle.on .settings-toggle-thumb {
@@ -4212,4 +4212,60 @@
 
 .sklm-page-jump::placeholder {
   color: var(--ds-text-muted);
+}
+
+/* Theme colour row: preset swatches plus a custom colour input. */
+.settings-accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.settings-accent-swatch {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 0;
+  border-radius: var(--radius-full);
+  background: var(--swatch-light);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ds-text-primary) 14%, transparent);
+  cursor: pointer;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+:root[data-theme="dark"] .settings-accent-swatch {
+  background: var(--swatch-dark);
+}
+.settings-accent-swatch:hover {
+  transform: scale(1.08);
+}
+.settings-accent-swatch.is-selected {
+  outline: 2px solid var(--ds-text-primary);
+  outline-offset: 2px;
+}
+.settings-accent-swatch:focus-visible,
+.settings-accent-custom:has(input:focus-visible) {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+.settings-accent-custom,
+:root[data-theme="dark"] .settings-accent-custom {
+  background: var(--ds-swatch-custom);
+}
+.settings-accent-custom.is-selected {
+  background: var(--swatch-light);
+}
+:root[data-theme="dark"] .settings-accent-custom.is-selected {
+  background: var(--swatch-dark);
+}
+.settings-accent-custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
 }

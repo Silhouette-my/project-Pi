@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import type { WorkflowWorkstream } from "@pi-desktop/shared";
 import { Field, Select, TooltipButton } from "../../components/ui";
 import { IconBookOpen, IconClose } from "../../components/icons";
+import { projectAccentStyle } from "../../lib/project-accent";
 import { WorkflowContext } from "./WorkflowContext";
 import { WorkstreamEditorDialog } from "./WorkstreamEditorDialog";
 
@@ -17,6 +18,7 @@ export function ProjectContextSheet({
   onWorkstreamChange,
   onOpenReference,
   onClose,
+  color,
 }: {
   projectId: string;
   workstreams: WorkflowWorkstream[];
@@ -24,6 +26,8 @@ export function ProjectContextSheet({
   onWorkstreamChange: (id: string) => void;
   onOpenReference: (reference: { kind: "artifact" | "resource"; id: string }) => Promise<void>;
   onClose: () => void;
+  /** The project's colour id, when it has one. */
+  color?: string;
 }) {
   const { t } = useTranslation();
   return (
@@ -31,6 +35,8 @@ export function ProjectContextSheet({
       onClose={onClose}
       labelledBy="workflow-context-sheet-title"
       className="workflow-context-sheet"
+      style={projectAccentStyle(color)}
+      dataProjectColor={color}
     >
       <div className="workflow-context-sheet-head">
         <span className="workflow-context-sheet-glyph" aria-hidden="true">

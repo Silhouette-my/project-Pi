@@ -103,8 +103,17 @@
   --ds-accent: var(--gray-0);
   --ds-accent-hover: var(--gray-100);
   --ds-accent-soft: var(--gray-300);
-  /* Focus rings / resize affordances. Tied to the accent so themes stay monochrome. */
-  --ds-focus: var(--ds-accent);
+  /*
+    User theme colour (Settings → Appearance). The renderer publishes both
+    variants on :root; each theme block picks its own, so no script needs to
+    know the active theme. Used only by a small set of shared primitives.
+  */
+  --ds-theme-accent: var(--ds-theme-accent-dark, #5b93ff);
+  --ds-on-theme-accent: var(--ds-on-theme-accent-dark, #000000);
+  /* Hue wheel for the "custom colour" swatch in Settings → Appearance. */
+  --ds-swatch-custom: conic-gradient(from 0deg, #ff5f5f, #ffb84d, #ffe14d, #5fd068, #4dc3ff, #7a6bff, #ff6fb5, #ff5f5f);
+  /* Keyboard focus rings follow the user theme colour; chrome stays neutral. */
+  --ds-focus: var(--ds-theme-accent);
   /* Settings fields and shared inset searches keep their built-in tones. */
   --ds-settings-field-bg: #212121;
   --ds-settings-nav-active: color-mix(in oklab, var(--gray-0) 10%, transparent);
@@ -256,7 +265,9 @@
   --ds-accent: #1a1c1f;
   --ds-accent-hover: #303030;
   --ds-accent-soft: #5d5d5d;
-  --ds-focus: var(--ds-accent);
+  --ds-theme-accent: var(--ds-theme-accent-light, #2f6fed);
+  --ds-on-theme-accent: var(--ds-on-theme-accent-light, #ffffff);
+  --ds-focus: var(--ds-theme-accent);
   --ds-settings-field-bg: #ffffff;
   --ds-settings-nav-active: color-mix(in oklab, #1a1c1f 12%, #ffffff);
   --ds-field-inset-bg: #f3f3f3;

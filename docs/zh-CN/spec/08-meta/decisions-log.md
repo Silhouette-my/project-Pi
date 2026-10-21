@@ -5504,3 +5504,13 @@ Markdown 源码，不是 `text/html` 负载；对禁用行内 HTML 的外部编�
   `apps/desktop/test/transcript-style.test.mjs` 与交互式转录探针覆盖。见修订后的 ADR、
   `04-ux/06-settings-ia.md`、`04-ux/08-component-spec.md`、
   `04-ux/09-interaction-patterns.md` 与 E2E-CHAT-turn-process-and-thinking-display。
+
+## 2026-10-22 —— 用户主题色与按项目着色（D669）
+
+- D669 放宽 2026-07-28 以及 `04-ux/07-ui-design-system.md` 中「仅中性灰强调」的原则：
+  用户可选择全局主题色（七个预设或自定义 `#rrggbb`，默认蓝色），也可为每个项目选择一个预设颜色。
+- 主题色只作用于主要按钮、开关开启态、复选框填充、键盘焦点环和可发送状态的发送按钮。
+  文字、链接、边框、侧边栏选中、分段控件和状态颜色保持不变；`--ds-accent` 仍为中性灰。
+- 项目颜色保存在渲染进程的侧边栏偏好中，只给侧边栏文件夹图标着色，并通过
+  `--ds-project-accent` 设置项目控制台强调色；缺失则跟随主题色。`accentColor`
+  加入可移植的应用字段，除此之外无主机协议或持久化 schema 变更。

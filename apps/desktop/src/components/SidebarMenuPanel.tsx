@@ -183,7 +183,8 @@ export function SidebarMenuPanel({
       <button
         ref={options?.inSubmenu ? undefined : takeFirstItemRef()}
         type="button"
-        role="menuitem"
+        role={item.checked === undefined ? "menuitem" : "menuitemradio"}
+        aria-checked={item.checked}
         className={item.danger ? "danger" : undefined}
         data-action={item.id}
         data-armed={item.armed ? "true" : undefined}
@@ -198,6 +199,7 @@ export function SidebarMenuPanel({
       >
         {item.icon ?? null}
         <span className="sidebar-menu-label">{item.label}</span>
+        {item.checked ? <span className="sidebar-sort-check" aria-hidden>✓</span> : null}
       </button>
       {item.describedBy && item.title ? (
         <p id={item.describedBy} className="sidebar-menu-hint">{item.title}</p>

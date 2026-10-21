@@ -6,6 +6,7 @@ import {
   type KeyboardShortcutId,
   keybindingDisplayParts,
   keybindingMatchesEvent,
+  resolveAccentColor,
   resolveFontScale,
   resolveKeybinding,
   type ShortcutPlatform,
@@ -609,6 +610,17 @@ export function useAppShellRuntime() {
       String(resolveFontScale(settings ?? {})),
     );
   }, [settings?.fontScale, settings?.fontSize]);
+
+  // Theme accent: both theme variants are published on :root and tokens.css
+  // picks the one that matches the active theme, so no JS tracks the theme.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    const accent = resolveAccentColor(settings?.accentColor);
+    root.setProperty("--ds-theme-accent-light", accent.light);
+    root.setProperty("--ds-theme-accent-dark", accent.dark);
+    root.setProperty("--ds-on-theme-accent-light", accent.onLight);
+    root.setProperty("--ds-on-theme-accent-dark", accent.onDark);
+  }, [settings?.accentColor]);
 
   useEffect(() => {
     if (bootstrapStartedRef.current) return;

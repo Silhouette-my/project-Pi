@@ -146,6 +146,26 @@ try {
   await until(() => page.evaluate("!!document.querySelector('[data-workflow=console]')"), "project home");
   assert.ok(await page.evaluate(`document.querySelector('[data-sidebar-project-group] .project-toggle')?.textContent.includes('Project navigation')`),"logical project name must replace root basename");
   await capture("project-home-light.png");
+  // Project colour: set through the project row menu, then verify the sidebar glyph and console accent in both themes.
+  const projectColorRgb = { light: "rgb(196, 54, 93)", dark: "rgb(255, 111, 147)" };
+  const colorProbe = () => page.evaluate(`(() => { const g=document.querySelector('[data-sidebar-project-group="'+${json(group)}+'"]'); const glyph=g?.querySelector('.project-toggle > svg:not(.sidebar-disclosure-icon)'); const mark=document.querySelector('.workflow-console .workflow-project-mark'); return { group: g?.dataset.projectColor, console: document.querySelector('.workflow-console')?.dataset.projectColor, glyph: glyph && getComputedStyle(glyph).color, mark: mark && getComputedStyle(mark).color } })()`);
+  assert.ok(await page.evaluate(`(() => { const more=document.querySelector('[data-sidebar-project-group="'+${json(group)}+'"] .project-more'); if(!more) return false; more.click(); return true })()`), "project overflow menu");
+  await until(() => page.evaluate(`(() => { const el=document.querySelector('.sidebar-row-menu [data-submenu-trigger="project-color"]'); if(!el) return false; el.click(); return true })()`), "Project color submenu trigger");
+  await until(() => page.evaluate("!!document.querySelector('.sidebar-submenu [data-action=\"project-color-rose\"]')"), "Project color presets");
+  assert.equal(await page.evaluate("document.querySelectorAll('.sidebar-submenu [role=menuitemradio]').length"), 8, "follow theme plus seven presets");
+  assert.equal(await page.evaluate("document.querySelector('.sidebar-submenu [data-action=\"project-color-theme\"]').getAttribute('aria-checked')"), "true");
+  await capture("project-color-menu-light.png");
+  await until(() => page.evaluate(`(() => { const el=document.querySelector('.sidebar-submenu [data-action="project-color-rose"]'); if(!el) return false; el.click(); return true })()`), "choose rose project colour");
+  await until(async () => (await colorProbe()).console === "rose", "console carries the project colour");
+  let probe = await colorProbe();
+  assert.equal(probe.group, "rose"); assert.equal(probe.glyph, projectColorRgb.light, "sidebar glyph tint (light)"); assert.equal(probe.mark, projectColorRgb.light, "console accent (light)");
+  await capture("project-color-light.png");
+  await page.evaluate("document.documentElement.dataset.theme='dark'");
+  await until(async () => (await colorProbe()).mark === projectColorRgb.dark, "console accent follows the dark variant");
+  probe = await colorProbe();
+  assert.equal(probe.glyph, projectColorRgb.dark, "sidebar glyph tint (dark)");
+  await capture("project-color-dark.png");
+  await page.evaluate("document.documentElement.dataset.theme='light'");
   const category = await createFolder("projects", "产品开发");
   const nested = await createFolder("projects", "桌面应用", category.id);
   const third = await createFolder("projects", "AI 工作空间", nested.id);

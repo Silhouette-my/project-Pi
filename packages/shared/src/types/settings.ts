@@ -99,6 +99,13 @@ export type AppSettings = {
    */
   fontScale?: number;
   /**
+   * Global theme accent: a preset id (`blue`, `teal`, `green`, `amber`,
+   * `rose`, `violet`, `graphite`) or a custom `#rrggbb`. Absent means the
+   * default preset `blue`. Used only by a small set of shared primitives
+   * (primary button, toggle, checkbox, focus ring, composer send).
+   */
+  accentColor?: string;
+  /**
    * Show model reasoning in the transcript. Off keeps the live thinking
    * indicator visible and hides completed reasoning rows and excerpts; absent
    * falls back to the legacy `thinkingDisplayMode`. This is a presentation
