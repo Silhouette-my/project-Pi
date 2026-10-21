@@ -8,6 +8,24 @@
 
 ## 1. Goals
 
+### E2E-PROJECT-overview-and-structure
+
+- **Preconditions:** Built task candidate and packaged Host, isolated HOME/data/
+  profile, synthetic local Git merge repository and finalized standard Archify
+  viewer fixture. No real account/model, generation or installed-App changes.
+- **Steps:** Open Project home, inspect actual goals/acceptance/blockers, open
+  Structure, select a real child and open its exact session. Select Git, inspect
+  merge-parent graph and working/commit diffs. Select Architecture, interact with
+  the standard viewer in its product iframe, then open a source line range.
+- **Expected:** No run-to-acceptance inference or folder-to-parent edges. Unlinked
+  history stays reachable. Git HEAD and files are unchanged. HTML uses the opaque
+  `pi-visualize` sandbox and cannot access its parent. Generated revision/current
+  file differ visibly; failed/truncated Git reads never imply a match.
+- **Coverage:** `project-structure-model.test.mjs`, existing Console renderer
+  user-path regression, host-runtime `project-structure.test.ts`, structure IPC
+  tests, and `scripts/e2e-project-structure-ui.mjs`. The script exercises actual
+  production DOM and frame interactions, not physical-pointer automation.
+
 ### E2E-VISUALIZE-isolated-document-policy
 
 - **Preconditions:** Built packaged candidate, temporary app/profile state, no

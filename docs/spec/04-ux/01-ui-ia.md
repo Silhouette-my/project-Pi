@@ -461,9 +461,24 @@ session and workspace. Opening it does not select, create or execute a session.
 Its overview answers what the project is trying to achieve, what is active or
 complete, who owns each workstream, what is blocked or awaits a decision, which
 candidate is current, and what action is next. Progress is expressed through
-those concrete states, never a fabricated percentage or message count. A
-project-level intent composer requires an explicit workstream target before
-routing; it never inherits an unrelated active chat as an implicit destination.
+those concrete states, never a fabricated percentage or message count. The
+compact project-level composer routes to the canonical discussion-only Project
+Agent without requiring a workstream. It never inherits an unrelated active chat
+as an implicit destination. Explicit Work actions still require a workstream.
+
+Structure is a separate project tab with Sessions, Git and Architecture views.
+Sessions shows only recorded `parentSessionId` edges; main-session and execution
+memberships are annotations, not invented edges. Unlinked history remains
+separate. Selection shows purpose, archive/live/unknown state, context return
+policy and attempts, and opens the exact existing conversation. Navigation
+folders do not alter these relationships.
+
+Git shows the read-only local commit-parent DAG, refs, current working changes
+and selected-commit diffs per registered root. Architecture discovers project
+`.archify` JSON/HTML with opaque `pi-visualize` previews. Source references show
+line ranges from the current working file, distinguished from the artifact's
+generated revision; incomplete Git state is unknown rather than a claimed match.
+Empty and error states do not invent nodes or trigger generation.
 
 Selecting a workstream opens its main line and a focused side-conversation
 surface. The workstream keeps its acceptance, owner, dependencies, current
@@ -531,8 +546,8 @@ resource conflicts retain the user's draft until explicit reload or close.
   project identity. It does not change the active session, selected workspace,
   or a running session. Back/Forward restores the exact project destination;
   returning to Chat restores the chosen conversation and its reading position.
-- Starting or routing an intent from the project surface requires an explicit
-  workstream target. Chat/Work transitions preserve the same workstream identity
+- Starting Work or routing a workstream intent requires an explicit
+  workstream target; project Agent discussion does not. Chat/Work transitions preserve the same workstream identity
   and make the handoff action explicit; an unadopted Explore proposal cannot
   steer Work.
 - Empty home has four explicit session states: a project-bound session shows

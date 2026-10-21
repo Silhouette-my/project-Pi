@@ -2,8 +2,8 @@ import { ProjectAgentButton } from "./ProjectAgentButton";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord, ProjectWorkflowSearchHit } from "@pi-desktop/shared";
-import { Badge, Button, Field, Select, Textarea, TooltipButton } from "../../components/ui";
-import { IconArrowUp, IconChat, IconChevronLeft, IconChevronRight, IconFileText, IconFolder, IconMore, IconPlus, IconSearch, IconShield, IconTarget } from "../../components/icons";
+import { Badge, Button, Field, Select, TooltipButton } from "../../components/ui";
+import { IconChat, IconChevronLeft, IconChevronRight, IconFileText, IconFolder, IconMore, IconPlus, IconSearch, IconTarget } from "../../components/icons";
 import { ProjectInstructionsDialog } from "../../components/ProjectInstructionsDialog";
 import { ProjectMemoryDialog } from "../../components/ProjectMemoryDialog";
 import { api } from "../../lib/api";
@@ -16,9 +16,11 @@ import { WorkflowContext } from "./WorkflowContext";
 import { WorkflowArtifacts } from "./WorkflowArtifacts";
 import { WorkstreamEditorDialog } from "./WorkstreamEditorDialog";
 import { useProjectAgent } from "./useProjectAgent";
-import { useProjectAgentDraft } from "./project-agent-draft";
+import { ProjectOverview } from "./ProjectOverview";
+import { ProjectStructureView } from "./ProjectStructureView";
 import "./workflow.css";
 import "./project-console-styles.css";
+import "./project-structure-styles.css";
 
 export function ProjectConsole({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
@@ -28,10 +30,9 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   const [groupLoaded, setGroupLoaded] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("");
-  const [tab, setTab] = useState<"overview" | "work" | "context" | "artifacts">("overview");
+  const [tab, setTab] = useState<"overview" | "work" | "context" | "artifacts" | "structure">("overview");
   const [editing, setEditing] = useState<"new" | "edit" | null>(null);
   const [contextEditor, setContextEditor] = useState<"instructions" | "memory" | null>(null);
-  const [intent, setIntent] = useProjectAgentDraft(projectId);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTarget, setSearchTarget] = useState<ProjectWorkflowSearchHit | null>(null);
   const mounted = useRef(true);
@@ -72,9 +73,6 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
       .filter((item) => item.projectId === projectId)
       .sort((left, right) => left.order - right.order) ?? [];
   const selected = workstreams.find((item) => item.id === selectedId);
-  const current = workstreams.filter((item) => !["completed", "cancelled"].includes(item.status));
-  const recentArtifacts = snapshot?.artifacts.filter((item) => item.projectId === projectId)
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, 3) ?? [];
   const candidate = snapshot?.artifacts.find((item) => item.id === selected?.currentCandidateId);
   useEffect(() => {
     if (!searchTarget) return;
@@ -121,10 +119,6 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   };
   const openReference = async (reference: { kind: "artifact" | "resource"; id: string }) => {
     await api.projectWorkflow.openReference({ projectId, ...reference });
-  };
-  const discussIntent = async () => {
-    if (!intent.trim() || projectAgent.busy) return;
-    try { await projectAgent.open(intent.trim()); setIntent(""); } catch (cause) { fail(cause); }
   };
   const openAgent = () => { void projectAgent.open().catch(fail); };
   const createWorkstream = () => {
@@ -203,34 +197,20 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
               <Button variant="ghost" aria-current={tab === "overview" ? "page" : undefined} onClick={() => selectTab("overview")}>{t("workflow.overview")}</Button>
               <Button variant="ghost" aria-current={tab === "work" ? "page" : undefined} onClick={() => selectTab("work")}>{t("workflow.workstreams")}</Button>
               <Button variant="ghost" aria-current={tab === "artifacts" ? "page" : undefined} onClick={() => selectTab("artifacts")}>{t("workflow.artifacts")}</Button>
+              <Button variant="ghost" aria-current={tab === "structure" ? "page" : undefined} onClick={() => selectTab("structure")}>{t("projectStructure.structure")}</Button>
               <Button variant="ghost" aria-current={tab === "context" ? "page" : undefined} onClick={() => selectTab("context")}>{t("workflow.context")}</Button>
             </nav>
             <div className="workflow-content">
             {tab === "overview" ? (
-              <section className="workflow-overview">
-                <div className="workflow-home-intro"><h2>{t("workflow.homeTitle")}</h2><p>{t("workflow.homeSubtitle")}</p></div>
-                <form className="composer-shell workflow-agent-composer" data-workflow="project-intent" onSubmit={(event) => { event.preventDefault(); void discussIntent(); }}>
-                  <Textarea aria-label={t("workflow.intentText")} placeholder={t("workflow.agentPlaceholder")} rows={2}
-                    value={intent} disabled={projectAgent.busy} onChange={(event) => setIntent(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && (event.metaKey || event.ctrlKey)) {
-                        event.preventDefault(); void discussIntent();
-                      }
-                    }} />
-                  <div className="composer-toolbar">
-                    <div className="composer-left"><TooltipButton tooltip={t("workflow.context")} ariaLabel={t("workflow.context")} className="icon-btn icon-btn-square" type="button" onClick={() => selectTab("context")}><IconPlus size={16} /></TooltipButton><span className="workflow-composer-mode"><IconChat size={14} />{t("workflow.discussion")}</span></div>
-                    <div className="composer-right"><Button type="button" variant="ghost" className="workflow-composer-model" disabled={projectAgent.busy} onClick={openAgent}>{t("workflow.configureAgent")}</Button><TooltipButton type="submit" className="send-btn" tooltip={t("workflow.sendAgent")} ariaLabel={t("workflow.sendAgent")} disabled={projectAgent.busy || !intent.trim()}><IconArrowUp size={16} /></TooltipButton></div>
-                  </div>
-                </form>
-                <p className="workflow-composer-note"><IconShield size={12} />{t("workflow.agentDiscussionHint")}</p>
-                <div className="workflow-suggestions">{(["status", "idea", "decisions"] as const).map((kind) => <Button variant="ghost" key={kind} disabled={projectAgent.busy} onClick={() => setIntent(t(`workflow.agentPrompts.${kind}`))}>{t(`workflow.agentSuggestions.${kind}`)}</Button>)}</div>
-                <div className="workflow-section-heading">
-                  <h2>{t("workflow.stage")}</h2><Button variant="ghost" onClick={createWorkstream}><IconPlus size={14} />{t("workflow.newWorkstream")}</Button>
-                </div>
-                {current.length ? workstreamRows(current.slice(0, 5)) : <div className="workflow-empty"><strong>{t("workflow.noCurrentWork")}</strong><p>{t("workflow.startWithAgent")}</p></div>}
-                {workstreams.length > 5 || workstreams.some((item) => ["completed", "cancelled"].includes(item.status)) ? <Button variant="ghost" className="workflow-view-all" onClick={() => { setSelectedId(""); selectTab("work"); }}>{t("workflow.allWorkstreams")}<IconChevronRight size={14} /></Button> : null}
-                {recentArtifacts.length ? <><div className="workflow-section-heading"><h2>{t("workflow.recentArtifacts")}</h2><Button variant="ghost" onClick={() => { setSelectedId(""); selectTab("artifacts"); }}>{t("workflow.viewAll")}<IconChevronRight size={14} /></Button></div><div className="workflow-recent-artifacts">{recentArtifacts.map((item) => <div className="workflow-artifact-row" key={item.id}><IconFileText size={18} /><div><strong>{item.label}</strong><p>{workstreams.find((work) => work.id === item.workstreamId)?.title}</p></div><Button onClick={() => void openReference({ kind: "artifact", id: item.id }).catch(fail)}>{t("workflow.openArtifact")}</Button></div>)}</div></> : null}
-              </section>
+              <ProjectOverview projectId={projectId} snapshot={snapshot}
+                onSelectWorkstream={selectWorkstream} onCreateWorkstream={createWorkstream}
+                onOpenContext={(id) => { setSelectedId(id ?? ""); selectTab("context"); }}
+                onOpenArtifacts={() => { setSelectedId(""); selectTab("artifacts"); }}
+                onOpenArtifact={(id) => openReference({ kind: "artifact", id })} onError={fail} />
+            ) : tab === "structure" ? (
+              <ProjectStructureView key={projectId} projectId={projectId} snapshot={snapshot}
+                projectPaths={group?.roots.map(root => root.path) ?? []}
+                onOpenSession={openSession} onOpenWorkstream={selectWorkstream} />
             ) : tab === "work" ? (
               <>
                 <div className="workflow-section-heading"><h2>{t("workflow.workstreams")}</h2><Button variant="ghost" onClick={createWorkstream}><IconPlus size={14} />{t("workflow.newWorkstream")}</Button></div>
@@ -293,7 +273,6 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                             {candidate.revision} · {candidate.environment}
                           </p>
                           <div className="workflow-actions">
-            <ProjectAgentButton projectId={projectId} />
                             <Button
                               onClick={() =>
                                 void openReference({ kind: "artifact", id: candidate.id }).catch(
