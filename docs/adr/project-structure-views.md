@@ -5,9 +5,11 @@
 The overview projects the existing Host workflow: current goals and acceptance
 counts, actual workstream states, blockers, proposed decisions, next actions and
 recent openable artifacts. It never synthesizes project completion or a progress
-percentage from execution completion. The existing canonical Agent composer
-becomes a compact action area; drafts and Chat/Work continuation retain their
-current behavior.
+percentage from execution completion. The canonical Agent discussion moved from
+an overview composer to a right-edge project dock that reads the Agent session as
+a detached transcript (no active-session change); drafts and Chat/Work
+continuation retain their current behavior. Outputs and evidence are shown in the
+workstream detail and shared context in a header sheet, leaving three tabs.
 
 A separate Structure tab contains switchable Sessions, Git and Architecture
 views rather than three canvases in the overview. Empty/error states describe

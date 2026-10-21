@@ -647,7 +647,8 @@ Object.assign(window, {
     check(sent.every((item) => item.target === "project-agent"), "Project prompt used unrelated active chat");
     check(actions.at(-1)?.kind === "agent.open", "Project Agent used fake workstream action");
     useAppStore.setState({ page: "project", projectConsoleId: "project-1", activeSessionId: null, refreshSessions: originals.refreshSessions, selectSession: originals.selectSession, sendPrompt: originals.sendPrompt });
-    click("workflow.artifacts");
+    // Outputs and evidence live in the workstream detail rather than a tab.
+    await selectPrimary();
     await until(
       () => document.querySelector('[data-workflow-artifact="candidate-7"]'),
       "Candidate missing",
@@ -881,7 +882,9 @@ Object.assign(window, {
       await selectPrimary();
     }
     if (target === "artifacts") {
-      click("workflow.artifacts");
+      click("workflow.overview");
+      await selectPrimary();
+      document.querySelector('[data-workflow-artifact="candidate-7"]')?.scrollIntoView({ block: "start" });
       await until(
         () => document.querySelector('[data-workflow-artifact="candidate-7"]'),
         "Candidate screenshot missing",
@@ -890,7 +893,7 @@ Object.assign(window, {
     await frame();
     document.getAnimations().forEach((animation) => animation.finish());
     await frame();
-    document.querySelector<HTMLElement>(".workflow-console")!.scrollTop = 0;
+    if (target !== "artifacts") document.querySelector<HTMLElement>(".workflow-page")!.scrollTop = 0;
     if (target === "controls") detail().scrollIntoView({ block: "start" });
     await frame();
     return {

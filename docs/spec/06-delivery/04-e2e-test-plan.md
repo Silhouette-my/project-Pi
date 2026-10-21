@@ -71,11 +71,13 @@
 - **Preconditions:** Built task worktree, reused Electron/runtime dependencies,
   temporary HOME, Host data and Chromium profile, loopback-only model fixture.
   No installed profile or real provider is used.
-- **Steps:** Open an empty project from the sidebar, send from its overview
-  composer, read the reply in the existing ChatSurface, return and reopen the
+- **Steps:** Open an empty project from the sidebar, send from the project
+  Agent dock, read the reply in the dock while the console stays the page, open
+  the full conversation in the existing ChatSurface, return and reopen the
   project Agent. Restart the app and continue the same discussion. Create a
   workstream through the shared dialog, open its detail, search and open a
-  candidate, submit revision-specific feedback, and inspect shared context.
+  candidate in the workstream detail, submit revision-specific feedback, and
+  inspect shared context in its header sheet.
   Use sidebar folder controls and inspect conversation grouping. Inspect the
   native minimum 800×600 window in light and dark appearances.
 - **Expected:** The Agent entry needs no workstream and reuses one durable
@@ -85,7 +87,7 @@
   ordinary sessions preserve their permission behavior. Header actions stay
   below the native titlebar, overview and work details are distinct, and
   navigation shows each standalone conversation once without moving its folder.
-  Failed sends retain the overview draft; later navigation cannot send it to a
+  Failed sends retain the dock draft; later navigation cannot send it to a
   different session.
 - **Coverage:** `scripts/e2e-project-workflow-ui.mjs` exercises the production
   process/renderer journey and captures native screenshots.

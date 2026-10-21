@@ -23,6 +23,7 @@ import {
   sessionNeedsModelPin,
 } from "../../lib/session-model";
 import {
+  attachDetachedTranscript,
   retainSessionPane,
 } from "../../lib/session-panes";
 import {
@@ -161,6 +162,7 @@ export function createSessionSlice({
   | "restorePendingPlan"
   | "refreshPlanCheckpoints"
   | "prefetchSession"
+  | "attachSessionTranscript"
   | "selectSession"
   | "newSession"
   | "forkSession"
@@ -375,6 +377,22 @@ export function createSessionSlice({
         messageLimit: 100,
         contentLimit: 64 * 1024,
       });
+    },
+
+    attachSessionTranscript: async (id) => {
+      if (!id) return;
+      if (!runtime.sessionTranscriptCache.has(id)) {
+        await runtime.loadSessionDetail(id, {
+          messageLimit: 100,
+          contentLimit: 64 * 1024,
+        });
+      }
+      const messages = runtime.sessionTranscriptCache.get(id) ?? [];
+      set((state) =>
+        state.activeSessionId === id
+          ? {}
+          : attachDetachedTranscript(state, id, messages),
+      );
     },
 
     selectSession: async (id, opts) => {

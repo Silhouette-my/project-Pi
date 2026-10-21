@@ -2,7 +2,7 @@
 .workflow-project-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .workflow-project-identity > div:last-child { min-width: 0; }
 /* Compact identity (07 §Destination pages): glyph seat matches .projects-glyph, the path uses the archive path voice. */
-.workflow-project-mark { width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius-xs); background: var(--ds-tile); color: var(--ds-text-secondary); display: grid; place-items: center; }
+.workflow-project-mark { width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius-xs); background: color-mix(in oklab, var(--workflow-accent) 14%, transparent); color: var(--workflow-accent); display: grid; place-items: center; }
 .workflow-project-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap !important; max-width: 460px; font-family: var(--font-mono); font-size: var(--text-xs-plus); line-height: var(--leading-normal) !important; }
 .workflow-header-actions { flex-shrink: 0; }
 /* Quiet underline navigation (07 §11.5): px-3 py-2 text-sm, secondary at rest. */
@@ -10,30 +10,22 @@
 .workflow-tabs > .btn { position: relative; min-height: 32px; padding: 8px 12px; border-radius: var(--radius-xs) var(--radius-xs) 0 0; font-size: var(--text-sm); color: var(--ds-text-secondary); background: transparent; }
 .workflow-tabs > .btn:hover { color: var(--ds-text-primary); background: transparent; }
 .workflow-tabs > .btn[aria-current="page"] { color: var(--ds-text-primary); font-weight: var(--font-weight-medium); }
-.workflow-tabs > .btn[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--ds-accent); border-radius: var(--radius-full); }
+.workflow-tabs > .btn[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--workflow-accent); border-radius: var(--radius-full); }
 /* Content band follows the 760px chat band; section rhythm stays within 16–24px (07 §13). */
 .workflow-content { width: 100%; max-width: 760px; margin: 0 auto; padding-top: 16px; }
 .workflow-content > .workflow-section-heading { margin-bottom: 12px; }
-.workflow-overview { min-width: 0; }
-.workflow-home-intro { margin-bottom: 18px; }
-.workflow-home-intro h2 { font-size: var(--text-xl); font-weight: var(--font-weight-strong); line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); }
-.workflow-home-intro p { color: var(--ds-text-muted); font-size: var(--text-sm); margin-top: 9px; }
-.workflow-overview > .workflow-section-heading { margin: 24px 0 8px; }
 .workflow-section-heading > .btn { font-size: var(--text-sm); }
 .workflow-row-copy small { line-height: var(--leading-normal); }
 .workflow-workstream > svg { flex-shrink: 0; color: var(--ds-text-muted); }
 .workflow-empty { padding: 16px 0; color: var(--ds-text-muted); font-size: var(--text-md); border-top: 1px solid var(--ds-border-subtle); }
 .workflow-empty strong { color: var(--ds-text-secondary); font-weight: var(--font-weight-medium); display: block; margin-bottom: 5px; }
 .workflow-empty > .btn { margin-top: 10px; }
-.workflow-view-all.btn { margin-top: 9px; font-size: var(--text-sm); }
 .workflow-artifact-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
 .workflow-artifact-row > svg { color: var(--ds-text-muted); flex-shrink: 0; }
 .workflow-artifact-row > div { min-width: 0; flex: 1; }
 .workflow-artifact-row strong { font-size: var(--text-md); font-weight: var(--font-weight-medium); overflow-wrap: anywhere; }
 .workflow-artifact-row p { font-size: var(--text-sm); color: var(--ds-text-muted); margin-top: 4px; }
 .workflow-back.btn { font-size: var(--text-sm); padding-left: 0; }
-.workflow-filter { margin-bottom: 20px; max-width: 300px; }
-.workflow-filter .field-select { width: 100%; }
 .workflow-project-search { padding: 5px 0 16px; }
 .workflow-project-search[hidden] { display: none; }
 .workflow-project-menu { position: relative; }
@@ -52,7 +44,6 @@
   .workflow-project-path { max-width: 230px; }
   .workflow-context-shortcut.btn { display: none; }
   .workflow-content { padding-top: 12px; }
-  .workflow-home-intro h2 { font-size: var(--text-lg); }
   .workflow-workstream.btn { flex-wrap: wrap; gap: 7px; }
   .workflow-workstream .workflow-row-copy { flex-basis: calc(100% - 32px); }
   .workflow-workstream > .badge { margin-left: 24px; }

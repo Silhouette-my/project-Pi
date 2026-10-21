@@ -110,6 +110,9 @@ const clickAria = async (label, selector = "button[aria-label]") => page.evaluat
 const fillByLabel = async (label, value) => page.evaluate(`(() => { const labels=[...document.querySelectorAll('label')]; const label=labels.find(x=>x.textContent?.trim().startsWith(${json(label)})); const input=label?.querySelector('input,textarea,select') || (label?.htmlFor && document.getElementById(label.htmlFor)); if(!input) return false; const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value')?.set; setter?.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); return true })()`);
 const fillControl = async (selector, value) => page.evaluate(`(() => { const input=document.querySelector(${json(selector)}); if(!input) return false; Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value').set.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); return true })()`);
 const submitForm = async selector => page.evaluate(`(() => { const form=document.querySelector(${json(selector)}); if(!form) return false; form.requestSubmit(); return true })()`);
+const openAgentDock = async () => page.evaluate(`(() => { const toggle=document.querySelector('[data-project-agent-dock-toggle]'); if(!toggle) return false; if(toggle.getAttribute('aria-pressed')!=='true') toggle.click(); return true })()`);
+const openContextSheet = async () => page.evaluate(`(() => { const button=document.querySelector('[data-workflow-context-open]'); if(!button) return false; button.click(); return true })()`);
+const closeContextSheet = async () => page.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
 const capture = async name => { const shot = await page.call("Page.captureScreenshot", { format: "png" }); await writeFile(join(output, name), Buffer.from(shot.data, "base64")); };
 try {
   const seed = new Host(hostBinary, data, { env: { HOME: home }, quiet: true });
@@ -128,11 +131,16 @@ try {
   await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim().includes('Workflow UI Production'))`), "empty project in sidebar", 60000);
   await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   assert.ok(await clickText("项目首页"));
+  await until(() => openAgentDock(), "project Agent dock toggle");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "empty project Agent composer");
   assert.equal((await snapshot()).workstreams.length, 0);
   assert.ok(await fillControl('[data-workflow="project-intent"] textarea', "PROJECT_AGENT_EMPTY_PROJECT: discuss before working"));
   assert.ok(await submitForm('[data-workflow="project-intent"]'));
-  await until(() => page.evaluate(`document.body.innerText.includes('PROJECT_AGENT_REPLY_1')`), "actual Agent response rendered");
+  await until(() => page.evaluate(`document.querySelector('[data-project-agent-dock]')?.innerText.includes('PROJECT_AGENT_REPLY_1')`), "actual Agent response rendered in the project dock");
+  assert.equal(await page.evaluate(`document.querySelector('[data-workflow="console"]') ? 'project' : 'other'`), "project", "discussing keeps the Project Console as the page");
+  await capture("renderer-project-agent-dock.png");
+  await page.evaluate(`document.querySelector('[data-project-agent-dock] [data-project-agent]').click()`);
+  await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar')`), "full Agent conversation opened from the dock");
   const projectAgentSession = (await snapshot()).projectAgents.find(agent => agent.projectId === projectId).sessionId;
   assert.equal((await snapshot()).workstreams.length, 0, "discussion creates no hidden workstream");
   assert.equal((await snapshot()).runs.length, 0, "discussion starts no workflow run");
@@ -141,19 +149,23 @@ try {
   assert.ok(await page.evaluate(`!!document.querySelector('.workflow-conversation-bar') && !document.querySelector('.composer-mode') && !document.querySelector('.composer-permission')`));
   await capture("renderer-project-agent.png");
   await page.evaluate(`document.querySelector('.workflow-conversation-bar button').click()`);
-  await until(() => page.evaluate(`!!document.querySelector('.workflow-console [data-project-agent]')`), "project return route");
-  await page.evaluate(`document.querySelector('.workflow-console [data-project-agent]').click()`);
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "project return route");
+  // A narrow console overlays the dock only on request, so reopen it explicitly.
+  await until(() => openAgentDock(), "project Agent dock toggle on return");
+  await until(() => page.evaluate(`!!document.querySelector('[data-project-agent-dock] [data-project-agent]')`), "project Agent dock entry on return");
+  await page.evaluate(`document.querySelector('[data-project-agent-dock] [data-project-agent]').click()`);
   await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar')`), "project Agent reopened");
   assert.equal((await snapshot()).projectAgents[0].sessionId, projectAgentSession);
   assert.equal(modelRequests.length, 1, "reopening never sends another prompt");
-  coverage.push("Empty project opens canonical Agent from the overview, renders an actual loopback-model reply in ChatSurface, preserves it on revisit, and creates no Workstream/Run or tool catalog");
+  coverage.push("Empty project discusses with the canonical Agent from the project dock, keeps the console as the page, opens the full conversation on demand, renders an actual loopback-model reply in ChatSurface, preserves it on revisit, and creates no Workstream/Run or tool catalog");
   await stopApp();
   await startApp();
   await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim().includes('Workflow UI Production'))`), "project restored after restart", 60000);
   await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   assert.ok(await clickText("项目首页"));
+  await until(() => openAgentDock(), "project Agent dock toggle after restart");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "project composer after restart");
-  await page.evaluate(`document.querySelector('.workflow-console [data-project-agent]').click()`);
+  await page.evaluate(`document.querySelector('[data-project-agent-dock] [data-project-agent]').click()`);
   await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar') && !!document.querySelector('.composer-input')`), "resumed Agent Composer");
   assert.ok(await page.evaluate(`(() => { const input=document.querySelector('.composer-input'); if(!input) return false; input.focus(); input.textContent='PROJECT_AGENT_RESTART: continue the same discussion'; input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'PROJECT_AGENT_RESTART: continue the same discussion'})); return true })()`));
   await until(() => page.evaluate(`!!document.querySelector('.composer-toolbar .send-btn:not(:disabled)')`), "real Composer send enabled");
@@ -227,8 +239,8 @@ try {
   const candidateOpenedPath = await main.evaluate(`globalThis.__workflowOpenedPaths[0]`);
   assert.equal(candidateOpenedPath, recordedPath);
 
-  // Context resource appears in its real tab and carries the source revision.
-  await clickText("共享上下文");
+  // Context resource appears in the shared-context sheet and carries the source revision.
+  assert.ok(await openContextSheet(), "shared context opens from the project header");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "project resource context");
   const resourceUi = await page.evaluate(`document.querySelector('[data-workflow-resource="${resourceId}"]')?.innerText`);
   assert.match(resourceUi, /src-r2/);
@@ -236,7 +248,9 @@ try {
   await until(() => main.evaluate(`globalThis.__workflowOpenedPaths?.length===2`), "resource reference routed to isolated shell boundary");
   const resourceOpenedPath = await main.evaluate(`globalThis.__workflowOpenedPaths[1]`);
   assert.equal(resourceOpenedPath, recordedPath);
-  coverage.push("Opened the resource context through the actual tab, read its source revision, and verified both candidate/resource references resolve to their recorded path through the production IPC boundary");
+  await closeContextSheet();
+  await until(() => page.evaluate(`!document.querySelector('[data-workflow-context-sheet]')`), "shared context sheet closed");
+  coverage.push("Opened the resource context through the header sheet, read its source revision, and verified both candidate/resource references resolve to their recorded path through the production IPC boundary");
 
   // Folder management and chat placement/removal are actual sidebar DOM actions:
   // the Chats header button, the folder dialog, and the rows' "..." menus.
@@ -316,8 +330,9 @@ try {
   await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"][data-project-id="${projectId}"]')`), "return to Project Console from chat navigation");
-  await clickText("共享上下文");
+  assert.ok(await openContextSheet());
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "resource panel restored after chat navigation");
+  await closeContextSheet();
 
   // Resize the actual Electron window (not the emulated CSS viewport) to its supported minimum.
   const nativeSize = await main.evaluate(`(() => { const require=process.getBuiltinModule('module').createRequire(${json(join(root, "apps/desktop/package.json"))}); const {BrowserWindow}=require('electron'); const win=BrowserWindow.getAllWindows().find(item=>!item.isDestroyed() && item.webContents.getURL().includes('/out/renderer/index.html')); if(!win) throw new Error('workflow window not found'); win.setContentSize(800,600); return win.getContentSize(); })()`);
@@ -326,7 +341,7 @@ try {
 
   // Inspect the workstream owner, blocker, and current candidate on Overview at both themes.
   await clickText("概览");
-  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"]')`), "Overview view");
+  await until(() => page.evaluate(`!!document.querySelector('[data-project-overview]')`), "Overview view");
 
   // At the native supported minimum, capture both themes and the shared context surface.
   for (const [name, theme] of [["renderer-overview-light.png", "light"], ["renderer-overview-dark.png", "dark"]]) {
@@ -341,13 +356,14 @@ try {
     assert.ok(metrics.documentWidth <= 801 && metrics.consoleWidth <= 801, `${name} overflows supported width: ${json(metrics)}`);
     assert.ok(metrics.headerActions && metrics.headerActions.top >= 46 && metrics.headerActions.bottom <= 600, `${name} overlaps native titlebar or clips header actions: ${json(metrics)}`);
   }
-  await clickText("Measured rollout", ".workflow-workstream-list button");
+  assert.ok(await clickText("工作流", ".workflow-tabs button"), "Workstreams tab");
+  await until(() => clickText("Measured rollout", ".workflow-workstream-list button"), "Measured rollout in the workstream list");
   await until(() => page.evaluate(`!!document.querySelector('.workflow-detail .workflow-blocker') && !!document.querySelector('.workflow-candidate-summary')`), "workstream owner, blocker, and candidate details");
   const overviewText = await page.evaluate(`document.querySelector('.workflow-detail')?.innerText`);
   assert.match(overviewText, /Release lead/);
   assert.match(overviewText, /Approve candidate-r7/);
   assert.match(overviewText, /candidate-r7/);
-  coverage.push("Opened a work item from Overview and inspected its owner, blocker/resume condition, and current candidate in its separate detail view");
+  coverage.push("Opened a work item from the Workstreams list and inspected its owner, blocker/resume condition, and current candidate in its separate detail view");
   await page.evaluate(`document.documentElement.dataset.theme='light'; document.querySelector('.workflow-detail')?.scrollIntoView({block:'start'})`);
   await until(() => page.evaluate(`(() => { const block=document.querySelector('.workflow-blocker')?.getBoundingClientRect(), candidate=document.querySelector('.workflow-candidate-summary')?.getBoundingClientRect(); return !!block && !!candidate && block.top >= 0 && block.bottom <= innerHeight && candidate.top >= 0 && candidate.bottom <= innerHeight })()`), "Overview blocker and candidate visible in viewport");
   const overviewDetail = await page.evaluate(`(() => { const rect=selector=>{const r=document.querySelector(selector)?.getBoundingClientRect(); return r?{top:r.top,bottom:r.bottom,left:r.left,right:r.right}:null}; return {text:document.querySelector('.workflow-detail')?.innerText,owner:rect('.workflow-detail .workflow-muted'),blocker:rect('.workflow-blocker'),candidate:rect('.workflow-candidate-summary'),width:innerWidth,height:innerHeight} })()`);
@@ -356,7 +372,7 @@ try {
   assert.ok(overviewDetail.candidate?.top >= 0 && overviewDetail.candidate.bottom <= 600, `Overview candidate is not visible: ${json(overviewDetail)}`);
   await capture("renderer-overview-detail.png");
 
-  await clickText("共享上下文");
+  assert.ok(await openContextSheet());
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "shared context screenshot");
   await page.evaluate("document.documentElement.dataset.theme='light'; document.querySelector('.workflow-console')?.scrollTo(0,0)"); await sleep(250);
   layout["renderer-context-light.png"] = await page.evaluate(`({width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,consoleWidth:document.querySelector('[data-workflow="console"]')?.getBoundingClientRect().width})`);

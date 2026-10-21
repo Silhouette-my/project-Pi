@@ -1,0 +1,592 @@
+/*
+  Project home composition: console + Agent dock, overview cards, the
+  workstream list/detail split and the shared-context sheet.
+
+  `--workflow-accent` is the project's accent: a per-project colour when set,
+  otherwise the user's theme colour, otherwise the neutral shell accent. It
+  marks selection, primary actions, focus and the project glyph only; status
+  keeps the semantic success / warning / error / purple vocabulary.
+*/
+.workflow-console,
+.workflow-context-sheet {
+  --workflow-accent: var(--ds-project-accent, var(--ds-theme-accent, var(--ds-accent)));
+}
+.workflow-console {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+}
+.workflow-console > .workflow-page {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  overflow: auto;
+  container-type: inline-size;
+}
+
+/* Header tools: the console action group plus the dock toggle. */
+.workflow-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.workflow-header-tools .workflow-agent-dock-toggle.is-active {
+  color: var(--workflow-accent);
+  background: color-mix(in oklab, var(--workflow-accent) 12%, transparent);
+}
+.workflow-tab-count {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--ds-text-primary) 8%, transparent);
+  color: var(--ds-text-secondary);
+  font-size: var(--text-3xs);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-normal);
+}
+
+/* Section header line shared by overview and workstream list. */
+.project-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+.workflow-page .project-section-label h2 {
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ds-text-secondary);
+}
+.project-section-count {
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--ds-text-primary) 8%, transparent);
+  color: var(--ds-text-secondary);
+  font-size: var(--text-3xs);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-normal);
+}
+.project-section-label > .btn,
+.project-section-label > .ct-icon-btn {
+  margin-left: auto;
+}
+
+/* Status vocabulary (07 §12.2). */
+.workflow-status-badge {
+  gap: 5px;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.workflow-status-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+.workflow-status-badge.is-decision {
+  color: var(--ds-purple);
+  background: color-mix(in oklab, var(--ds-purple) 14%, transparent);
+}
+.workflow-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: var(--radius-full);
+  background: var(--ds-text-faint);
+}
+.workflow-status-dot.is-ready,
+.workflow-status-dot.is-completed {
+  background: var(--ds-success);
+}
+.workflow-status-dot.is-executing {
+  background: var(--ds-warning);
+}
+.workflow-status-dot.is-blocked {
+  background: var(--ds-error);
+}
+.workflow-status-dot.is-awaiting_user {
+  background: var(--ds-purple);
+}
+
+/* Overview. */
+.project-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.project-overview-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.project-overview-stat {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+}
+.project-overview-stat dt {
+  font-size: var(--text-sm);
+  color: var(--ds-text-muted);
+}
+.project-overview-stat dd {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+  font-variant-numeric: tabular-nums;
+}
+.project-overview-stat.is-accent dd {
+  color: var(--workflow-accent);
+}
+.project-overview-stat.is-decision dd {
+  color: var(--ds-purple);
+}
+.project-overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.project-overview-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.project-overview-card.btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  height: auto;
+  padding: 10px 14px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+  text-align: left;
+  white-space: normal;
+}
+.project-overview-card.btn:hover {
+  background: var(--ds-tile-hover);
+}
+.project-overview-card > svg:last-child {
+  flex-shrink: 0;
+  color: var(--ds-text-muted);
+}
+.project-attention-item.is-blocked {
+  box-shadow: inset 3px 0 var(--ds-error);
+}
+.project-attention-item.is-decision {
+  box-shadow: inset 3px 0 var(--ds-purple);
+}
+.project-attention-item.is-unknown {
+  box-shadow: inset 3px 0 var(--ds-warning);
+}
+.project-card-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.project-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.project-card-title strong {
+  font-size: var(--text-md-plus);
+  font-weight: var(--font-weight-medium);
+  color: var(--ds-text-primary);
+  overflow-wrap: anywhere;
+}
+.project-card-copy > span:not(.project-card-title),
+.project-card-copy > small {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--ds-text-muted);
+}
+.project-card-goal {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-overview-next {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ds-text-secondary) !important;
+}
+.project-overview-next svg {
+  flex-shrink: 0;
+  color: var(--workflow-accent);
+}
+.project-card-meta {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.project-card-meta small {
+  font-size: var(--text-xs-plus);
+  color: var(--ds-text-muted);
+  white-space: nowrap;
+}
+.project-acceptance-meter {
+  display: inline-flex;
+  gap: 3px;
+}
+.project-acceptance-meter i {
+  width: 14px;
+  height: 4px;
+  border-radius: var(--radius-3xs);
+  background: color-mix(in oklab, var(--ds-text-primary) 12%, transparent);
+}
+.project-acceptance-meter i.is-done {
+  background: var(--workflow-accent);
+}
+.project-overview-output {
+  padding: 8px 12px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+}
+
+/* Workstreams: list and detail side by side when the page is wide enough. */
+.workflow-work {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  border-top: 1px solid var(--ds-border-subtle);
+}
+.workflow-work-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px 8px 0;
+  border-right: 1px solid var(--ds-border-subtle);
+}
+.workflow-work-detail {
+  min-width: 0;
+  padding: 12px 0 0 20px;
+}
+.workflow-work .workflow-workstream-list {
+  gap: 1px;
+  border-top: 0;
+}
+.workflow-work .workflow-workstream.btn {
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-bottom: 0;
+  border-radius: var(--radius-sm);
+}
+.workflow-work .workflow-workstream.is-selected {
+  background: color-mix(in oklab, var(--workflow-accent) 12%, transparent);
+}
+.workflow-work .workflow-row-copy strong {
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-normal);
+  color: var(--ds-text-primary);
+}
+.workflow-row-count {
+  margin-left: auto;
+  font-size: var(--text-xs-plus);
+  color: var(--ds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.workflow-work .workflow-back {
+  display: none;
+}
+.workflow-work.is-stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+.workflow-work.is-stacked .workflow-work-list {
+  padding-right: 0;
+  border-right: 0;
+}
+.workflow-work.is-stacked.has-detail .workflow-work-list {
+  display: none;
+}
+.workflow-work.is-stacked .workflow-work-detail {
+  padding-left: 0;
+}
+.workflow-work.is-stacked .workflow-back {
+  display: inline-flex;
+}
+.workflow-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.workflow-detail-head > div:first-child {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.workflow-page .workflow-detail-head h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
+}
+.workflow-detail-head p {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+}
+.workflow-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  gap: 6px;
+}
+.workflow-detail-goal {
+  font-size: var(--text-md);
+  color: var(--ds-text-secondary);
+}
+.workflow-detail .workflow-blocker {
+  border-left-color: var(--ds-error);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: color-mix(in oklab, var(--ds-error) 8%, transparent);
+  font-size: var(--text-sm);
+}
+.workflow-detail .workflow-candidate-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+}
+.workflow-candidate-summary h3 {
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ds-text-secondary);
+}
+.workflow-detail-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.workflow-detail-facts:empty {
+  display: none;
+}
+.workflow-detail-facts dt {
+  color: var(--ds-text-muted);
+}
+.workflow-detail-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.workflow-detail-outputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ds-border-subtle);
+}
+
+/* Primary actions inside the console use the project accent. */
+.workflow-console .btn-primary {
+  background: var(--workflow-accent);
+}
+
+/* Project Agent dock. */
+.project-agent-dock {
+  display: flex;
+  flex: 0 0 340px;
+  flex-direction: column;
+  width: 340px;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--ds-border-subtle);
+  background: var(--ds-bg-dock);
+}
+.workflow-console[data-agent-dock="overlay"] > .project-agent-dock {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(340px, 92%);
+  box-shadow: var(--ds-shadow-dialog);
+}
+.project-agent-dock-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--ds-border-subtle);
+}
+.project-agent-dock-glyph {
+  display: inline-flex;
+  color: var(--workflow-accent);
+}
+.project-agent-dock-header h2 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-strong);
+}
+.project-agent-dock-tag {
+  padding: 1px 6px;
+  border-radius: var(--radius-2xs);
+  background: var(--ds-tile);
+  color: var(--ds-text-muted);
+  font-size: var(--text-xs);
+}
+.project-agent-dock-spacer {
+  flex: 1;
+}
+.project-agent-dock-header .ct-icon-btn {
+  display: inline-flex;
+  width: var(--ds-control-size);
+  height: var(--ds-control-size);
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ds-text-secondary);
+  cursor: pointer;
+}
+.project-agent-dock-header .ct-icon-btn:hover:not(:disabled) {
+  background: var(--ds-bg-hover);
+  color: var(--ds-text-primary);
+}
+.project-agent-dock-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.project-agent-dock-empty {
+  padding: 16px;
+  color: var(--ds-text-muted);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+.project-agent-dock-error {
+  margin: 0 10px 8px;
+}
+.project-agent-dock-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 10px 10px;
+  padding: 8px 8px 6px 12px;
+  border-radius: var(--ds-composer-radius, var(--radius-2xl));
+  background: var(--ds-bg-composer);
+  box-shadow: var(--ds-shadow-composer);
+}
+.project-agent-dock-composer:focus-within {
+  box-shadow: 0 7px 24px color-mix(in oklab, var(--ds-text-primary) 9%, transparent);
+}
+.project-agent-dock-composer .field-textarea {
+  min-height: 44px;
+  max-height: 160px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  resize: none;
+}
+.project-agent-dock-composer .field-textarea:focus {
+  background: transparent;
+  box-shadow: none;
+}
+.project-agent-dock-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.project-agent-dock-scope {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-agent-dock-composer .send-btn:not(:disabled) {
+  background: var(--workflow-accent);
+}
+
+/* Shared-context sheet. */
+.workflow-editor-dialog.workflow-context-sheet {
+  width: 720px;
+}
+.workflow-context-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px 20px 12px;
+}
+.workflow-context-sheet-head > div {
+  flex: 1;
+  min-width: 0;
+}
+.workflow-context-sheet-head h3 {
+  margin: 0 0 2px;
+  font-size: var(--text-base-plus);
+  font-weight: var(--font-weight-strong);
+}
+.workflow-context-sheet-head p {
+  font-size: var(--text-sm);
+}
+.workflow-context-sheet-glyph {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border-radius: var(--radius-xs);
+  background: color-mix(in oklab, var(--workflow-accent) 14%, transparent);
+  color: var(--workflow-accent);
+}
+.workflow-context-sheet-head .ct-icon-btn {
+  display: inline-flex;
+  width: var(--ds-control-size);
+  height: var(--ds-control-size);
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ds-text-secondary);
+  cursor: pointer;
+}
+.workflow-context-sheet-body {
+  padding: 0 20px 20px;
+}
+
+@container (max-width: 640px) {
+  .project-overview-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .project-card-meta {
+    display: none;
+  }
+}

@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   RETAINED_SESSION_PANE_LIMIT,
+  attachDetachedTranscript,
   clearSessionPanes,
   recordPaneTranscript,
   releaseSessionPane,
@@ -136,4 +137,18 @@ test("the store keeps the retained panes in step with the live projection", () =
   assert.match(store, /\.\.\.releaseSessionPane\(state, id\)/);
   assert.match(store, /retainedSessionIds: \[\],/);
   assert.match(store, /retainedTranscripts: \{\},/);
+});
+
+test("a detached transcript stays live without becoming a chat pane", () => {
+  const state = visit(empty, ["a"]);
+  const docked = attachDetachedTranscript(state, "agent", say("agent"));
+  // The chat surface mounts and shows only retainedSessionIds; the dock must
+  // never become the pane on screen, even when no chat pane exists.
+  assert.deepEqual(docked.retainedSessionIds, ["a"]);
+  assert.deepEqual(docked.retainedTranscripts.agent, say("agent"));
+  assert.deepEqual(attachDetachedTranscript(empty, "agent", say("agent")).retainedSessionIds, []);
+  // Re-attaching keeps the live snapshot instead of resetting it.
+  assert.strictEqual(attachDetachedTranscript(docked, "agent", []), docked);
+  // Selecting a chat session rebuilds retention and releases the detached snapshot.
+  assert.equal(retainSessionPane(docked, "b", say("b")).retainedTranscripts.agent, undefined);
 });

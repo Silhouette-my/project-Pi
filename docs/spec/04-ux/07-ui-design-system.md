@@ -1465,12 +1465,16 @@ adjacent form inputs; dense surfaces may override that metric locally.
 
 - **Project Console**: a compact project identity/header sits below the existing
   46px native titlebar safe area. Window controls remain Electron-owned. Overview,
-  Workstreams, Outputs, and Context use a quiet underline navigation; Project Agent
-  is a persistent action here and in the project's sidebar, opening the real chat
-  surface rather than a second transcript implementation. Overview leads with a
-  discussion-only Composer plate, current work rows and recent recorded outputs.
+  Workstreams and Structure use a quiet underline navigation; shared context opens
+  as a header sheet. The Project Agent occupies a right dock (340px, `--ds-bg-dock`,
+  subtle leading divider) that renders the existing session pane and a Composer
+  plate, and reaches the full chat surface through the existing Agent entry rather
+  than a second transcript implementation. Overview leads with four real counts,
+  then cards for items needing the user (a 3px semantic inset: error for blocked,
+  purple for decisions, warning for unknown effects), current work cards with
+  status badges and discrete acceptance segments, and recent recorded outputs.
   A new project can discuss a goal without first creating a workstream. A work row
-  opens its detail; creation/editing uses the shared modal overlay and existing
+  opens its detail beside the workstream list; creation/editing uses the shared modal overlay and existing
   validated form, keeping execution scope and acceptance controls intact.
   Project instructions, memory and reload live in the project menu; search expands
   from the header. Reuse the shared UI primitives, Composer plate/toolbar classes,
@@ -1486,7 +1490,11 @@ adjacent form inputs; dense surfaces may override that metric locally.
   `--ds-bg-active` selection); disclosures use the shared chevron rather than the
   UA triangle; section rhythm stays within 24px and dividers use `border-subtle`.
   Sidebar navigation-tree actions stay hidden until their row or toolbar is
-  hovered or keyboard-focused, matching native sidebar rows. Project drafts are
+  hovered or keyboard-focused, matching native sidebar rows. Status badges carry a
+  leading dot in the semantic colours (ready/accepted success, executing warning,
+  blocked error, awaiting user purple, others neutral). The project accent
+  (`--workflow-accent`) marks only the selected tab, list selection, primary
+  actions, acceptance segments and the project glyph. Project drafts are
   renderer-memory, keyed by project, retained on navigation/send failure, and
   cleared only after a successful send. Ordinary chat display groups are disjoint:
   Favorites first, then Recent, then remaining folder/Unfiled entries; this changes

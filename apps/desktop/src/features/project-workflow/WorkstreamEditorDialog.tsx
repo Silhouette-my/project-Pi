@@ -3,7 +3,12 @@ import { OverlayBackdrop, portalOverlay } from "../../components/ui";
 import { useBlockingOverlay } from "../../lib/blocking-overlay";
 
 /** Keep the full work contract available without making the project home a form. */
-export function WorkstreamEditorDialog({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+export function WorkstreamEditorDialog({ children, onClose, labelledBy = "workflow-workstream-editor-title", className }: {
+  children: ReactNode;
+  onClose: () => void;
+  labelledBy?: string;
+  className?: string;
+}) {
   useBlockingOverlay();
   const dialog = useRef<HTMLDivElement>(null);
   const returnFocus = useRef(document.activeElement);
@@ -24,6 +29,6 @@ export function WorkstreamEditorDialog({ children, onClose }: { children: ReactN
     return () => { window.removeEventListener("keydown", onKeyDown); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
   }, []);
   return portalOverlay(<OverlayBackdrop className="overlay workflow-editor-overlay" role="presentation" onClick={onClose}>
-    <div className="dialog workflow-editor-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="workflow-workstream-editor-title" onClick={(event) => event.stopPropagation()}>{children}</div>
+    <div className={["dialog workflow-editor-dialog", className].filter(Boolean).join(" ")} ref={dialog} role="dialog" aria-modal="true" aria-labelledby={labelledBy} onClick={(event) => event.stopPropagation()}>{children}</div>
   </OverlayBackdrop>);
 }

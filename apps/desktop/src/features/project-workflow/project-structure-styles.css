@@ -1,7 +1,6 @@
 .workflow-content:has(> .project-structure) {
   max-width: 100%;
 }
-.project-overview-heading,
 .project-structure-heading {
   display: flex;
   justify-content: space-between;
@@ -12,11 +11,7 @@
 /* In-page headings use the native section header line (projects.css
    .projects-group-label): the destination title already lives in the header,
    so content sections never repeat a page-scale title. */
-.project-overview-heading h2,
-.project-structure-heading h2,
-.project-overview-work .workflow-section-heading h2,
-.project-overview-attention h2,
-.project-overview-artifacts .workflow-section-heading h2 {
+.project-structure-heading h2 {
   display: flex;
   align-items: center;
   min-height: 28px;
@@ -25,115 +20,6 @@
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--ds-text-secondary);
-}
-.project-overview-counts {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: var(--text-sm);
-  color: var(--ds-text-muted);
-}
-/* The project Agent entry is a Composer plate (07 §Destination pages): same
-   radius, surface and lift as .composer-shell, no stroke and no leading glyph. */
-.project-agent-action {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  border-radius: var(--ds-composer-radius, var(--radius-2xl));
-  padding: 8px 8px 8px 16px;
-  margin-bottom: 20px;
-  background: var(--ds-bg-composer);
-  box-shadow: var(--ds-shadow-composer);
-  transition: box-shadow var(--motion-duration-normal) var(--motion-ease-out);
-}
-.project-agent-action .field-textarea {
-  min-height: 36px;
-  max-height: 150px;
-  flex: 1;
-  border: 0;
-  resize: vertical;
-  background: transparent;
-  padding: 8px 0;
-  box-shadow: none;
-}
-.project-agent-action:focus-within {
-  box-shadow: 0 7px 24px color-mix(in oklab, var(--ds-text-primary) 9%, transparent);
-}
-.project-agent-action .field-textarea:focus {
-  box-shadow: none;
-  background: transparent;
-}
-.project-overview-grid.has-attention {
-  display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(220px, 1fr);
-  gap: 24px;
-}
-.project-overview-work-list {
-  display: flex;
-  flex-direction: column;
-}
-.project-overview-work-item.btn {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  text-align: left;
-  gap: 8px;
-  white-space: normal;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--ds-border-subtle);
-  border-radius: 0;
-}
-.project-overview-work-item.btn > span:not(:first-child) {
-  font-size: var(--text-sm);
-  color: var(--ds-text-secondary);
-}
-.project-overview-work-title {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-}
-.project-overview-work-title strong {
-  font-size: var(--text-md);
-}
-.project-overview-work-item small {
-  color: var(--ds-text-muted);
-  font-size: var(--text-sm);
-}
-.project-overview-next {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-}
-.project-overview-next svg {
-  flex-shrink: 0;
-}
-.project-overview-attention {
-  border-left: 1px solid var(--ds-border-subtle);
-  padding-left: 20px;
-}
-.project-overview-attention h2 {
-  margin: 0 0 4px;
-}
-.project-attention-item.btn {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 7px;
-  text-align: left;
-  white-space: normal;
-  padding: 10px 0;
-  border-radius: 0;
-  width: 100%;
-}
-.project-attention-item span,
-.project-attention-item small {
-  color: var(--ds-text-secondary);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-}
-.project-overview-artifacts {
-  margin-top: 24px;
 }
 .project-structure-heading p {
   color: var(--ds-text-muted);
@@ -246,7 +132,7 @@
 .project-session-node[aria-pressed="true"],
 .project-git-graph .btn[aria-pressed="true"],
 .project-git-working[aria-pressed="true"] {
-  background: var(--ds-bg-active);
+  background: color-mix(in oklab, var(--workflow-accent) 12%, transparent);
 }
 .project-session-badges {
   display: flex;
@@ -575,17 +461,14 @@ details[open] > summary > .project-disclosure-icon {
   background: var(--ds-bg-hover);
 }
 @container (max-width: 760px) {
-  .project-overview-heading,
   .project-structure-heading {
     align-items: flex-start;
     flex-direction: column;
   }
-  .project-overview-grid.has-attention,
   .project-session-layout,
   .project-git-layout {
     grid-template-columns: minmax(0, 1fr);
   }
-  .project-overview-attention,
   .project-git-detail {
     border-left: 0;
     padding-left: 0;

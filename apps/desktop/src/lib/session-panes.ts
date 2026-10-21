@@ -68,6 +68,26 @@ export function clearSessionPanes(): RetainedPanes {
   return { retainedSessionIds: [], retainedTranscripts: {} };
 }
 
+/**
+ * Keeps a live transcript for a session that is shown outside the chat panes
+ * (the project Agent dock). Only the snapshot is stored: the id never joins
+ * `retainedSessionIds`, so the chat surface neither mounts a pane for it nor
+ * treats it as the pane on screen. Event projection already updates any
+ * session present in `retainedTranscripts`, which keeps the dock live; the
+ * next `retainSessionPane` drops the snapshot and the dock re-attaches it.
+ */
+export function attachDetachedTranscript(
+  current: RetainedPanes,
+  id: string,
+  messages: UiMessage[],
+): RetainedPanes {
+  if (current.retainedTranscripts[id]) return current;
+  return {
+    retainedSessionIds: current.retainedSessionIds,
+    retainedTranscripts: { ...current.retainedTranscripts, [id]: messages },
+  };
+}
+
 /** Releases a pane whose session is gone (deleted, or no longer reachable). */
 export function releaseSessionPane(
   current: RetainedPanes,

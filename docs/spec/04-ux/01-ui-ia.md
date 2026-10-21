@@ -471,9 +471,23 @@ Its overview answers what the project is trying to achieve, what is active or
 complete, who owns each workstream, what is blocked or awaits a decision, which
 candidate is current, and what action is next. Progress is expressed through
 those concrete states, never a fabricated percentage or message count. The
-compact project-level composer routes to the canonical discussion-only Project
-Agent without requiring a workstream. It never inherits an unrelated active chat
-as an implicit destination. Explicit Work actions still require a workstream.
+console has three tabs: Overview (real counts, items needing the user, current
+work with acceptance conditions, recent outputs), Workstreams (list beside the
+selected workstream's detail, including its candidate, controls and outputs and
+evidence; stacked below 720px of page width) and Structure. Shared context
+(canonical references and decisions) opens as a header sheet scoped by the same
+workstream filter rather than occupying a tab.
+
+The canonical discussion-only Project Agent lives in a dock at the console's
+right edge. The dock reads the Agent session as a detached transcript, so the
+console stays the visible page, the active chat session is unchanged and the
+chat surface mounts no extra pane. Its composer sends to the Agent session
+explicitly and never inherits an unrelated active chat; the full conversation
+opens through the existing Agent entry. The dock is docked when the console is
+at least 960px wide, where an explicit open/close choice is remembered per
+project (open by default). Narrower consoles show it as an overlay only on
+request, and the overlay closes when the console is left or widens. Explicit
+Work actions still require a workstream.
 
 Structure is a separate project tab with Sessions, Git and Architecture views.
 Sessions shows only recorded `parentSessionId` edges; main-session and execution
