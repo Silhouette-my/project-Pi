@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next";
 import { TooltipButton } from "../../components/ui";
 import { IconChat } from "../../components/icons";
 import { useProjectAgent } from "./useProjectAgent";
-import { useAppStore } from "../../stores/app-store";
 
 export function ProjectAgentButton({
   projectId,
@@ -24,13 +23,7 @@ export function ProjectAgentButton({
       disabled={agent.busy}
       onClick={(event) => {
         event.stopPropagation();
-        void agent.open().catch((cause: unknown) => {
-          useAppStore
-            .getState()
-            .showToast(cause instanceof Error ? cause.message : String(cause), {
-              variant: "error",
-            });
-        });
+        void agent.open().catch(() => {});
       }}
     >
       <IconChat size={15} />

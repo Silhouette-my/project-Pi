@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
 register(new URL("./helpers/ts-import-hooks.mjs", import.meta.url));
-const { navigationHighlights, navigationSessions, folderParents, workflowGroupForPath, workflowProjectEntries } =
+const { navigationHighlights, navigationSessions, folderParents, workflowGroupForPath, workflowProjectEntries, workflowContextProjectId } =
   await import("../src/features/project-workflow/navigation-model.ts");
 const { createSessionSlice } = await import("../src/stores/slices/session-slice.ts");
 const { createSessionRuntime } = await import("../src/stores/runtime/session-runtime.ts");
@@ -108,6 +108,14 @@ test("logical project name wins over workspace basename while an explicit sideba
   const entry = { path: "/repo/apps", name: "apps", sessions: [], meta: {} };
   assert.equal(workflowProjectEntries([entry], groups)[0].name, "Project navigation");
   assert.equal(workflowProjectEntries([{ ...entry, meta: { name: "My workspace" } }], groups)[0].name, "My workspace");
+});
+test("topbar project context covers project drafts and legacy links but not independent Chat", () => {
+  const groups = [{ id: "p", name: "Project", primaryPath: "/project", roots: [] }];
+  const snapshot = { conversations: [{ sessionId: "linked", projectId: "p" }], workstreams: [{ mainSessionId: "main", projectId: "p" }] };
+  assert.equal(workflowContextProjectId(snapshot, groups, undefined, "/project"), "p");
+  assert.equal(workflowContextProjectId(snapshot, groups, { id: "chat", projectPath: null }, "/project"), undefined);
+  assert.equal(workflowContextProjectId(snapshot, groups, { id: "linked", projectPath: null }), "p");
+  assert.equal(workflowContextProjectId(snapshot, groups, { id: "main", projectPath: null }), "p");
 });
 function deferred() {
   let resolve;

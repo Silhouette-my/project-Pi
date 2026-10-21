@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createServer as createNetServer } from "node:net";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { repositoryRoot, assertDesktopBuild, resolveElectronBinary } from "./e2e/boot.mjs";
@@ -91,7 +91,7 @@ const capture = async name => { const shot = await page.call("Page.captureScreen
 const treeSelector = scope => `[data-workflow-tree="${scope}"]`;
 async function createFolder(scope, name, parentId = "") {
   const selector = treeSelector(scope);
-  assert.ok(await clickAria("新建文件夹", `${selector} > .workflow-tree-toolbar button`));
+  assert.ok(await clickAria("新建文件夹", `${selector} > .workflow-tree-toolbar button`) || await clickAria("New folder", `${selector} > .workflow-tree-toolbar button`));
   await until(() => page.evaluate(`!!document.querySelector(${json(selector + " > form input")})`), "folder editor");
   assert.ok(await fillControl(selector + " > form input", name));
   if (parentId) await page.evaluate(`(() => { const input=document.querySelector(${json(selector + " > form select")}); input.value=${json(parentId)}; input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
@@ -121,7 +121,8 @@ try {
   const group = await page.evaluate(`document.querySelector(${json(`[data-project-agent="${projectId}"]`)})?.closest('[data-sidebar-project-group]')?.dataset.sidebarProjectGroup`);
   await page.evaluate(`(() => { const group=document.querySelector('[data-sidebar-project-group="'+${json(group)}+'"]'); const toggle=group.querySelector('.project-toggle'); if(toggle.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   await until(() => page.evaluate(`!!document.querySelector(${json(`[data-workflow-tree="project"][data-project-id="${projectId}"]`)})`), "project conversation tree");
-  assert.ok(await clickText("项目首页"));
+  assert.ok(await page.evaluate(`!!document.querySelector(${json(`.conversation-topbar [data-project-agent="${projectId}"]`)})`),"new task in a project must have the Agent topbar entry");
+  assert.ok(await clickText("项目首页") || await clickText("Project home"));
   await until(() => page.evaluate("!!document.querySelector('[data-workflow=console]')"), "project home");
   assert.ok(await page.evaluate(`document.querySelector('[data-sidebar-project-group] .project-toggle')?.textContent.includes('Project navigation')`),"logical project name must replace root basename");
   await capture("project-home-light.png");
@@ -163,6 +164,7 @@ try {
   assert.equal(persisted.projectNavigation.find(item=>item.projectId===projectId).folderId,third.id);
   assert.equal(persisted.projectAgents.find(item=>item.projectId===projectId).sessionId,agent.sessionId);
   await writeFile(join(output,"result.json"),json({ok:true,sourceCommitAtRun,sourceChangesAtRun,builtCommit,hostBuiltCommit,projectId,agentSessionId:agent.sessionId,coverage:["project/Chat shared navigation tree","third-level project category","deep project conversation folder","before/inside drag feedback","navigation-only session move","Agent icon routes and canonical identity","restart persistence"],interaction:"production renderer DOM DragEvent and click handlers; no physical pointer or model calls"}));
+  await Promise.all(["failure.txt","failure.png"].map(name => rm(join(output,name),{force:true})));
 } catch(error) {
   await writeFile(join(output,"failure.txt"),String(error.stack??error)+"\n"+log.slice(-9000));
   if(page) { try { await capture("failure.png"); } catch {} }

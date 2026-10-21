@@ -1,6 +1,6 @@
 import { ProjectAgentButton } from "../features/project-workflow/ProjectAgentButton";
 import { useWorkflowProjectGroups } from "../features/project-workflow/WorkflowNavigation";
-import { workflowGroupForPath } from "../features/project-workflow/navigation-model";
+import { workflowContextProjectId } from "../features/project-workflow/navigation-model";
 import { useProjectWorkflow } from "../features/project-workflow/useProjectWorkflow";
 import { isRemoteSession } from "../lib/remote-session-safety";
 import {
@@ -96,8 +96,7 @@ export function ConversationTopbar({
   const groups = useWorkflowProjectGroups(workspace?.path);
   const activeSession = sessions.find((session) => session.id === activeSessionId);
 
-  const projectId = snapshot?.projectAgents?.find(agent => agent.sessionId === activeSessionId)?.projectId
-    ?? (activeSession?.projectPath ? workflowGroupForPath(groups.groups, activeSession.projectPath)?.id : undefined);
+  const projectId = workflowContextProjectId(snapshot, groups.groups, activeSession, workspace?.path);
 
   /*
    * A scheduled run's conversation is read from the Scheduled route, and the

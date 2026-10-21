@@ -15,6 +15,23 @@ export function workflowGroupForPath(groups: ProjectGroupRecord[], path: string)
   );
 }
 
+/** A standalone Chat does not inherit the last workspace's project context. */
+export function workflowContextProjectId(
+  snapshot: ProjectWorkflowSnapshot | null,
+  groups: ProjectGroupRecord[],
+  session?: Pick<SessionSummary, "id" | "projectPath">,
+  workspacePath?: string | null,
+) {
+  if (session) {
+    const linked = snapshot?.projectAgents?.find(item => item.sessionId === session.id)?.projectId
+      ?? snapshot?.conversations.find(item => item.sessionId === session.id)?.projectId
+      ?? snapshot?.workstreams.find(item => item.mainSessionId === session.id)?.projectId;
+    if (linked) return linked;
+  }
+  const path = session ? session.projectPath : workspacePath;
+  return path ? workflowGroupForPath(groups, path)?.id : undefined;
+}
+
 /** Keep the existing visible/manual order; multiple open roots of one group share one row. */
 export function workflowProjectEntries<T extends { path: string; sessions: SessionSummary[]; name?: string; meta?: { name?: string } }>(
   entries: T[],
