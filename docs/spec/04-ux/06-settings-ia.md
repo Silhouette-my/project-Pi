@@ -160,6 +160,14 @@ Settings is a **full-window page** that replaces the app sidebar + main chrome (
     shared Lucide icon scales in proportion without a reload. Window Zoom
     In/Out/Reset stays independent. The UI never asks for a px value
     (D343 / ADR 0180)
+  - **Translucent window** (macOS only): one switch for the native window
+    surface (ADR 0332). On — and absent — keeps the shipped `sidebar` vibrancy
+    material behind a transparent backing; off paints the opaque surface that
+    frees the window from WindowServer's per-frame recomposition. It persists as
+    `AppSettings.macosWindowTranslucency` and is applied when the main window is
+    created, so the row shows a restart hint while the stored value differs from
+    the surface this process launched with instead of pretending to change the
+    live window. Other platforms do not render the row.
   - **Auto language detection** resolves the OS locale through the main process
     (`app.getLocale()`) rather than the renderer's `navigator.language`, and the
     Auto option shows the detected language inline (e.g. "Currently 简体中文")
@@ -310,6 +318,14 @@ Settings is a **full-window page** that replaces the app sidebar + main chrome (
   persisted-settings compatibility and is no longer exposed; an absent or
   unknown value shows reasoning and an explicit `compact` hides it. Settings
   search indexes the row.
+- **Don't collapse commands** is a toggle that persists as the optional
+  `keepCommandsExpanded` boolean in host-owned settings, defaulting to on when
+  absent. On keeps shell calls on their own rows beside the tool groups they ran
+  among; off folds them back into those groups, the layout used before commands
+  were separated. It affects presentation only — neither value changes how many
+  process disclosures a turn renders (always one), what a tool received, or what
+  is stored — and it is read at render time, so toggling repaints the transcript
+  immediately. Settings search indexes the row.
 - The **Command shell** row in Defaults uses the host-discovered catalog of native
   PowerShell 5.1, PowerShell 7, cmd, Git Bash, and Bash with IDs
   `windows-powershell`, `windows-pwsh`, `cmd`, `git-bash`, and

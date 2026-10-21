@@ -415,8 +415,12 @@ reasoning visibility. It is a portable application preference and synchronizes
 across devices like the legacy field. Missing values fall back to the legacy
 `thinkingDisplayMode` field (`compact` hides, `detailed`/unknown/absent shows),
 which is retained only for persisted-settings compatibility and as that
-fallback. These additive display preferences neither rewrite stored reasoning
-nor change the database schema.
+fallback. The app settings JSON optionally stores `keepCommandsExpanded`
+(boolean) for command-row placement inside a turn's process disclosure: absent
+means on, so `Bash` and run aliases stay on their own rows beside the activity
+groups; `false` folds them into their groups. It is a portable application
+preference and changes presentation only. These additive display preferences
+neither rewrite stored reasoning nor change the database schema.
 
 The settings blob may still contain legacy prompt-enhancement keys from an
 earlier release. They are retained for rollback and downgrade compatibility,

@@ -75,6 +75,16 @@ export type AppSettings = {
   promptEnhancementThinkingLevel?: ThinkingLevel;
   defaultPermissionMode?: GlobalPermissionMode;
   theme: ThemePreference;
+  /**
+   * macOS only: keep the native `sidebar` vibrancy material behind a
+   * transparent window surface. This is the shipped look, so absent and `true`
+   * both mean translucent; `false` paints an opaque surface, which keeps the
+   * window out of WindowServer's per-frame recomposition path (#1064) at the
+   * cost of the desktop blur. Other platforms ignore it. Electron fixes
+   * `transparent` when the window is created, so a change applies on the next
+   * launch.
+   */
+  macosWindowTranslucency?: boolean;
   /** UI language; `auto` (and absent) follows the OS locale. */
   language?: "auto" | "en" | "zh-CN" | "zh-TW" | "tr" | "de" | "es" | "fr" | "ko" | "pt-BR";
   /**
@@ -96,6 +106,16 @@ export type AppSettings = {
    * export, or execution, and it does not control turn-process folding.
    */
   showThinking?: boolean;
+  /**
+   * Keep shell calls (`Bash`, `exec`, `shell`, …) as their own rows instead of
+   * folding them into the surrounding tool group. Absent means `true`, so an
+   * existing install keeps today's scannable command rows.
+   *
+   * The turn's process disclosure itself is not affected: both values render
+   * exactly one top-level disclosure per turn. This preference only decides
+   * whether a run row sits inside a group or beside it.
+   */
+  keepCommandsExpanded?: boolean;
   /**
    * @deprecated Retained for persisted-settings compatibility. New writes use
    * `showThinking`; this field is read only as a fallback when `showThinking`

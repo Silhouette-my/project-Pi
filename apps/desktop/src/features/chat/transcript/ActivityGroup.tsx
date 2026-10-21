@@ -60,22 +60,6 @@ type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 type ActivityItem = AssistantActivityItem;
 
-export function activityItemDetail(item: ActivityItem): string {
-  if (item.kind === "hostedSearch") return item.round.query ?? "";
-  if (item.kind === "thinking") {
-    // Latest thought line, so a collapsed header reads like a live ticker.
-    const lines = thinkingText(item.message)
-      .split("\n")
-      .map((line) => line.replace(/^#+\s*|\*\*/g, "").trim())
-      .filter(Boolean);
-    return lines[lines.length - 1] || "";
-  }
-  if (lifecycleKindOf(item.message)) {
-    return delegationRosterSummary(delegationRoster(item.message));
-  }
-  return getToolSummary(item.message.toolName, item.message.toolArgs);
-}
-
 
 function waitingSubagentActionLabel(
   agent: AgentActivityAgent,
@@ -260,6 +244,10 @@ export const ActivityGroup = memo(function ActivityGroup({
     disclosureKey("activity", first?.message.id ?? "", first?.kind ?? "", first?.kind === "hostedSearch" ? first.round.id : ""),
   );
   const { open, toggle: toggleDisclosure, collapse: collapseDisclosure, claim: claimDisclosure, titleRef } = disclosure;
+  // A subagent card is its own disclosure, so it reads the same parent gate the
+  // group does: below a collapsed whole-turn process it stays shut, and
+  // reopening the process restores the card's own choice.
+  const cardShut = hasSubagentTopology && !open;
   const [now, setNow] = useState(Date.now);
   const [finishedAt, setFinishedAt] = useState<number | null>(null);
   const wasActiveRef = useRef(live);
@@ -308,14 +296,10 @@ export const ActivityGroup = memo(function ActivityGroup({
           : // History reloads keep no end timestamp for pure-thinking groups.
             t("chat.thinking", { defaultValue: "Thinking" })
         : t("chat.processedFor", { time: elapsed });
-  const runtimeStatus = runtimeActivity
-    ? runActivityLabel(runtimeActivity, t as Translate)
-    : "";
-  const currentDetail = useMemo(() =>
-    live && !runtimeStatus && lastItem && !(hideThinking && lastItem.kind === "thinking")
-      ? activityItemDetail(lastItem) : "",
-  [live, runtimeStatus, lastItem, hideThinking]);
-  const tail = live && !open ? currentDetail : "";
+  // The header states outcome, counts and elapsed time; it never echoes the item
+  // it is working on. A shell command or a search query can be arbitrarily long,
+  // and repeating it here pushed the counts off the row while adding nothing a
+  // reader cannot get by opening the item.
 
   useEffect(() => {
     if (wasActiveRef.current && !live) setFinishedAt(Date.now());
@@ -392,17 +376,13 @@ export const ActivityGroup = memo(function ActivityGroup({
       </button>
       <SubagentStopButton running={topologyLive} />
       </div>
-      {tail ? (
-        <div className="tool-activity-preview" aria-hidden>
-          {tail}
-        </div>
-      ) : null}
       <div
         ref={disclosure.bodyRef}
         {...disclosure.bodyEvents}
         className="tool-activity-collapse"
-        aria-hidden={!open}
-        inert={!open}
+        aria-hidden={!open || cardShut}
+        inert={!open || cardShut}
+        hidden={cardShut}
       >
         <div className="tool-activity-collapse-inner">
           <div className="tool-activity-body" id={detailsId}>

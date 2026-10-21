@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentSession, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream, Type, type AssistantMessage } from "@earendil-works/pi-ai";
 import { NativePiSessionService } from "./native-pi-session.js";
 import {
   acquireNativePiSessionLease,
@@ -1280,8 +1280,14 @@ describe("independent native ownership, identity and tool regressions", () => {
     } finally { service.disposeAll(); }
   });
 
-  it("sends zero native tools to the model", async () => {
+  it.each([false, true])("sends zero native tools even with restored active tools: %s", async (restoreTools) => {
     const f = await configuredFixture();
+    if (restoreTools) {
+      SessionManager.open(f.file).appendMessage({
+        role: "system", content: "Previously active tools", timestamp: Date.now(),
+        toolsAdded: [{ name: "bash", description: "Native shell", parameters: Type.Object({ command: Type.String() }) }],
+      });
+    }
     const requests: unknown[] = [];
     vi.spyOn(ModelRuntime.prototype, "streamSimple").mockImplementation((_model, context) => { requests.push(context.tools ?? []); return fauxStream(); });
     const service = new NativePiSessionService(f);

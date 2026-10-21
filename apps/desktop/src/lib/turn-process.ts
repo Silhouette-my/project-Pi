@@ -1,10 +1,11 @@
-import type { UiMessage } from "@pi-desktop/shared";
+import type { AgentActivity, UiMessage } from "@pi-desktop/shared";
 import type {
   AssistantActivityItem,
   AssistantTurnEntry,
   AssistantTurnPart,
 } from "./assistant-turns";
 import { isStandaloneRunActivity } from "./assistant-turns";
+import { isDelegationStartTool } from "./tool-display";
 
 export function isThinkingActive(message: UiMessage, active: boolean): boolean {
   return active && message.status === "streaming" && !message.content.trim();
@@ -39,14 +40,17 @@ export function processContainsMessage(
   });
 }
 
-/** A `Bash`/run call rendered as its own row outside any process disclosure. */
+/**
+ * A run call rendered as its own row beside the nested activity groups inside
+ * the turn's process disclosure.
+ */
 export type TurnProcessRunSegment = {
   kind: "run";
   key: string;
   item: Extract<AssistantActivityItem, { kind: "tool" }>;
 };
 
-/** One chronological chunk of non-run process content between run calls. */
+/** One chronological process chunk; ON mode splits it at run calls. */
 export type TurnProcessBodySegment = {
   kind: "process";
   key: string;
@@ -55,21 +59,114 @@ export type TurnProcessBodySegment = {
 
 export type TurnProcessSegment = TurnProcessRunSegment | TurnProcessBodySegment;
 
+/** A `Task` fan-out group is its own topology, never ordinary work. */
+function isDelegationGroupPart(
+  part: Extract<AssistantTurnPart, { kind: "activity" }>,
+): boolean {
+  return part.items.some(
+    (item) => item.kind === "tool" && isDelegationStartTool(item.message.toolName),
+  );
+}
+
+/**
+ * Coalesce the activity chunks one folded process shows.
+ *
+ * Turn entries isolate every run row in its own activity part, so rendering the
+ * parts as built would still put a command beside the group it ran among. Folding
+ * means one group around the whole contiguous ordinary stretch: build a new part
+ * with the source items in order, keeping their identity, and let progress text
+ * and a `Task` fan-out stay hard boundaries. The new part ends where its last
+ * source part ended; the cached parts are never mutated.
+ */
+function coalesceProcessActivityParts(
+  parts: readonly AssistantTurnPart[],
+): AssistantTurnPart[] {
+  const coalesced: AssistantTurnPart[] = [];
+  let pending:
+    | {
+        delegation: boolean;
+        source: Extract<AssistantTurnPart, { kind: "activity" }>;
+        items: AssistantActivityItem[];
+        merged: boolean;
+        endedAt?: string;
+      }
+    | undefined;
+  const flush = () => {
+    if (!pending) return;
+    // A group with nothing to join keeps its cached part identity, so an
+    // unchanged singleton group does not remount on every preference read.
+    coalesced.push(
+      pending.merged
+        ? {
+            kind: "activity",
+            items: pending.items,
+            ...(pending.endedAt === undefined ? {} : { endedAt: pending.endedAt }),
+          }
+        : pending.source,
+    );
+    pending = undefined;
+  };
+  for (const part of parts) {
+    if (part.kind === "message") {
+      flush();
+      coalesced.push(part);
+      continue;
+    }
+    const delegation = isDelegationGroupPart(part);
+    if (pending && pending.delegation === delegation) {
+      pending.items.push(...part.items);
+      pending.merged = true;
+      pending.endedAt = part.endedAt;
+      continue;
+    }
+    flush();
+    pending = {
+      delegation,
+      source: part,
+      items: [...part.items],
+      merged: false,
+      endedAt: part.endedAt,
+    };
+  }
+  flush();
+  return coalesced;
+}
+
 /**
  * Split one turn's process into the order it renders (ADR
  * turn-process-and-thinking-display).
  *
- * `Bash` and run aliases are pulled out of the process flow entirely: each is
- * its own `run` segment rendered as a standalone row with no process or group
- * ancestor, and adjacent calls stay separate. The remaining tools, thinking,
- * hosted searches and progress text keep their original order and are grouped
- * into `process` chunks between the run calls. Segment parts are the same part
- * objects as the input, so downstream reveal and active-tail identity still
- * hold.
+ * With `keepCommandsExpanded` the `Bash` and run aliases are pulled out of the
+ * process flow: each is its own `run` segment, rendered as a standalone row
+ * beside the nested groups rather than inside one, and adjacent calls stay
+ * separate. The remaining tools, thinking, hosted searches and progress text
+ * keep their original order and are grouped into `process` chunks between the
+ * run calls.
+ *
+ * Without it the run rows keep their place in the flow, so a command is just
+ * another row of the group it ran among - the layout before commands were
+ * separated at all. Because the entry builder keeps every run row in its own
+ * activity part, folding coalesces contiguous ordinary parts into one rendered
+ * group here, at render time. Progress messages remain paragraph boundaries and
+ * a `Task`/delegation group never absorbs ordinary work around it. The
+ * coalesced group is a new part whose end is the last source group's end; the
+ * source parts and their items are not mutated.
+ *
+ * Either way the turn renders one top-level disclosure; only the placement of
+ * run rows inside it changes. ON-mode segment parts are the same part objects
+ * as the input, so downstream reveal and active-tail identity still hold.
  */
 export function segmentTurnProcess(
   parts: readonly AssistantTurnPart[],
+  keepCommandsExpanded: boolean,
 ): TurnProcessSegment[] {
+  if (!keepCommandsExpanded) {
+    const first = parts[0];
+    if (!first) return [];
+    const key =
+      first.kind === "activity" ? first.items[0].message.id : first.message.id;
+    return [{ kind: "process", key, parts: coalesceProcessActivityParts(parts) }];
+  }
   const segments: TurnProcessSegment[] = [];
   let pending: AssistantTurnPart[] = [];
   const flushProcess = () => {
@@ -96,6 +193,60 @@ export function segmentTurnProcess(
 }
 
 /**
+ * What the turn's process header says about the turn as a whole.
+ *
+ * One line, and it only answers "how did this turn end up" - never what it is
+ * working on, because a shell command can be arbitrarily long and would push
+ * the counts off the row.
+ *
+ * Precedence is deliberate: failure, stop, running, completed. A recorded
+ * failure outranks everything: the turn produced no answer, and a header
+ * reading "Processed" over a failed run hid that. A user stop outranks a live
+ * run and completion alike - the work was interrupted, not finished - and it is
+ * read from the turn's own aborted rows because the turn result only
+ * distinguishes completed from failed. Both assistant message rows and activity
+ * item rows count; a Stop while a tool or reasoning row is in flight settles
+ * there rather than in a trailing text. Delegate child rows are deliberately
+ * not scanned: a failed child is not a failed or stopped turn.
+ */
+export type TurnProcessPhase =
+  | { kind: "failed" }
+  | { kind: "stopped" }
+  /** Live work; `phase` names the runtime stage when one is known. */
+  | { kind: "running"; phase?: AgentActivity["phase"] }
+  | { kind: "completed" };
+
+export function turnProcessPhase({
+  parts,
+  isActive,
+  failed,
+  activity,
+}: {
+  parts: readonly AssistantTurnPart[];
+  isActive: boolean;
+  /** The turn recorded a failure of its own. */
+  failed: boolean;
+  /** Runtime phase while the turn is live, when the runtime reports one. */
+  activity?: AgentActivity;
+}): TurnProcessPhase {
+  if (failed) return { kind: "failed" };
+  // The turn result cannot say "stopped": the runtime records only completed or
+  // failed, and a user stop settles as an aborted row. Reading the aborted row
+  // is therefore the most precise signal available, whether it is the turn's
+  // text or an activity item (a tool, thinking, or hosted search) that was in
+  // flight. A denied tool is not a stop - the run continued without that call -
+  // so it stays a recorded issue.
+  const stopped = parts.some((part) =>
+    part.kind === "message"
+      ? part.message.status === "aborted"
+      : part.items.some((item) => item.message.status === "aborted"),
+  );
+  if (stopped) return { kind: "stopped" };
+  if (isActive) return { kind: "running", phase: activity?.phase };
+  return { kind: "completed" };
+}
+
+/**
  * Only a trailing assistant text can be the answer: text followed by tools is
  * progress. The stream carries no final-answer marker, so a live trailing text
  * remains visible until a later activity establishes that it was intermediate.
@@ -115,39 +266,6 @@ export function projectTurnProcess(entry: AssistantTurnEntry) {
     }
   }
   return { process, responses };
-}
-
-/**
- * Steps a process body renders under the thinking preference.
- *
- * `hideThinking` is `!showThinking`: completed reasoning rows and excerpts are
- * hidden, while the live reasoning indicator still counts as a visible step so
- * a thinking-only process keeps its indicator. The helper counts exactly the
- * parts it is given; Bash and run aliases are segmented out before rendering
- * and never reach a process chunk, so they are never counted here.
- */
-export function visibleProcessSteps(
-  parts: readonly AssistantTurnPart[],
-  hideThinking: boolean,
-  active: boolean,
-): number {
-  let count = 0;
-  for (const part of parts) {
-    if (part.kind === "message") {
-      if (part.message.content.trim()) count += 1;
-      continue;
-    }
-    for (const item of part.items) {
-      if (
-        item.kind !== "thinking" ||
-        !hideThinking ||
-        isThinkingActive(item.message, active)
-      ) {
-        count += 1;
-      }
-    }
-  }
-  return count;
 }
 
 /** Use recorded message/tool timing for history; elapsed live time is UI-only. */

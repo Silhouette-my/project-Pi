@@ -426,6 +426,7 @@ export function normalizeSettings(settings: AppSettings): AppSettings {
     sidebarRunningIndicators: settings.sidebarRunningIndicators !== false,
     sidebarRunningBadge: settings.sidebarRunningBadge !== false,
     sidebarRunningRail: settings.sidebarRunningRail === true,
+    keepCommandsExpanded: settings.keepCommandsExpanded !== false,
     defaultMode: normalizeMode((settings as { defaultMode?: unknown }).defaultMode),
     infiniteProviderRetry:
       (settings as { infiniteProviderRetry?: unknown }).infiniteProviderRetry === true,
@@ -546,6 +547,8 @@ export function validateSettingsWrite(settings: AppSettings): AppSettings {
     "sidebarRunningBadge",
     "sidebarRunningRail",
     "sidebarSessionTime",
+    "macosWindowTranslucency",
+    "keepCommandsExpanded",
   ] as const) {
     if (
       Object.prototype.hasOwnProperty.call(value, key) &&
@@ -1643,7 +1646,10 @@ export const api = {
       { theme, color, cornerRadius },
     ),
   windowControl: (action: WindowControlAction) =>
-    invoke<{ maximized: boolean }>(IPC.invoke.windowControl, { action }),
+    invoke<{ maximized: boolean; macosWindowTranslucency: boolean }>(
+      IPC.invoke.windowControl,
+      { action },
+    ),
   getCloseBehavior: () =>
     invoke<{ behavior: CloseBehavior; supported: boolean }>(
       IPC.invoke.closeBehaviorGet,
@@ -1794,6 +1800,79 @@ export const api = {
       });
     });
   },
+  /**
+   * A plugin offered one line for the composer, or the main process ordered
+   * whatever is on screen dropped (`pi.composer.suggest`, ADR 0333).
+   *
+   * The shell answers every offer over `pluginComposerSuggestionResult`, because
+   * only the renderer knows whether the draft can take it. A malformed message
+   * is ignored — nothing here decides whether a plugin's suggestion is valid.
+   */
+  onPluginComposerSuggestion: (
+    listener: (
+      event:
+        | {
+            kind: "offer";
+            requestId: string;
+            pluginId: string;
+            sessionId: string;
+            turnId?: string;
+            text: string;
+            expiresAt: number;
+          }
+        | { kind: "clear"; pluginId?: string; sessionId?: string },
+    ) => void,
+  ) => {
+    if (!window.piDesktop?.on) return () => undefined;
+    return window.piDesktop.on(IPC.event.pluginComposerSuggestion, (payload) => {
+      const event = payload as {
+        kind?: unknown;
+        requestId?: unknown;
+        pluginId?: unknown;
+        sessionId?: unknown;
+        turnId?: unknown;
+        text?: unknown;
+        expiresAt?: unknown;
+      };
+      if (event?.kind === "clear") {
+        listener({
+          kind: "clear",
+          ...(typeof event.pluginId === "string" && event.pluginId
+            ? { pluginId: event.pluginId }
+            : {}),
+          ...(typeof event.sessionId === "string" && event.sessionId
+            ? { sessionId: event.sessionId }
+            : {}),
+        });
+        return;
+      }
+      if (
+        event?.kind !== "offer" ||
+        typeof event.requestId !== "string" ||
+        typeof event.pluginId !== "string" ||
+        typeof event.sessionId !== "string" ||
+        typeof event.text !== "string" ||
+        typeof event.expiresAt !== "number"
+      ) {
+        return;
+      }
+      listener({
+        kind: "offer",
+        requestId: event.requestId,
+        pluginId: event.pluginId,
+        sessionId: event.sessionId,
+        ...(typeof event.turnId === "string" && event.turnId ? { turnId: event.turnId } : {}),
+        text: event.text,
+        expiresAt: event.expiresAt,
+      });
+    });
+  },
+  /** The shell's answer to one composer suggestion the main process is waiting on. */
+  pluginComposerSuggestionResult: (input: {
+    requestId: string;
+    shown: boolean;
+    reason?: string;
+  }) => invoke<{ ok: boolean }>(IPC.invoke.pluginComposerSuggestionResult, input),
   onBrowserOpenFile: (listener: (event: { path: string }) => void) => {
     if (!window.piDesktop?.on) return () => undefined;
     return window.piDesktop.on(IPC.event.browserOpenFile, (payload) => {
