@@ -28,6 +28,26 @@
 - **Decision:** [Isolated visualization frame documents](../../adr/isolated-visualize-frame-document.md).
 
 
+### E2E-PROJECT-navigation-trees
+
+- **Preconditions:** Built task candidate, reused Electron/runtime dependencies,
+  isolated Host data and Chromium profile; no installed profile or real model.
+- **Steps:** Create three-level project categories and project conversation
+  folders; drag projects and conversations inside, before, after, and to the
+  root. Move folders and try a cycle. Use keyboard-accessible folder/move
+  controls. Open/favorite a standalone Chat and drag its shortcut into a folder.
+  Reopen the Agent using project title, Home and topbar icons. Restart.
+- **Expected:** Folders and entries interleave and placements persist; forbidden
+  cycles/scope moves fail atomically. Removing a folder promotes contents, with
+  all transcripts reachable. Legacy explicitly linked workspace-free sessions
+  remain in their project; filing never changes cwd. Archive/pin semantics and
+  independent Chat shortcuts remain usable. Agent has no session row and all
+  routes reuse one canonical identity. Drop feedback distinguishes insertion
+  from filing.
+- **Coverage:** Host `project_workflow::tests::tree_tests`,
+  `project-navigation-tree-model.test.mjs`, both workflow folder user-path
+  tests, and `scripts/e2e-project-navigation-ui.mjs` production-renderer captures.
+
 ### E2E-PROJECT-agent-entry-and-console-layout
 
 - **Preconditions:** Built task worktree, reused Electron/runtime dependencies,

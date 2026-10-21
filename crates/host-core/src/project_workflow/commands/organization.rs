@@ -11,15 +11,11 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             if command["kind"] == "folder.update" && existing.is_err() {
                 return Err(Error::missing("folder not found"));
             }
-            if let Some(parent) = folder.get("parentId") {
-                let parent_row = find(value, "folders", parent)?;
-                if *parent == folder["id"]
-                    || parent_row.get("parentId").is_some()
-                    || rows(value, "folders")
-                        .iter()
-                        .any(|r| r.get("parentId") == Some(&folder["id"]))
-                {
-                    return Err(Error::invalid("folders support only one nesting level"));
+            navigation_tree::validate_scope(db, folder)?;
+            navigation_tree::validate_parent(value, folder)?;
+            if let Ok(i) = existing {
+                if !navigation_tree::same_scope(&value["folders"][i], folder) {
+                    return Err(Error::invalid("folder scope is immutable"));
                 }
             }
             match existing {
@@ -31,16 +27,32 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
         "folder.remove" => {
             let id = &command["folderId"];
             let i = index(value, "folders", id)?;
+            let parent = value["folders"][i].get("parentId").cloned();
             rows_mut(value, "folders").remove(i);
-            // Child folders become roots, while only the removed folder's chats become unfiled.
+            // Promote direct children without deleting their navigation or execution identity.
             for row in rows_mut(value, "folders") {
                 if row.get("parentId") == Some(id) {
-                    row.as_object_mut().unwrap().remove("parentId");
+                    match &parent {
+                        Some(parent) => row["parentId"] = parent.clone(),
+                        None => {
+                            row.as_object_mut().unwrap().remove("parentId");
+                        }
+                    }
                 }
             }
-            for row in rows_mut(value, "navigation") {
-                if row.get("folderId") == Some(id) {
-                    row.as_object_mut().unwrap().remove("folderId");
+            for key in ["navigation", "projectNavigation"] {
+                if value.get(key).is_none() {
+                    continue;
+                }
+                for row in rows_mut(value, key) {
+                    if row.get("folderId") == Some(id) {
+                        match &parent {
+                            Some(parent) => row["folderId"] = parent.clone(),
+                            None => {
+                                row.as_object_mut().unwrap().remove("folderId");
+                            }
+                        }
+                    }
                 }
             }
             rows_mut(value, "expandedIds").retain(|expanded| expanded != id);
@@ -52,6 +64,7 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             }
             for session in rows(command, "sessionIds") {
                 check_session(db, session)?;
+                navigation_tree::validate_destination(db, value, session, command.get("folderId"))?;
             }
             for session in rows(command, "sessionIds") {
                 let i = rows(value, "navigation")
@@ -81,6 +94,12 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             if let Some(id) = row.get("folderId") {
                 find(value, "folders", id)?;
             }
+            navigation_tree::validate_destination(
+                db,
+                value,
+                &row["sessionId"],
+                row.get("folderId"),
+            )?;
             if let Some(id) = row.get("lastMessageId") {
                 check_message(db, id, &row["sessionId"])?;
             }

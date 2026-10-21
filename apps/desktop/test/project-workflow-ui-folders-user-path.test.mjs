@@ -38,6 +38,13 @@ api.projectWorkflow.mutate = async (command) => {
     snapshot.navigation = snapshot.navigation.map(n => n.folderId === command.folderId ? {...n,folderId:undefined}:n);
   }
   if (command.kind === "navigation.expand") snapshot.expandedIds = command.expandedIds;
+  if (command.kind === "tree.move") {
+    function place(target,order) {
+      if(target.kind==="folder"){const row=snapshot.folders.find(f=>f.id===target.id);row.parentId=command.folderId;row.order=order;}
+      else {let row=snapshot.navigation.find(n=>n.sessionId===target.id);if(!row){row={sessionId:target.id,favorite:false};snapshot.navigation.push(row);}row.folderId=command.folderId;row.order=order;}
+    }
+    place(command.target,command.order);command.siblingOrder?.forEach(place);
+  }
   if (command.kind === "navigation.move") {
     for (const sessionId of command.sessionIds) {
       const old = snapshot.navigation.find(n => n.sessionId === sessionId);
@@ -54,6 +61,13 @@ const sessions = [{id:"chat",title:"Existing chat",createdAt:"2026-10-01",update
 const rootNode = createRoot(document.getElementById("root"));
 flushSync(() => rootNode.render(<ProjectWorkflowProvider><WorkflowNavigation sessions={sessions} renderSessions={items => items.map(s => <button key={s.id} className="thread-item-main">{s.title}</button>)} /></ProjectWorkflowProvider>));
 const frame = () => new Promise(requestAnimationFrame);
+async function drag(source,target,where=.5) {
+ const sourceKey=source.parentElement.dataset.workflowTreeNode;
+ await until(()=>{source=document.querySelector('[data-workflow-tree-node="'+sourceKey+'"] > .workflow-tree-row');return source?.draggable;},"Source remains busy");
+ const dataTransfer=new DataTransfer();flushSync(()=>source.dispatchEvent(new DragEvent("dragstart",{bubbles:true,cancelable:true,dataTransfer})));await frame();const rect=target.getBoundingClientRect();
+ flushSync(()=>target.dispatchEvent(new DragEvent("dragover",{bubbles:true,cancelable:true,dataTransfer,clientY:rect.top+rect.height*where})));await frame();
+ flushSync(()=>target.dispatchEvent(new DragEvent("drop",{bubbles:true,cancelable:true,dataTransfer,clientY:rect.top+rect.height*where})));await frame();
+}
 async function until(check, message) { for(let n=0;n<120;n++) { if(check()) return; await frame(); } throw Error(message + document.body.textContent); }
 function click(label, scope=document) { const element=[...scope.querySelectorAll("button")].find(b=>b.getAttribute("aria-label")===label || b.textContent.trim()===label); if(!element) throw Error("No button "+label); flushSync(()=>element.click()); }
 function setInput(input,value) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,value); flushSync(()=>input.dispatchEvent(new Event("input",{bubbles:true}))); }
@@ -86,6 +100,18 @@ window.folderProbe = async () => {
  flushSync(()=>{destination.value="folder";destination.dispatchEvent(new Event("change",{bubbles:true}));});
  click("workflowNav.move");
  await until(()=>snapshot.navigation.filter(n=>n.folderId==="folder").length===2,"bulk move did not preserve both chats");
+ const row=(kind,id)=>document.querySelector('[data-workflow-tree-node="'+kind+':'+id+'"] > .workflow-tree-row');
+ const second=snapshot.folders.find(f=>f.name==="Second");
+ await drag(row("session","chat"),row("folder",second.id),.1);
+ await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat").folderId===undefined,"Chat could not return to root");
+ await until(()=>row("session","chat")?.draggable,"Root chat ready");
+ flushSync(()=>row("session","chat").querySelector(".thread-item-main").click());
+ await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat")?.lastAccessedAt,"Chat did not enter Recent");
+ await until(()=>row("session","chat")?.draggable,"Recent shortcut ready");
+ const favorite=row("session","chat").querySelector('[aria-label="workflowNav.favorite"]');flushSync(()=>favorite.click());
+ await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat")?.favorite,"Chat did not enter Favorites");
+ await drag(row("session","chat"),row("folder","folder"));
+ await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat").folderId==="folder","Chat could not re-enter folder");
  click("workflowNav.removeFolder",document.querySelector('[data-workflow-folder="folder"]'));
  click("workflowNav.removeFolder",document.querySelector('[role="alert"]'));
  await until(()=>snapshot.folders.length===1,"remove missing");

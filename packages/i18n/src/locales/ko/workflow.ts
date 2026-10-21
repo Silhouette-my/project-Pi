@@ -41,8 +41,9 @@ export const workflowCatalog = {
   },
   workflowNav: {
     chats: "대화", newChat: "새 대화", newFolder: "새 폴더", organize: "대화 정리", selectChat: "{{title}} 선택", favorite: "대화 즐겨찾기",
+    emptyFolder: "빈 폴더", moveItem: "{{title}} 이동", dropAtRoot: "여기에 놓아 최상위로 이동",
     moveFirst: "맨 앞으로 이동", editFolder: "폴더 이름 변경 또는 이동", removeFolder: "폴더 제거", folderName: "폴더 이름", parentFolder: "상위 폴더", topLevel: "최상위",
-    removeHint: "이 폴더를 제거할까요? 대화는 미분류에서 계속 볼 수 있습니다.", moveSelected: "선택한 대화 {{count}}개 이동", move: "이동", unfiled: "미분류", favorites: "즐겨찾기", recent: "최근",
+    removeHint: "이 폴더를 제거할까요? 내용은 상위 폴더로 이동합니다.", moveSelected: "선택한 대화 {{count}}개 이동", move: "이동", unfiled: "미분류", favorites: "즐겨찾기", recent: "최근",
     branch: "브랜치", child: "사이드 대화", toggleWorkstream: "워크스트림 펼치기 또는 접기", toggleProject: "프로젝트 펼치기 또는 접기", legacyConversations: "대화 및 기록 ({{count}})", history: "기록 ({{count}})",
   },
   workflowContext: {

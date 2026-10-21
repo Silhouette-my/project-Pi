@@ -1,3 +1,5 @@
+import { WorkflowProjectTree } from "../features/project-workflow/WorkflowProjectTree";
+import { ProjectAgentButton } from "../features/project-workflow/ProjectAgentButton";
 import { IconClock } from "./icons";
 import { WorkflowNavigation, WorkflowProjectConversations, useWorkflowProjectGroups } from "../features/project-workflow/WorkflowNavigation";
 import { workflowGroupForPath, workflowProjectEntries } from "../features/project-workflow/navigation-model";
@@ -698,13 +700,15 @@ export function Sidebar({
     // point (issue #1291). The session stays in the store so the chat surface
     // can still resolve its title, source, and capabilities when it is opened
     // from there.
+    const agentIds = new Set(workflow.snapshot?.projectAgents?.map(agent => agent.sessionId));
     const candidates = listableSessions(sessions)
+      .filter((session) => !agentIds.has(session.id))
       .filter((session) => showArchived || !sessionArchived(session, sessionMeta[session.id]));
     // Empty sessions are durable sidebar rows now. Their message count, not
     // their title, controls New Task reuse, so a manual rename never changes
     // the empty-slot behavior.
     return candidates;
-  }, [sessions, showArchived, sessionMeta]);
+  }, [sessions, showArchived, sessionMeta, workflow.snapshot?.projectAgents]);
 
   const compareSessions = useCallback((a: SessionSummary, b: SessionSummary) => {
     const aMeta = sessionMeta[a.id] ?? {};
@@ -2381,8 +2385,8 @@ export function Sidebar({
             aria-grabbed={draggingProjectKey === entry.key}
             data-action="toggle-project-collapse"
             onDragStart={(event) => event.preventDefault()}
-            onPointerDown={(event) => beginProjectReorderPress(event, entry.key)}
-            onKeyDown={(event) => moveProjectWithKeyboard(event, entry.key)}
+            onPointerDown={(event) => { if (!workflowGroup) beginProjectReorderPress(event, entry.key); }}
+            onKeyDown={(event) => { if (!workflowGroup) moveProjectWithKeyboard(event, entry.key); }}
             onClick={() => {
               if (suppressProjectTitleClickRef.current) {
                 suppressProjectTitleClickRef.current = false;
@@ -2422,6 +2426,7 @@ export function Sidebar({
             {". "}
             {t("project.reorder", { name: entry.name, defaultValue: "Reorder {{name}}" })}
           </span>
+          {workflowGroup ? <ProjectAgentButton projectId={workflowGroup.id} className="sidebar-toolbar-button" /> : null}
           <div className="sidebar-menu-wrap">
             <TooltipButton
               type="button"
@@ -2745,7 +2750,14 @@ export function Sidebar({
           onDrop={onProjectsAreaDrop}
         >
           {workflow.snapshot && workflowGroups.error ? <p role="alert" className="workflow-navigation-error">{workflowGroups.error}</p> : null}
-          {projectEntries.length > 0 ? (workflow.snapshot ? workflowProjectEntries(projectEntries, workflowGroups.groups) : projectEntries).map(renderProjectGroup) : (
+          {workflow.snapshot ? <>
+            <WorkflowProjectTree projects={workflowProjectEntries(projectEntries, workflowGroups.groups).flatMap((entry, index) => {
+              const group = workflowGroupForPath(workflowGroups.groups, entry.path);
+              return group ? [{ id: group.id, name: entry.name, order: projectMetaFor(group.primaryPath, projectMeta).order ?? entry.meta.order ?? index, pinned: entry.meta.pinned, archived: entry.meta.archived, render: renderProjectGroup(entry) }] : [];
+            })} />
+            {projectEntries.filter(entry => !workflowGroupForPath(workflowGroups.groups, entry.path)).map(renderProjectGroup)}
+          </> : projectEntries.map(renderProjectGroup)}
+          {projectEntries.length === 0 ? (
             <section className="sidebar-session-group" aria-labelledby="sidebar-project-group-label">
               <div className="sidebar-session-group-header">
                 <button type="button" id="sidebar-project-group-label" className="sidebar-session-group-title" onClick={() => void openProjectPicker()}>
@@ -2754,7 +2766,7 @@ export function Sidebar({
                 </button>
               </div>
             </section>
-          )}
+          ) : null}
           <RemoteProjectGroups groups={remoteProjectGroups}
             renderSessions={(sessions) => renderSessionRows(sessions, {
               temporary: false,

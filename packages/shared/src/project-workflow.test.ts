@@ -6,6 +6,16 @@ import { ProjectWorkflowSnapshotSchema, emptyProjectWorkflowSnapshot, isProjectW
   isProjectWorkflowCommand, isProjectWorkflowUserCommand } from "./project-workflow.js";
 
 describe("project workflow boundary", () => {
+  it("accepts additive navigation trees without requiring new fields in old snapshots", () => {
+    const legacy = emptyProjectWorkflowSnapshot();
+    expect(Value.Check(ProjectWorkflowSnapshotSchema, legacy)).toBe(true);
+    const snapshot = { ...legacy, folders: [{ id: "folder", name: "Project chats", scope: "project", projectId: "p", order: 0 }], projectNavigation: [{ projectId: "p", folderId: "category", order: 0 }] };
+    expect(Value.Check(ProjectWorkflowSnapshotSchema, snapshot)).toBe(true);
+    const move = { kind: "tree.move", commandId: "tree-1", expectedRevision: 0, target: { kind: "session", id: "s" }, scope: "project", projectId: "p", folderId: "folder", order: 0, siblingOrder: [{ kind: "session", id: "s" }, { kind: "folder", id: "nested" }] };
+    expect(isProjectWorkflowUserCommand(move)).toBe(true);
+    expect(isProjectWorkflowUserCommand({ ...move, scope: "workspace" })).toBe(false);
+    expect(isProjectWorkflowUserCommand({ ...move, target: { kind: "workspace", id: "s" } })).toBe(false);
+  });
   it("starts at revision zero and validates representative records", () => {
     expect(emptyProjectWorkflowSnapshot().revision).toBe(0);
     expect(Value.Check(ProjectWorkflowSnapshotSchema, projectWorkflowFixture())).toBe(true);

@@ -41,8 +41,9 @@ export const workflowCatalog = {
   },
   workflowNav: {
     chats: "Conversas", newChat: "Nova conversa", newFolder: "Nova pasta", organize: "Organizar conversas", selectChat: "Selecionar {{title}}", favorite: "Favoritar conversa",
+    emptyFolder: "Pasta vazia", moveItem: "Mover {{title}}", dropAtRoot: "Solte aqui para mover ao nível superior",
     moveFirst: "Mover para a primeira posição", editFolder: "Renomear ou mover pasta", removeFolder: "Remover pasta", folderName: "Nome da pasta", parentFolder: "Pasta superior", topLevel: "Nível superior",
-    removeHint: "Remover esta pasta? As conversas continuarão disponíveis em Sem pasta.", moveSelected: "Mover {{count}} conversas selecionadas", move: "Mover", unfiled: "Sem pasta", favorites: "Favoritos", recent: "Recentes",
+    removeHint: "Remover esta pasta? O conteúdo será movido para a pasta superior.", moveSelected: "Mover {{count}} conversas selecionadas", move: "Mover", unfiled: "Sem pasta", favorites: "Favoritos", recent: "Recentes",
     branch: "Ramificação", child: "Conversa paralela", toggleWorkstream: "Expandir ou recolher frente de trabalho", toggleProject: "Expandir ou recolher projeto", legacyConversations: "Conversas e histórico ({{count}})", history: "Histórico ({{count}})",
   },
   workflowContext: {

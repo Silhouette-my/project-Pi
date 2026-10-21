@@ -126,7 +126,8 @@ try {
   assert.equal(setup.ok, true, json(setup));
   await invoke("settingsSet", { ...await invoke("settingsGet"), defaultProviderId: setup.providerId, defaultModelId: setup.modelId });
   await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "empty project in sidebar", 60000);
-  await clickText("apps");
+  await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
+  assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "empty project Agent composer");
   assert.equal((await snapshot()).workstreams.length, 0);
   assert.ok(await fillControl('[data-workflow="project-intent"] textarea', "PROJECT_AGENT_EMPTY_PROJECT: discuss before working"));
@@ -140,8 +141,8 @@ try {
   assert.ok(await page.evaluate(`!!document.querySelector('.workflow-conversation-bar') && !document.querySelector('.composer-mode') && !document.querySelector('.composer-permission')`));
   await capture("renderer-project-agent.png");
   await page.evaluate(`document.querySelector('.workflow-conversation-bar button').click()`);
-  await until(() => page.evaluate(`!!document.querySelector('.workflow-agent-tab')`), "project return route");
-  await page.evaluate(`document.querySelector('.workflow-agent-tab').click()`);
+  await until(() => page.evaluate(`!!document.querySelector('.workflow-console [data-project-agent]')`), "project return route");
+  await page.evaluate(`document.querySelector('.workflow-console [data-project-agent]').click()`);
   await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar')`), "project Agent reopened");
   assert.equal((await snapshot()).projectAgents[0].sessionId, projectAgentSession);
   assert.equal(modelRequests.length, 1, "reopening never sends another prompt");
@@ -149,9 +150,10 @@ try {
   await stopApp();
   await startApp();
   await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "project restored after restart", 60000);
-  await clickText("apps");
+  await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
+  assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "project composer after restart");
-  await page.evaluate(`document.querySelector('.workflow-agent-tab').click()`);
+  await page.evaluate(`document.querySelector('.workflow-console [data-project-agent]').click()`);
   await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar') && !!document.querySelector('.composer-input')`), "resumed Agent Composer");
   assert.ok(await page.evaluate(`(() => { const input=document.querySelector('.composer-input'); if(!input) return false; input.focus(); input.textContent='PROJECT_AGENT_RESTART: continue the same discussion'; input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'PROJECT_AGENT_RESTART: continue the same discussion'})); return true })()`));
   await until(() => page.evaluate(`!!document.querySelector('.composer-toolbar .send-btn:not(:disabled)')`), "real Composer send enabled");
@@ -178,7 +180,8 @@ try {
   assert.equal(initial.resources.find(item => item.id === resourceId)?.source.revision, "src-r2");
   // The user path opens the project without selecting the seeded Agent session.
   await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "open project appears in real sidebar", 60000);
-  await clickText("apps");
+  await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
+  assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"][data-project-id="${projectId}"]')`), "Project Console opens from sidebar");
   coverage.push("Opened the real Project Console from the sidebar; no active session was selected by the harness");
 
@@ -282,7 +285,8 @@ try {
   assert.equal(retainedNavigation?.folderId, folderRoot.id, "removing the empty nested folder leaves moved chat in its destination");
   assert.ok((await invoke("sessionList")).sessions.some(session => session.id === nestedChat.sessionId), "folder removal leaves the underlying chat accessible");
   coverage.push("Removed the now-empty nested folder non-destructively and verified its chat remains available in the session inventory");
-  await clickText("apps");
+  await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
+  assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"][data-project-id="${projectId}"]')`), "return to Project Console from chat navigation");
   await clickText("共享上下文");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "resource panel restored after chat navigation");

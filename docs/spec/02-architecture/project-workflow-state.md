@@ -98,6 +98,37 @@ Other uncontained tools, background and delegated execution return
 `WORKFLOW_RESOURCE_DENIED` before effects. A path grant is not a process sandbox.
 Ordinary turns without a workflow binding retain their existing behavior.
 
+## Navigation trees
+
+Folders support arbitrary depth. Optional `scope` is `chats`, `projects`, or
+`project`; omitted scope retains the standalone Chat meaning. Only `project`
+folders carry a stable ProjectGroup `projectId`. The optional
+`projectNavigation` collection stores stable project placements, separate from
+session navigation. Old version-1 snapshots remain readable. Before the first
+placement, projects retain their existing visible/manual order and project-main
+path metadata; conversations without navigation records remain reachable.
+
+`tree.move` changes navigation only. Its target is a folder, project, or session,
+and its destination contains a scope, optional project and folder, and numeric
+order. Optional `siblingOrder` normalizes the visible mixed folder/item order in
+the same CAS transaction, including entries without prior placement records.
+Host validates identity, scope, project membership and arbitrary-depth folder
+cycles. Scope is immutable for folders. Removing a folder promotes its direct
+children and placements to its parent; no sessions or projects are deleted.
+Existing unscoped `navigation.move/update` retain their historical contract.
+
+Project membership includes explicit conversation links and workstream main
+sessions, including legacy sessions with no workspace. Filing such a session
+never assigns a workspace. Project archive/pin filtering remains in Sidebar,
+execution history stays reachable, and the fixed conversations/history wrapper
+is removed. Independent Chat and project trees share drag-before, drag-after,
+drop-inside, and root drop behavior. Recent/Favorites references use the same
+drag source as their canonical conversation. Folder and item move menus provide
+a keyboard-accessible alternative.
+
+Git trees, Archify architecture and session relationship trees are deferred to
+a subsequent overview iteration; no placeholder panels are rendered.
+
 ## Project Agent discussion
 
 `agent.open` opens the project's canonical discussion session without requiring
@@ -106,6 +137,10 @@ the existing project and session identities; old snapshots without that
 collection remain valid. Reopening or restarting reuses the live associated
 session. Opening the entry alone sends no prompt and creates no workstream, run,
 or execution authorization.
+
+The project title, sidebar Home row, project page header and project-aware chat
+top bar expose an icon action to the same discussion; the Agent has no session
+row in Sidebar. These entries share in-flight opening state.
 
 The discussion uses the existing ChatSurface, transcript, model picker and
 prompt queue. Project instructions, memory and current workflow context remain

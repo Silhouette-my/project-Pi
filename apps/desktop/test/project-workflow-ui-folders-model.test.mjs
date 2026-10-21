@@ -36,13 +36,13 @@ test("folder projection uses manual order, not background update time; work conv
     ["c"],
   );
 });
-test("folder parent choices prevent cycles and third nesting level", () => {
+test("folder parent choices allow arbitrary depth while preventing cycles", () => {
   const folders = [
     { id: "parent", order: 0 },
     { id: "child", parentId: "parent", order: 1 },
     { id: "other", order: 2 },
   ];
-  assert.deepEqual(folderParents(folders, folders[0]), []);
+  assert.deepEqual(folderParents(folders, folders[0]).map(f => f.id), ["other"]);
   assert.deepEqual(
     folderParents(folders, folders[1]).map((f) => f.id),
     ["parent", "other"],
@@ -102,6 +102,12 @@ test("durable project identity resolves an existing visible path without inventi
     1,
     "projection must not mutate retained project metadata",
   );
+});
+test("logical project name wins over workspace basename while an explicit sidebar rename remains authoritative", () => {
+  const groups = [{ id: "p", name: "Project navigation", primaryPath: "/repo/apps", roots: [] }];
+  const entry = { path: "/repo/apps", name: "apps", sessions: [], meta: {} };
+  assert.equal(workflowProjectEntries([entry], groups)[0].name, "Project navigation");
+  assert.equal(workflowProjectEntries([{ ...entry, meta: { name: "My workspace" } }], groups)[0].name, "My workspace");
 });
 function deferred() {
   let resolve;

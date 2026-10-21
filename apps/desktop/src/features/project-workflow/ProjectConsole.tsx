@@ -1,3 +1,4 @@
+import { ProjectAgentButton } from "./ProjectAgentButton";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord, ProjectWorkflowSearchHit } from "@pi-desktop/shared";
@@ -157,6 +158,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
             </div>
           </div>
           <div className="workflow-actions">
+            <ProjectAgentButton projectId={projectId} />
             <TooltipButton tooltip={t("workflow.search")} ariaLabel={t("workflow.search")}
               aria-expanded={searchOpen} onClick={() => setSearchOpen(!searchOpen)}><IconSearch size={16} /></TooltipButton>
             <Button variant="ghost" className="workflow-context-shortcut" onClick={() => selectTab("context")}>
@@ -199,7 +201,6 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
             /></div>
             <nav className="workflow-tabs" aria-label={t("workflow.console")}>
               <Button variant="ghost" aria-current={tab === "overview" ? "page" : undefined} onClick={() => selectTab("overview")}>{t("workflow.overview")}</Button>
-              <Button variant="ghost" className="workflow-agent-tab" disabled={projectAgent.busy} onClick={openAgent}><IconChat size={15} />{t("workflow.agentTitle")}</Button>
               <Button variant="ghost" aria-current={tab === "work" ? "page" : undefined} onClick={() => selectTab("work")}>{t("workflow.workstreams")}</Button>
               <Button variant="ghost" aria-current={tab === "artifacts" ? "page" : undefined} onClick={() => selectTab("artifacts")}>{t("workflow.artifacts")}</Button>
               <Button variant="ghost" aria-current={tab === "context" ? "page" : undefined} onClick={() => selectTab("context")}>{t("workflow.context")}</Button>
@@ -292,6 +293,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                             {candidate.revision} · {candidate.environment}
                           </p>
                           <div className="workflow-actions">
+            <ProjectAgentButton projectId={projectId} />
                             <Button
                               onClick={() =>
                                 void openReference({ kind: "artifact", id: candidate.id }).catch(

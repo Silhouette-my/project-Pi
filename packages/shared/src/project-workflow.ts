@@ -37,8 +37,13 @@ export const WorkflowWorkstreamSchema = object({
 export type WorkflowWorkstream = Type.Static<typeof WorkflowWorkstreamSchema>;
 export type WorkflowStatus = WorkflowWorkstream["status"];
 
-export const WorkflowFolderSchema = object({ id, name: id, parentId: optionalId, order: Type.Number() });
+export const WorkflowTreeScopeSchema = literals("chats", "projects", "project");
+export type WorkflowTreeScope = Type.Static<typeof WorkflowTreeScopeSchema>;
+export const WorkflowFolderSchema = object({ id, name: id, parentId: optionalId, order: Type.Number(),
+  scope: Type.Optional(WorkflowTreeScopeSchema), projectId: optionalId });
 export type WorkflowFolder = Type.Static<typeof WorkflowFolderSchema>;
+export const WorkflowProjectNavigationSchema = object({ projectId: id, folderId: optionalId, order: Type.Number() });
+export type WorkflowProjectNavigation = Type.Static<typeof WorkflowProjectNavigationSchema>;
 export const WorkflowConversationSchema = object({
   sessionId: id, projectId: id, workstreamId: id,
   parentSessionId: optionalId, sourceMessageId: optionalId, sourceRevision: revision,
@@ -121,6 +126,7 @@ export type ProjectAgent = Type.Static<typeof ProjectAgentSchema>;
 export const ProjectWorkflowSnapshotSchema = object({
   schemaVersion: Type.Literal(PROJECT_WORKFLOW_VERSION), revision,
   projectAgents: Type.Optional(Type.Array(ProjectAgentSchema)),
+  projectNavigation: Type.Optional(Type.Array(WorkflowProjectNavigationSchema)),
   folders: Type.Array(WorkflowFolderSchema), navigation: Type.Array(WorkflowNavigationSchema),
   expandedIds: strings, workstreams: Type.Array(WorkflowWorkstreamSchema),
   conversations: Type.Array(WorkflowConversationSchema), resources: Type.Array(WorkflowResourceSchema),
@@ -136,6 +142,7 @@ const common = { commandId: id, expectedRevision: revision };
 const command = <T extends Type.TProperties, K extends string>(kind: K, properties: T) =>
   object({ ...common, kind: Type.Literal(kind), ...properties });
 const scope = { projectId: id, workstreamId: id };
+const treeTarget = object({ kind: literals("folder", "session", "project"), id });
 export const ProjectWorkflowUserCommandSchema = Type.Union([
   command("folder.create", { folder: WorkflowFolderSchema }),
   command("folder.update", { folder: WorkflowFolderSchema }),
@@ -143,6 +150,9 @@ export const ProjectWorkflowUserCommandSchema = Type.Union([
   command("navigation.move", { sessionIds: strings, folderId: optionalId }),
   command("navigation.update", { navigation: WorkflowNavigationSchema }),
   command("navigation.expand", { expandedIds: strings }),
+  command("tree.move", { target: treeTarget,
+    scope: WorkflowTreeScopeSchema, projectId: optionalId, folderId: optionalId, order: Type.Number(),
+    siblingOrder: Type.Optional(Type.Array(treeTarget, { maxItems: 1000 })) }),
   command("workstream.create", { workstream: WorkflowWorkstreamSchema }),
   command("workstream.update", { ...scope, patch: object({
     title: Type.Optional(id), goal: Type.Optional(text), acceptance: Type.Optional(Type.Array(WorkflowAcceptanceSchema)),

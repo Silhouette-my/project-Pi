@@ -41,8 +41,9 @@ export const workflowCatalog = {
   },
   workflowNav: {
     chats: "Chats", newChat: "Neuer Chat", newFolder: "Neuer Ordner", organize: "Chats organisieren", selectChat: "{{title}} auswählen", favorite: "Chat favorisieren",
+    emptyFolder: "Leerer Ordner", moveItem: "{{title}} verschieben", dropAtRoot: "Hier auf die oberste Ebene verschieben",
     moveFirst: "An den Anfang verschieben", editFolder: "Ordner umbenennen oder verschieben", removeFolder: "Ordner entfernen", folderName: "Ordnername", parentFolder: "Übergeordneter Ordner", topLevel: "Oberste Ebene",
-    removeHint: "Diesen Ordner entfernen? Die Chats bleiben unter „Nicht abgelegt“ verfügbar.", moveSelected: "{{count}} ausgewählte Chats verschieben", move: "Verschieben", unfiled: "Nicht abgelegt", favorites: "Favoriten", recent: "Zuletzt verwendet",
+    removeHint: "Diesen Ordner entfernen? Der Inhalt wird in den übergeordneten Ordner verschoben.", moveSelected: "{{count}} ausgewählte Chats verschieben", move: "Verschieben", unfiled: "Nicht abgelegt", favorites: "Favoriten", recent: "Zuletzt verwendet",
     branch: "Abzweigung", child: "Nebenunterhaltung", toggleWorkstream: "Arbeitsstrang ein- oder ausklappen", toggleProject: "Projekt ein- oder ausklappen", legacyConversations: "Unterhaltungen und Verlauf ({{count}})", history: "Verlauf ({{count}})",
   },
   workflowContext: {

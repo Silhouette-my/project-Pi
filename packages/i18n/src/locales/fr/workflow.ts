@@ -41,8 +41,9 @@ export const workflowCatalog = {
   },
   workflowNav: {
     chats: "Discussions", newChat: "Nouvelle discussion", newFolder: "Nouveau dossier", organize: "Organiser les discussions", selectChat: "Sélectionner {{title}}", favorite: "Ajouter aux favoris",
+    emptyFolder: "Dossier vide", moveItem: "Déplacer {{title}}", dropAtRoot: "Déposer ici pour déplacer au premier niveau",
     moveFirst: "Déplacer en première position", editFolder: "Renommer ou déplacer le dossier", removeFolder: "Supprimer le dossier", folderName: "Nom du dossier", parentFolder: "Dossier parent", topLevel: "Niveau supérieur",
-    removeHint: "Supprimer ce dossier ? Ses discussions resteront disponibles dans Non classées.", moveSelected: "Déplacer les {{count}} discussions sélectionnées", move: "Déplacer", unfiled: "Non classées", favorites: "Favoris", recent: "Récentes",
+    removeHint: "Supprimer ce dossier ? Son contenu sera déplacé dans le dossier parent.", moveSelected: "Déplacer les {{count}} discussions sélectionnées", move: "Déplacer", unfiled: "Non classées", favorites: "Favoris", recent: "Récentes",
     branch: "Branche", child: "Conversation secondaire", toggleWorkstream: "Développer ou réduire le chantier", toggleProject: "Développer ou réduire le projet", legacyConversations: "Conversations et historique ({{count}})", history: "Historique ({{count}})",
   },
   workflowContext: {

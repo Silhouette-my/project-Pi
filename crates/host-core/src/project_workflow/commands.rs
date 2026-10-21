@@ -1,11 +1,13 @@
 use super::*;
 mod execution;
+mod navigation_tree;
 mod organization;
 
 pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result<()> {
     // Every reference enters through this boundary; navigation never changes workspace roots.
     check_sources(db, value, command)?;
     match command["kind"].as_str().unwrap() {
+        "tree.move" => navigation_tree::move_entry(db, value, command),
         "agent.create" => {
             let project = db
                 .list_project_groups()?

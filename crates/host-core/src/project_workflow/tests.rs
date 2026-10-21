@@ -1,3 +1,5 @@
+#[path = "tree_tests.rs"]
+mod tree_tests;
 use super::*;
 
 #[test]
@@ -275,7 +277,7 @@ fn workflow_folders_remove_non_destructively_and_navigation_stays_independent() 
         "folder.create",
         json!({"folder":{"id":"deep","name":"Deep","parentId":"child","order":0}}),
     );
-    assert_eq!(mutate(&f.db, &deep).unwrap_err().code, "INVALID_ARGUMENT");
+    mutate(&f.db, &deep).unwrap();
     f.execute(
         "navigation.move",
         json!({"sessionIds":[f.session],"folderId":"parent"}),

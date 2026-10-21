@@ -41,8 +41,9 @@ export const workflowCatalog = {
   },
   workflowNav: {
     chats: "對話", newChat: "新增對話", newFolder: "新增資料夾", organize: "整理對話", selectChat: "選取 {{title}}", favorite: "收藏對話",
+    emptyFolder: "空資料夾", moveItem: "移動 {{title}}", dropAtRoot: "拖曳至此移至最上層",
     moveFirst: "移至最前面", editFolder: "重新命名或移動資料夾", removeFolder: "移除資料夾", folderName: "資料夾名稱", parentFolder: "上層資料夾", topLevel: "最上層",
-    removeHint: "要移除此資料夾嗎？其中的對話仍可在未分類中找到。", moveSelected: "移動選取的 {{count}} 個對話", move: "移動", unfiled: "未分類", favorites: "收藏", recent: "最近",
+    removeHint: "移除此資料夾？其中的項目、對話和子資料夾將移至上層。", moveSelected: "移動選取的 {{count}} 個對話", move: "移動", unfiled: "未分類", favorites: "收藏", recent: "最近",
     branch: "分支", child: "側邊對話", toggleWorkstream: "展開或收合工作流", toggleProject: "展開或收合專案", legacyConversations: "對話與歷史記錄（{{count}}）", history: "歷史記錄（{{count}}）",
   },
   workflowContext: {

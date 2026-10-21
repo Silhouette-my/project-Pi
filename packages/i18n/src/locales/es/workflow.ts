@@ -41,8 +41,9 @@ export const workflowCatalog = {
   },
   workflowNav: {
     chats: "Chats", newChat: "Nuevo chat", newFolder: "Nueva carpeta", organize: "Organizar chats", selectChat: "Seleccionar {{title}}", favorite: "Añadir chat a favoritos",
+    emptyFolder: "Carpeta vacía", moveItem: "Mover {{title}}", dropAtRoot: "Soltar aquí para mover al nivel superior",
     moveFirst: "Mover a la primera posición", editFolder: "Cambiar nombre o mover carpeta", removeFolder: "Quitar carpeta", folderName: "Nombre de la carpeta", parentFolder: "Carpeta superior", topLevel: "Nivel superior",
-    removeHint: "¿Quitar esta carpeta? Sus chats seguirán disponibles en Sin carpeta.", moveSelected: "Mover {{count}} chats seleccionados", move: "Mover", unfiled: "Sin carpeta", favorites: "Favoritos", recent: "Recientes",
+    removeHint: "¿Quitar esta carpeta? Su contenido se moverá a la carpeta superior.", moveSelected: "Mover {{count}} chats seleccionados", move: "Mover", unfiled: "Sin carpeta", favorites: "Favoritos", recent: "Recientes",
     branch: "Rama", child: "Conversación paralela", toggleWorkstream: "Expandir o contraer flujo de trabajo", toggleProject: "Expandir o contraer proyecto", legacyConversations: "Conversaciones e historial ({{count}})", history: "Historial ({{count}})",
   },
   workflowContext: {

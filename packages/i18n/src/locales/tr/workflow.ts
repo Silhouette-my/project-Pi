@@ -41,8 +41,9 @@ export const workflowCatalog = {
   },
   workflowNav: {
     chats: "Sohbetler", newChat: "Yeni sohbet", newFolder: "Yeni klasör", organize: "Sohbetleri düzenle", selectChat: "{{title}} sohbetini seç", favorite: "Sohbeti favorilere ekle",
+    emptyFolder: "Boş klasör", moveItem: "{{title}} öğesini taşı", dropAtRoot: "En üst düzeye taşımak için buraya bırakın",
     moveFirst: "İlk sıraya taşı", editFolder: "Klasörü yeniden adlandır veya taşı", removeFolder: "Klasörü kaldır", folderName: "Klasör adı", parentFolder: "Üst klasör", topLevel: "En üst düzey",
-    removeHint: "Bu klasör kaldırılsın mı? Sohbetleri Sınıflandırılmamış bölümünde kalır.", moveSelected: "Seçili {{count}} sohbeti taşı", move: "Taşı", unfiled: "Sınıflandırılmamış", favorites: "Favoriler", recent: "Son kullanılanlar",
+    removeHint: "Bu klasör kaldırılsın mı? İçeriği üst klasöre taşınır.", moveSelected: "Seçili {{count}} sohbeti taşı", move: "Taşı", unfiled: "Sınıflandırılmamış", favorites: "Favoriler", recent: "Son kullanılanlar",
     branch: "Dal", child: "Yan sohbet", toggleWorkstream: "İş akışını genişlet veya daralt", toggleProject: "Projeyi genişlet veya daralt", legacyConversations: "Sohbetler ve geçmiş ({{count}})", history: "Geçmiş ({{count}})",
   },
   workflowContext: {

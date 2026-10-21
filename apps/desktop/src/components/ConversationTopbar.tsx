@@ -1,3 +1,7 @@
+import { ProjectAgentButton } from "../features/project-workflow/ProjectAgentButton";
+import { useWorkflowProjectGroups } from "../features/project-workflow/WorkflowNavigation";
+import { workflowGroupForPath } from "../features/project-workflow/navigation-model";
+import { useProjectWorkflow } from "../features/project-workflow/useProjectWorkflow";
 import { isRemoteSession } from "../lib/remote-session-safety";
 import {
   KEYBOARD_SHORTCUTS,
@@ -88,7 +92,12 @@ export function ConversationTopbar({
       })
     : t("nav.search");
 
+  const { snapshot } = useProjectWorkflow();
+  const groups = useWorkflowProjectGroups(workspace?.path);
   const activeSession = sessions.find((session) => session.id === activeSessionId);
+
+  const projectId = snapshot?.projectAgents?.find(agent => agent.sessionId === activeSessionId)?.projectId
+    ?? (activeSession?.projectPath ? workflowGroupForPath(groups.groups, activeSession.projectPath)?.id : undefined);
 
   /*
    * A scheduled run's conversation is read from the Scheduled route, and the
@@ -164,6 +173,7 @@ export function ConversationTopbar({
 
       <div className="ct-right">
         <div className="ct-actions">
+          {projectId && !isRemoteSession(activeSession) ? <ProjectAgentButton projectId={projectId} className="ct-icon-btn" /> : null}
           <TooltipButton
             type="button"
             className="ct-icon-btn"
