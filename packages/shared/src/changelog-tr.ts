@@ -22,6 +22,8 @@ export const trEntries: ChangelogEntry[] = [
       "Yerel HTML çıktılarını oluşturan oturumun içinde açın.",
       "Geniş Markdown tablolarını sohbet düzenini bozmadan kaydırın.",
       "Bir araç aşırı büyük bir görsel döndürse bile konuşmayı kullanmaya devam edin.",
+      "Yerleşik LaTeX becerisiyle LaTeX projelerini derleyin ve TeX araç zincirlerini tanılayın veya kurun.",
+      "Derin çok kaynaklı araştırmayı özel bir alt ajana devredin; atıflı bir Markdown raporu ve kaynak kaydı alın.",
     ],
   },
   {

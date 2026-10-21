@@ -22,6 +22,8 @@ export const ptBREntries: ChangelogEntry[] = [
       "Abra artefatos HTML locais na conversa que os criou.",
       "Role tabelas Markdown largas sem afetar o layout da conversa.",
       "A conversa continua utilizável quando uma ferramenta retorna uma imagem grande demais.",
+      "Compile projetos LaTeX com uma skill integrada e diagnostique ou instale cadeias de ferramentas TeX.",
+      "Delegue pesquisa profunda com várias fontes a um subagente dedicado e receba um relatório em Markdown citado com um registro de fontes.",
     ],
   },
   {

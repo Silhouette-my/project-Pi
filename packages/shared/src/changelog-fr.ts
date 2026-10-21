@@ -22,6 +22,8 @@ export const frEntries: ChangelogEntry[] = [
       "Ouvrez les artefacts HTML locaux dans la conversation qui les a créés.",
       "Faites défiler les tableaux Markdown larges sans déformer la conversation.",
       "La conversation reste utilisable lorsqu’un outil renvoie une image trop volumineuse.",
+      "Compilez des projets LaTeX grâce à une compétence intégrée et diagnostiquez ou installez les chaînes d’outils TeX.",
+      "Confiez la recherche approfondie multi-sources à un sous-agent dédié et obtenez un rapport Markdown sourcé avec un registre des sources.",
     ],
   },
   {

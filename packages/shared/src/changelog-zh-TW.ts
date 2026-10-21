@@ -22,6 +22,8 @@ export const zhTWEntries: ChangelogEntry[] = [
       "可在建立本機 HTML 頁面的對話中直接開啟頁面。",
       "寬大的 Markdown 表格可橫向捲動，不影響對話版面。",
       "工具回傳超大圖片時，對話仍可正常使用。",
+      "內建 LaTeX 技能可編譯 LaTeX 專案，並診斷或安裝 TeX 工具鏈。",
+      "深度多源研究交由專職子代理執行，產出含引用與來源清單的 Markdown 報告。",
     ],
   },
   {

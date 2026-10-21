@@ -22,6 +22,8 @@ export const enEntries: ChangelogEntry[] = [
       "Open local HTML artifacts within the session that created them.",
       "Scroll wide Markdown tables without losing the conversation layout.",
       "Keep conversations usable when a tool returns an oversized image.",
+      "Compile LaTeX projects and diagnose or install TeX toolchains from a built-in LaTeX skill.",
+      "Delegate deep multi-source research to a dedicated subagent and get a cited Markdown report with a source ledger.",
     ],
   },
   {
