@@ -11,12 +11,13 @@ const {
   builtinSkills,
   DEEP_RESEARCH_SKILL_ID,
   LATEX_SKILL_ID,
+  VISUALIZE_SKILL_ID,
   loadBuiltinSkillBody,
 } = await import("../electron/main/builtin-skills.ts");
 
 test("bundled catalog advertises the latex and deep-research skills", () => {
   const catalog = builtinSkillCatalog();
-  for (const id of [LATEX_SKILL_ID, DEEP_RESEARCH_SKILL_ID]) {
+  for (const id of [LATEX_SKILL_ID, DEEP_RESEARCH_SKILL_ID, VISUALIZE_SKILL_ID]) {
     const entry = catalog.find((skill) => skill.id === id);
     assert.ok(entry, `catalog is missing ${id}`);
     assert.ok(entry.name.length > 0);
@@ -54,6 +55,7 @@ test("new skills are active by default and withheld when disabled", async () => 
   const ids = new Set(active.map((skill) => skill.id));
   assert.ok(ids.has(LATEX_SKILL_ID));
   assert.ok(ids.has(DEEP_RESEARCH_SKILL_ID));
+  assert.ok(ids.has(VISUALIZE_SKILL_ID));
 
   const disabled = builtinSkills({
     workspacePath: null,

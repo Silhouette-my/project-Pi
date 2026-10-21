@@ -8,11 +8,10 @@
  *     session-lifetime memory only (Phase 1). It survives iframe remounts
  *     inside one app run — scrolling, re-renders — but NOT an app restart
  *     or transcript reload, and it is never sent to the model.
- *   - `sendFollowUpMessage`: posts the prompt straight into the composer
- *     send path for the owning session. The `title` is accepted and
- *     ignored; PI-Desktop shows no confirmation dialog.
+ *   - `sendFollowUpMessage`: requests host confirmation before sending the
+ *     prompt for the owning session. The `title` is accepted and ignored.
  *   - `openExternal`: routes an http(s) link through the host's external
- *     opener.
+ *     opener after host confirmation.
  *
  * Messages are plain postMessage envelopes; the host validates the source
  * window and the `source` tag on both directions.
@@ -103,6 +102,16 @@
       root.dataset.theme = theme;
       openai.theme = theme;
       dispatchGlobals({ theme, visualizationTheme: theme });
+    }
+  });
+  document.addEventListener("click", (event) => {
+    const anchor = event.target?.closest?.("a[href]");
+    if (!anchor) return;
+    const href = anchor.getAttribute("href");
+    if (!href || href.startsWith("#")) return;
+    event.preventDefault();
+    if (/^https?:\/\//i.test(href) && event.isTrusted) {
+      post("open-external", { href });
     }
   });
   const sendHeight = () => {

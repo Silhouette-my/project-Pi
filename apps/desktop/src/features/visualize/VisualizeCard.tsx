@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../../styles/visualize.css";
 import { IconCircleAlert, IconSparkles } from "../../components/icons";
+import { Button } from "../../components/ui";
 import type { SourcePositionProps } from "../../lib/markdown-source";
 import { openHttpUrl } from "../../lib/open-http-url";
 import { useThemeMode } from "../../lib/use-theme-mode";
@@ -35,27 +36,33 @@ function displayName(spec: VisualizeFenceSpec): string {
 export function VisualizeCard({
   spec,
   sourcePosition,
+  sourceId,
 }: {
   spec: VisualizeFenceSpec;
   sourcePosition: SourcePositionProps;
+  sourceId: string;
 }) {
   const { t } = useTranslation();
   const theme = useThemeMode();
   const paneSessionId = useSlotSessionId();
   const sessionId = useAppStore((s) => paneSessionId || s.activeSessionId);
-  const fragment = useVisualizeFragment(spec.path);
-  const cardId = `${sessionId ?? "draft"}|${spec.path}|${
+  const cardId = `${sessionId ?? "draft"}|${sourceId}|${spec.path}|${
     sourcePosition["data-source-start"] ?? 0
   }`;
+  const fragment = useVisualizeFragment(spec.path, cardId);
+  const [pendingAction, setPendingAction] = useState<{ kind: "follow-up" | "open-external"; value: string } | null>(null);
+  useEffect(() => setPendingAction(null), [cardId]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [docUrl, setDocUrl] = useState<string | null>(null);
   const [height, setHeight] = useState(240);
+
+  const fragmentContent = fragment.kind === "text" ? fragment.content : null;
 
   // Build the sandbox document whenever the fragment changes. Theme changes
   // are pushed into the live frame by the effect below instead of rebuilding,
   // so an interacting user never loses in-flight fragment state.
   useEffect(() => {
-    if (fragment.kind !== "text") {
+    if (fragmentContent === null) {
       setDocUrl(null);
       return;
     }
@@ -63,7 +70,7 @@ export function VisualizeCard({
       new Blob(
         [
           buildVisualizeDocument({
-            fragment: fragment.content,
+            fragment: fragmentContent,
             theme,
             state: readWidgetState(cardId),
           }),
@@ -75,7 +82,7 @@ export function VisualizeCard({
     return () => URL.revokeObjectURL(url);
     // `theme` is read at build time only; live updates go by postMessage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fragment, cardId]);
+  }, [fragmentContent, cardId]);
 
   useEffect(() => {
     if (!docUrl) return;
@@ -105,13 +112,14 @@ export function VisualizeCard({
         case "follow-up": {
           const prompt = typeof data.prompt === "string" ? data.prompt.trim() : "";
           if (prompt) {
-            // Same send path as the composer; a busy session queues it.
-            void useAppStore.getState().sendPrompt(prompt, undefined, sessionId ?? undefined);
+            setPendingAction({ kind: "follow-up", value: prompt });
           }
           break;
         }
         case "open-external": {
-          if (typeof data.href === "string") openHttpUrl(data.href);
+          if (typeof data.href === "string" && /^https?:\/\//i.test(data.href)) {
+            setPendingAction({ kind: "open-external", value: data.href });
+          }
           break;
         }
       }
@@ -158,6 +166,22 @@ export function VisualizeCard({
           <span>{displayName(spec)}</span>
         </span>
       </div>
+      {pendingAction && (
+        <div className="visualize-card-action">
+          <p>{t(pendingAction.kind === "follow-up" ? "chat.visualizeConfirmPrompt" : "chat.visualizeConfirmLink")}</p>
+          <pre>{pendingAction.value}</pre>
+          <Button onClick={() => {
+            const action = pendingAction;
+            setPendingAction(null);
+            if (action.kind === "follow-up") {
+              void useAppStore.getState().sendPrompt(action.value, undefined, sessionId ?? undefined);
+            } else {
+              openHttpUrl(action.value);
+            }
+          }}>{t(pendingAction.kind === "follow-up" ? "chat.visualizeSend" : "chat.visualizeOpenLink")}</Button>
+          <Button onClick={() => setPendingAction(null)}>{t("common.cancel")}</Button>
+        </div>
+      )}
       {status ?? (
         <iframe
           ref={iframeRef}

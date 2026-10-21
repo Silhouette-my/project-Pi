@@ -395,6 +395,8 @@ function MermaidBlock({ code, ...position }: { code: string } & SourcePositionPr
 
 /* ---------- react-markdown component overrides ---------- */
 
+const MarkdownSourceIdentityContext = createContext("");
+
 const MarkdownBlockContext = createContext({
   closedFence: false,
   renderDiagrams: true,
@@ -444,6 +446,7 @@ function PreBlock({
   ...rest
 }: ComponentProps<"pre"> & SourcePositionProps & { node?: unknown }) {
   const { closedFence, renderDiagrams } = useContext(MarkdownBlockContext);
+  const sourceId = useContext(MarkdownSourceIdentityContext);
   const info = extractCode(children);
   // Hooks stay unconditional: the fence language and closed-ness can flip
   // between streaming renders, so the lookup must run on every render.
@@ -471,6 +474,7 @@ function PreBlock({
     if (spec) {
       return (
         <VisualizeCard
+          sourceId={sourceId}
           spec={spec}
           sourcePosition={sourcePositionProps(rest)}
         />
@@ -948,8 +952,10 @@ export const Markdown = memo(function Markdown({
   renderDiagrams = true,
   baseDir,
   streaming = false,
+  sourceId,
 }: {
   source: string;
+  sourceId?: string;
   renderDiagrams?: boolean;
   /** True only while an assistant message is still receiving text. */
   streaming?: boolean;
@@ -1003,6 +1009,7 @@ export const Markdown = memo(function Markdown({
   );
   let sourceOffset = 0;
   return (
+    <MarkdownSourceIdentityContext.Provider value={sourceId ?? source}>
     <MarkdownFileMenuContext.Provider value={openMarkdownFileMenu}>
       <MarkdownBaseDirContext.Provider value={baseDir ?? ""}>
         {fullSourceTooLarge ? (
@@ -1047,5 +1054,6 @@ export const Markdown = memo(function Markdown({
       </MarkdownBaseDirContext.Provider>
       <ContextMenu state={fileMenu} onClose={closeFileMenu} />
     </MarkdownFileMenuContext.Provider>
+    </MarkdownSourceIdentityContext.Provider>
   );
 });

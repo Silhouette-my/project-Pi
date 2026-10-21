@@ -134,7 +134,7 @@ test("the card document carries the CSP, design system, bridge, and fragment", a
   }
 });
 
-test("a follow-up click routes through the composer send path", async () => {
+test("follow-ups require the host confirmation button before the composer send path", async () => {
   // The card has no DOM of its own to click in node --test; the wiring is
   // asserted at the seam the repo uses for cross-process send paths.
   const { readFile } = await import("node:fs/promises");
@@ -144,7 +144,7 @@ test("a follow-up click routes through the composer send path", async () => {
   );
   assert.match(
     card,
-    /useAppStore\.getState\(\)\.sendPrompt\(prompt, undefined, sessionId/,
+    /useAppStore\.getState\(\)\.sendPrompt\(action.value, undefined, sessionId/,
   );
   // The frame stays script-enabled but never same-origin.
   assert.match(card, /sandbox="allow-scripts"/);
