@@ -5,6 +5,7 @@ import {
 import { workflowHost, type WorkflowHostConnection } from "../services/project-workflow-host";
 import type { IpcRegistrar } from "./types";
 import { openProjectWorkflowReference } from "../services/project-workflow-reference";
+import { createProjectStructureService } from "../services/project-structure";
 
 export type ProjectWorkflowIpcDependencies = {
   registrar: IpcRegistrar;
@@ -16,6 +17,16 @@ export type ProjectWorkflowIpcDependencies = {
 };
 
 export function registerProjectWorkflowIpc({ registrar, host, getHost, getRuntime, openPath, openExternal }: ProjectWorkflowIpcDependencies): void {
+  const structure = createProjectStructureService(getHost);
+  for (const [channel, read] of [
+    [IPC.invoke.projectStructureGitSnapshot, structure.gitSnapshot],
+    [IPC.invoke.projectStructureGitDiff, structure.gitDiff],
+    [IPC.invoke.projectStructureArchitectureSnapshot, structure.architectureSnapshot],
+    [IPC.invoke.projectStructureReadFile, structure.readFile],
+  ] as const) registrar.handleWithEvent(channel, async (event, input: unknown) => {
+    registrar.assertMainWindowSender(event);
+    return read(input);
+  });
   // These are user actions. Do not register them on the external-agent invoke map
   // or weaken the existing plugin collaboration provenance boundary.
   registrar.handleWithEvent(IPC.invoke.projectWorkflowSnapshot, async (event, input = {}) => {
