@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowConversation, WorkflowWorkstream } from "@pi-desktop/shared";
 import { Badge, Button, Checkbox, Field, Input, Select, Textarea } from "../../components/ui";
+import { IconChevronRight } from "../../components/icons";
 import { useProjectWorkflow, type WorkflowAction } from "./useProjectWorkflow";
 import { useAppStore } from "../../stores/app-store";
 import { normalizeProjectPath } from "../../lib/sidebar-session-groups";
@@ -203,7 +204,7 @@ export function WorkflowControls({
       )}
       {selectedAuthorization && (
         <details className="workflow-authority-details">
-          <summary>{t("workflow.selectedAuthority")}</summary>
+          <summary><IconChevronRight size={12} className="project-disclosure-icon" />{t("workflow.selectedAuthority")}</summary>
           <dl>
             <dt>{t("workflow.allowedActions")}</dt>
             <dd>{selectedAuthorization.actions.join(", ")}</dd>

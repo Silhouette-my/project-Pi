@@ -6,10 +6,11 @@
   container-type: inline-size;
   margin-top: 46px;
 }
+/* Destination frame metrics follow .page-frame (980px, 28px gutters). */
 .workflow-page {
-  max-width: 1100px;
+  max-width: 980px;
   margin: 0 auto;
-  padding: 18px 30px 70px;
+  padding: 8px 28px 48px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -19,14 +20,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 0 14px;
+  padding: 0 0 12px;
 }
 .workflow-header h1 {
-  font-size: var(--text-lg-plus);
+  font-size: var(--text-lg);
   line-height: var(--leading-tighter);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-strong);
   letter-spacing: var(--tracking-tight);
-  margin: 0 0 3px;
+  margin: 0 0 2px;
   overflow-wrap: anywhere;
 }
 .workflow-eyebrow,
@@ -36,19 +37,24 @@
 }
 .workflow-eyebrow {
   font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-strong);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
+/* Weight ramp (07 §5.4): semibold stays reserved for brand and CTAs, and
+   <strong> must not fall back to the UA's 700. */
 .workflow-page h2 {
   font-size: var(--text-md);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-strong);
   margin: 0;
 }
 .workflow-page h3 {
   font-size: var(--text-md);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   margin: 0;
+}
+.workflow-page strong {
+  font-weight: var(--font-weight-medium);
 }
 .workflow-page p {
   margin: 0;
@@ -67,7 +73,7 @@
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  border: 1px solid var(--ds-border-default);
+  border: 0;
   border-radius: var(--radius-md-plus);
   background: var(--ds-tile);
 }
@@ -103,16 +109,16 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-top: 1px solid var(--ds-border-default);
+  border-top: 1px solid var(--ds-border-subtle);
 }
 .workflow-workstream.btn {
   width: 100%;
   min-width: 0;
   justify-content: space-between;
   text-align: left;
-  padding: 15px 2px;
+  padding: 10px 2px;
   border-radius: 0;
-  border-bottom: 1px solid var(--ds-border-default);
+  border-bottom: 1px solid var(--ds-border-subtle);
   gap: 12px;
 }
 .workflow-workstream .workflow-row-copy {
@@ -134,8 +140,7 @@
   overflow-wrap: anywhere;
 }
 .workflow-workstream.is-selected {
-  background: var(--ds-bg-hover);
-  box-shadow: inset 3px 0 var(--ds-accent);
+  background: var(--ds-bg-active);
 }
 .workflow-summary,
 .workflow-detail {
@@ -144,8 +149,8 @@
   gap: 16px;
 }
 .workflow-summary {
-  padding: 0 0 24px;
-  border-bottom: 1px solid var(--ds-border-default);
+  padding: 0 0 20px;
+  border-bottom: 1px solid var(--ds-border-subtle);
 }
 .workflow-summary > div {
   display: flex;
@@ -243,7 +248,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 22px;
-  border-bottom: 1px solid var(--ds-border-default);
+  border-bottom: 1px solid var(--ds-border-subtle);
   color: var(--ds-text-secondary);
   font-size: var(--text-sm);
   margin-top: 46px;
@@ -256,7 +261,7 @@
   min-width: 0;
 }
 .workflow-conversation-bar strong {
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   overflow-wrap: anywhere;
 }
 .workflow-conversation-bar span {
@@ -264,7 +269,7 @@
 }
 @media (max-width: 680px) {
   .workflow-page {
-    padding: 20px 16px 60px;
+    padding: 8px 16px 48px;
   }
   .workflow-form {
     padding: 16px;

@@ -1474,7 +1474,19 @@ adjacent form inputs; dense surfaces may override that metric locally.
   validated form, keeping execution scope and acceptance controls intact.
   Project instructions, memory and reload live in the project menu; search expands
   from the header. Reuse the shared UI primitives, Composer plate/toolbar classes,
-  project instruction/memory dialogs and semantic theme tokens. Project drafts are
+  project instruction/memory dialogs and semantic theme tokens. Concretely: the
+  identity uses a 28px glyph seat, a `--text-lg` / strong-weight name and the
+  archive's mono path voice; header actions share the conversation top bar's
+  28px `.ct-icon-btn` seat and tile-backed group; underline tabs are px-3 py-2
+  `--text-sm`, secondary at rest. In-page section headings (overview groups,
+  Structure, session detail sections) are the Project archive section header line
+  (uppercase `--text-2xs`, strong weight, secondary), never a second page title.
+  Structure filters sit inline in one 32px toolbar row with raised pill pickers;
+  tree and graph rows use the sidebar row voice (`--text-md`, normal weight,
+  `--ds-bg-active` selection); disclosures use the shared chevron rather than the
+  UA triangle; section rhythm stays within 24px and dividers use `border-subtle`.
+  Sidebar navigation-tree actions stay hidden until their row or toolbar is
+  hovered or keyboard-focused, matching native sidebar rows. Project drafts are
   renderer-memory, keyed by project, retained on navigation/send failure, and
   cleared only after a successful send. Ordinary chat display groups are disjoint:
   Favorites first, then Recent, then remaining folder/Unfiled entries; this changes

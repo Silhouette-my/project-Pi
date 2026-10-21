@@ -146,19 +146,19 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
       <div className="workflow-page">
         <header className="workflow-header">
           <div className="workflow-project-identity">
-            <div className="workflow-project-mark"><IconFolder size={21} /></div>
+            <div className="workflow-project-mark"><IconFolder size={14} /></div>
             <div><h1>{group?.name ?? projectId}</h1>
               <p className="workflow-muted workflow-project-path">{group?.primaryPath}</p>
             </div>
           </div>
-          <div className="workflow-actions">
-            <ProjectAgentButton projectId={projectId} />
-            <TooltipButton tooltip={t("workflow.search")} ariaLabel={t("workflow.search")}
+          <div className="workflow-header-actions">
+            <ProjectAgentButton projectId={projectId} className="ct-icon-btn" />
+            <TooltipButton className="ct-icon-btn" tooltip={t("workflow.search")} ariaLabel={t("workflow.search")}
               aria-expanded={searchOpen} onClick={() => setSearchOpen(!searchOpen)}><IconSearch size={16} /></TooltipButton>
-            <Button variant="ghost" className="workflow-context-shortcut" onClick={() => selectTab("context")}>
-              <IconFileText size={15} />{t("workflow.context")}</Button>
+            <TooltipButton className="ct-icon-btn workflow-context-shortcut" tooltip={t("workflow.context")} ariaLabel={t("workflow.context")}
+              onClick={() => selectTab("context")}><IconFileText size={16} /></TooltipButton>
             <details className="workflow-project-menu">
-              <summary aria-label={t("workflow.projectMenu")}><IconMore size={18} /></summary>
+              <summary className="ct-icon-btn" aria-label={t("workflow.projectMenu")}><IconMore size={16} /></summary>
               <div className="workflow-project-menu-content">
                 <Button variant="ghost" disabled={!group} onClick={(event) => { setContextEditor("instructions"); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{t("workflow.instructions")}</Button>
                 <Button variant="ghost" disabled={!group} onClick={(event) => { setContextEditor("memory"); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{t("workflow.memory")}</Button>

@@ -3,7 +3,6 @@ import type { ProjectWorkflowSnapshot } from "@pi-desktop/shared";
 import { Badge, Button, Textarea, TooltipButton } from "../../components/ui";
 import {
   IconArrowUp,
-  IconChat,
   IconChevronRight,
   IconFileText,
   IconPlus,
@@ -71,7 +70,6 @@ export function ProjectOverview({
           void discuss();
         }}
       >
-        <IconChat size={18} />
         <Textarea
           aria-label={t("workflow.intentText")}
           placeholder={t("workflow.agentPlaceholder")}

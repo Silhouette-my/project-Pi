@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectGitSnapshot, WorkspaceDiff } from "@pi-desktop/shared";
 import { Badge, Button, Field, Select } from "../../components/ui";
+import { IconChevronRight } from "../../components/icons";
 import { api } from "../../lib/api";
 import { gitGraph } from "./git-structure-model";
 
@@ -163,7 +164,7 @@ export function GitStructureView({ projectId }: { projectId: string }) {
               ) : null}
               {repo.refs.length ? (
                 <details className="project-git-refs">
-                  <summary>{t("projectStructure.references", { count: repo.refs.length })}</summary>
+                  <summary><IconChevronRight size={12} className="project-disclosure-icon" />{t("projectStructure.references", { count: repo.refs.length })}</summary>
                   {repo.refs.map((ref) => (
                     <p key={ref.name}>
                       <Badge>{ref.name}</Badge>
@@ -208,6 +209,7 @@ function ProjectDiff({ diff }: { diff: WorkspaceDiff }) {
         diff.files.map((file) => (
           <details key={file.path} open={diff.files.length === 1}>
             <summary>
+              <IconChevronRight size={12} className="project-disclosure-icon" />
               <code>{file.path}</code>
               <span>
                 {t(`projectStructure.fileStates.${file.status}`)} · +{file.additions} −{file.deletions}

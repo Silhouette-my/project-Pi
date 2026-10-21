@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowArtifact, WorkflowWorkstream } from "@pi-desktop/shared";
 import { Badge, Button, Field, Input, Select, Textarea } from "../../components/ui";
+import { IconChevronRight } from "../../components/icons";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import { WorkflowRecord, WorkflowReference, type WorkflowSurfaceProps } from "./WorkflowReference";
 import "./context-artifacts-styles.css";
@@ -253,7 +254,7 @@ export function WorkflowArtifacts({
       )}
       {history.length ? (
         <details className="workflow-record-history">
-          <summary>{t("workflowArtifacts.otherArtifacts", { count: history.length })}</summary>
+          <summary><IconChevronRight size={12} className="project-disclosure-icon" />{t("workflowArtifacts.otherArtifacts", { count: history.length })}</summary>
           {history.map((item) => artifactView(item, false))}
         </details>
       ) : null}

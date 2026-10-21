@@ -41,7 +41,7 @@
   border-radius: var(--radius-md);
 }
 .workflow-navigation-subheading {
-  padding: 7px 10px 3px;
+  padding: 8px 6px 2px;
   color: var(--ds-text-muted);
   font-size: var(--text-sm);
 }
@@ -84,10 +84,21 @@
 .workflow-tree-row.is-drop-inside, .workflow-tree-root-target.is-drop-inside { outline: 1px solid var(--ds-accent); background: var(--ds-bg-active); }
 .workflow-tree-node.is-dragging > .workflow-tree-row { opacity: .5; }
 .workflow-tree-empty { padding: 5px 10px; color: var(--ds-text-muted); font-size: var(--text-sm); }
+.workflow-tree-toolbar.is-headless { justify-content: flex-end; min-height: 0; }
 .workflow-tree-root-hint { min-height: 8px; color: var(--ds-text-muted); font-size: var(--text-sm); padding: 0 6px; }
 
-.workflow-tree-toolbar .sidebar-toolbar-button,
+/* Row and toolbar actions follow the native sidebar contract: quiet at rest and
+   revealed by hover or keyboard focus on their owning row (09 §sidebar rows).
+   Organize mode keeps its explicit controls visible. */
+.workflow-tree-toolbar:hover .sidebar-toolbar-button,
+.workflow-tree-toolbar:focus-within .sidebar-toolbar-button,
+.workflow-tree-toolbar .sidebar-toolbar-button[aria-pressed="true"],
+.workflow-navigation-tree:hover > .workflow-tree-toolbar.is-headless .sidebar-toolbar-button,
 .workflow-tree-controls .sidebar-toolbar-button,
-.sidebar-toolbar-button.workflow-agent-entry,
-.workflow-tree-row:hover > .sidebar-toolbar-button { opacity: 1; }
+.workflow-tree-row:hover > .sidebar-toolbar-button,
+.workflow-tree-row:focus-within > .sidebar-toolbar-button,
+.workflow-navigation-project-entry:hover > .workflow-agent-entry,
+.workflow-navigation-project-entry:focus-within > .workflow-agent-entry,
+.sidebar-session-group-header:hover .workflow-agent-entry,
+.sidebar-session-group-header:focus-within .workflow-agent-entry { opacity: 1; }
 .workflow-agent-entry { flex-shrink: 0; }

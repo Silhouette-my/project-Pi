@@ -2,7 +2,7 @@ import { useState, type DragEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowFolder } from "@pi-desktop/shared";
 import { Button, Field, Input, Select, TooltipButton } from "../../components/ui";
-import { IconChevronDown, IconFolder, IconPencil, IconTrash } from "../../components/icons";
+import { IconArrowUpDown, IconChevronDown, IconFolder, IconPencil, IconTrash } from "../../components/icons";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import {
   dropPosition,
@@ -215,7 +215,7 @@ export function NavigationTree({
                   setDestination(entry.parentId ?? "");
                 }}
               >
-                ↕
+                <IconArrowUpDown size={12} />
               </TooltipButton>
               {folder ? (
                 <>
@@ -260,7 +260,7 @@ export function NavigationTree({
       data-workflow-tree={context.scope}
       data-project-id={context.projectId}
     >
-      <div className="workflow-tree-toolbar">
+      <div className={`workflow-tree-toolbar${toolbar ? "" : " is-headless"}`}>
         <span>{toolbar ? label : null}</span>
         <div className="sidebar-toolbar-actions">
           {toolbarActions}

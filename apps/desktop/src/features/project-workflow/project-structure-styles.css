@@ -1,5 +1,5 @@
 .workflow-content:has(> .project-structure) {
-  max-width: 1100px;
+  max-width: 100%;
 }
 .project-overview-heading,
 .project-structure-heading {
@@ -7,12 +7,24 @@
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
+/* In-page headings use the native section header line (projects.css
+   .projects-group-label): the destination title already lives in the header,
+   so content sections never repeat a page-scale title. */
 .project-overview-heading h2,
-.project-structure-heading h2 {
-  font-size: var(--text-xl);
-  font-weight: var(--font-weight-semibold);
+.project-structure-heading h2,
+.project-overview-work .workflow-section-heading h2,
+.project-overview-attention h2,
+.project-overview-artifacts .workflow-section-heading h2 {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ds-text-secondary);
 }
 .project-overview-counts {
   display: flex;
@@ -21,19 +33,18 @@
   font-size: var(--text-sm);
   color: var(--ds-text-muted);
 }
+/* The project Agent entry is a Composer plate (07 §Destination pages): same
+   radius, surface and lift as .composer-shell, no stroke and no leading glyph. */
 .project-agent-action {
   display: flex;
-  gap: 12px;
-  align-items: center;
-  border: 1px solid var(--ds-border-default);
-  border-radius: var(--radius-xl);
-  padding: 8px 10px 8px 15px;
-  margin-bottom: 28px;
+  gap: 8px;
+  align-items: flex-end;
+  border-radius: var(--ds-composer-radius, var(--radius-2xl));
+  padding: 8px 8px 8px 16px;
+  margin-bottom: 20px;
   background: var(--ds-bg-composer);
-}
-.project-agent-action > svg {
-  color: var(--ds-text-muted);
-  flex-shrink: 0;
+  box-shadow: var(--ds-shadow-composer);
+  transition: box-shadow var(--motion-duration-normal) var(--motion-ease-out);
 }
 .project-agent-action .field-textarea {
   min-height: 36px;
@@ -46,12 +57,16 @@
   box-shadow: none;
 }
 .project-agent-action:focus-within {
-  border-color: var(--ds-text-muted);
+  box-shadow: 0 7px 24px color-mix(in oklab, var(--ds-text-primary) 9%, transparent);
+}
+.project-agent-action .field-textarea:focus {
+  box-shadow: none;
+  background: transparent;
 }
 .project-overview-grid.has-attention {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(220px, 1fr);
-  gap: 30px;
+  gap: 24px;
 }
 .project-overview-work-list {
   display: flex;
@@ -64,8 +79,8 @@
   text-align: left;
   gap: 8px;
   white-space: normal;
-  padding: 17px 0;
-  border-bottom: 1px solid var(--ds-border-default);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ds-border-subtle);
   border-radius: 0;
 }
 .project-overview-work-item.btn > span:not(:first-child) {
@@ -94,12 +109,11 @@
   flex-shrink: 0;
 }
 .project-overview-attention {
-  border-left: 1px solid var(--ds-border-default);
+  border-left: 1px solid var(--ds-border-subtle);
   padding-left: 20px;
 }
 .project-overview-attention h2 {
-  font-size: var(--text-md);
-  margin: 8px 0 12px;
+  margin: 0 0 4px;
 }
 .project-attention-item.btn {
   display: flex;
@@ -108,7 +122,7 @@
   gap: 7px;
   text-align: left;
   white-space: normal;
-  padding: 12px 0;
+  padding: 10px 0;
   border-radius: 0;
   width: 100%;
 }
@@ -119,29 +133,55 @@
   line-height: var(--leading-normal);
 }
 .project-overview-artifacts {
-  margin-top: 32px;
+  margin-top: 24px;
 }
 .project-structure-heading p {
   color: var(--ds-text-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
-  margin-top: 7px;
+  margin-top: 2px;
   max-width: 600px;
 }
+/* Filters form one compact toolbar row (06 §toolbar, projects.css 32px
+   controls): each label reads inline before its picker instead of stacking
+   form-style above a tall field. */
 .project-structure-filters {
   display: flex;
-  align-items: end;
-  gap: 14px;
-  margin: 20px 0;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 0 0 16px;
   flex-wrap: wrap;
 }
-.project-structure-filters .field {
-  min-width: 180px;
+.project-structure-filters > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   max-width: 100%;
 }
+/* Field's stacked `space-y` spacing would offset the inline label from its picker. */
+.project-structure-filters > label > * {
+  margin-block: 0;
+}
+.project-structure-filters > label > div {
+  font-size: var(--text-sm);
+  color: var(--ds-text-muted);
+  white-space: nowrap;
+}
 .project-structure-filters .field-select {
-  width: 100%;
-  max-width: 650px;
+  width: auto;
+  min-width: 140px;
+  max-width: min(560px, 100%);
+  min-height: 32px;
+  height: 32px;
+  padding: 0 28px 0 12px;
+  border-radius: var(--radius-full);
+  background-color: var(--ds-raised);
+  box-shadow: var(--ds-raised-shadow);
+  font-size: var(--text-sm-plus);
+}
+.project-structure-filters > .btn {
+  height: 32px;
 }
 .project-session-layout,
 .project-git-layout {
@@ -150,8 +190,8 @@
   gap: 24px;
 }
 .project-session-tree {
-  padding-right: 18px;
-  border-right: 1px solid var(--ds-border-default);
+  padding-right: 16px;
+  border-right: 1px solid var(--ds-border-subtle);
   min-width: 0;
 }
 .project-session-tree ul {
@@ -159,10 +199,11 @@
   padding: 0;
   margin: 0;
 }
+/* Tree rows reuse the sidebar thread metrics: 13px indent + 9px guide, ~30px rows. */
 .project-session-tree .project-session-children {
-  margin-left: 13px;
-  padding-left: 10px;
-  border-left: 1px solid var(--ds-border-default);
+  margin-left: 9px;
+  padding-left: 9px;
+  border-left: 1px solid var(--ds-border-subtle);
 }
 .project-session-tree-row {
   display: flex;
@@ -175,31 +216,37 @@
 }
 .project-session-node.btn {
   min-width: 0;
+  min-height: 30px;
   flex: 1;
   justify-content: space-between;
-  padding: 10px 7px;
-  gap: 5px;
+  padding: 5px 8px;
+  gap: 8px;
+  border-radius: var(--radius-sm);
   white-space: normal;
   text-align: left;
 }
 .project-session-node > span:first-child {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 1px;
   min-width: 0;
 }
 .project-session-node strong {
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--leading-row);
+  color: var(--ds-text-primary);
   overflow-wrap: anywhere;
 }
 .project-session-node small {
-  font-size: var(--text-xs);
+  font-size: var(--text-xs-plus);
   color: var(--ds-text-muted);
 }
+/* Selection is the native navigation paint (bg-active), hover stays bg-hover. */
 .project-session-node[aria-pressed="true"],
 .project-git-graph .btn[aria-pressed="true"],
 .project-git-working[aria-pressed="true"] {
-  background: var(--ds-bg-hover);
+  background: var(--ds-bg-active);
 }
 .project-session-badges {
   display: flex;
@@ -207,32 +254,51 @@
   flex-wrap: wrap;
 }
 .project-session-tree h3 {
-  font-size: var(--text-sm);
-  color: var(--ds-text-muted);
-  margin: 24px 0 10px 24px;
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 16px 0 2px 18px;
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ds-text-secondary);
 }
 .project-session-detail {
   min-width: 0;
 }
 .project-session-detail h2 {
   font-size: var(--text-lg);
+  font-weight: var(--font-weight-strong);
   overflow-wrap: anywhere;
+}
+.project-session-detail > .workflow-section-heading small {
+  font-size: var(--text-xs-plus);
+  color: var(--ds-text-muted);
 }
 .project-session-detail > .workflow-section-heading {
   align-items: flex-start;
   gap: 12px;
 }
 .project-session-detail h3 {
-  font-size: var(--text-md);
-  margin: 22px 0 10px;
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 16px 0 4px;
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ds-text-secondary);
 }
 .project-structure-path {
   overflow-wrap: anywhere;
-  margin: 12px 0;
-  font-size: var(--text-sm);
+  margin: 8px 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs-plus);
 }
 .project-session-parent {
-  margin: 16px 0;
+  margin: 12px 0;
   font-size: var(--text-sm);
   display: flex;
   flex-wrap: wrap;
@@ -258,8 +324,8 @@
   text-align: left;
 }
 .project-session-run {
-  border-top: 1px solid var(--ds-border-default);
-  padding: 14px 0;
+  border-top: 1px solid var(--ds-border-subtle);
+  padding: 10px 0;
   font-size: var(--text-sm);
 }
 .project-session-run > div {
@@ -275,20 +341,24 @@
 }
 .project-git-summary {
   display: flex;
-  gap: 12px;
+  align-items: baseline;
+  gap: 8px 12px;
   flex-wrap: wrap;
-  margin: 12px 0 22px;
+  margin: -4px 0 16px;
   font-size: var(--text-sm);
 }
 .project-git-summary span {
   color: var(--ds-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs-plus);
   overflow-wrap: anywhere;
 }
 .project-git-working.btn {
   width: 100%;
   justify-content: space-between;
-  padding: 12px;
-  margin-bottom: 12px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
 }
 .project-git-graph {
   display: grid;
@@ -325,16 +395,20 @@
   width: 100%;
   flex-direction: column;
   align-items: stretch;
-  gap: 5px;
+  justify-content: center;
+  gap: 3px;
   text-align: left;
   white-space: normal;
   padding: 8px;
+  border-radius: var(--radius-sm);
 }
 .project-git-graph strong {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-normal);
+  color: var(--ds-text-primary);
 }
 .project-git-graph small {
   display: flex;
@@ -346,7 +420,7 @@
   white-space: nowrap;
 }
 .project-git-refs {
-  margin-top: 20px;
+  margin-top: 12px;
   font-size: var(--text-sm);
 }
 .project-git-refs p {
@@ -356,13 +430,14 @@
   margin: 8px 0;
 }
 .project-git-detail {
-  border-left: 1px solid var(--ds-border-default);
+  border-left: 1px solid var(--ds-border-subtle);
   padding-left: 24px;
   min-width: 0;
 }
 .project-git-detail h3 {
   font-size: var(--text-lg);
-  margin-bottom: 12px;
+  font-weight: var(--font-weight-strong);
+  margin-bottom: 8px;
 }
 .project-git-detail > p {
   font-size: var(--text-sm);
@@ -370,18 +445,49 @@
   overflow-wrap: anywhere;
 }
 .project-diff details {
-  border-top: 1px solid var(--ds-border-default);
-  margin-top: 14px;
+  border-top: 1px solid var(--ds-border-subtle);
+  margin-top: 12px;
 }
-.project-diff summary {
+/* Disclosures use the shared chevron (07 §11.11a) instead of the UA triangle. */
+.project-diff summary,
+.project-git-refs > summary,
+.workflow-record-history > summary,
+.workflow-authority-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  list-style: none;
   cursor: pointer;
-  padding: 12px 0;
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
-.project-diff summary span {
-  float: right;
+.project-diff summary::-webkit-details-marker,
+.project-git-refs > summary::-webkit-details-marker,
+.workflow-record-history > summary::-webkit-details-marker,
+.workflow-authority-details > summary::-webkit-details-marker {
+  display: none;
+}
+.project-diff summary:hover,
+.project-git-refs > summary:hover,
+.workflow-record-history > summary:hover,
+.workflow-authority-details > summary:hover {
+  background: var(--ds-bg-hover);
+}
+.project-disclosure-icon {
+  flex-shrink: 0;
   color: var(--ds-text-muted);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+details[open] > summary > .project-disclosure-icon {
+  transform: rotate(90deg);
+}
+.project-diff summary span {
+  margin-left: auto;
+  color: var(--ds-text-muted);
+  white-space: nowrap;
 }
 .project-diff pre,
 .project-source pre,
@@ -392,7 +498,7 @@
   line-height: var(--leading-relaxed);
   background: var(--ds-tile);
   border-radius: var(--radius-md);
-  padding: 14px;
+  padding: 12px 14px;
 }
 .project-diff-add {
   color: var(--ds-text-primary);
@@ -432,14 +538,14 @@
   width: 100%;
   height: 650px;
   max-height: 80vh;
-  border: 1px solid var(--ds-border-default);
+  border: 1px solid var(--ds-border-subtle);
   border-radius: var(--radius-lg);
   background: var(--ds-bg-primary);
 }
 .project-architecture-sources h3,
 .project-source h3 {
   font-size: var(--text-md);
-  margin: 22px 0 8px;
+  margin: 16px 0 8px;
 }
 .project-architecture-sources p {
   font-size: var(--text-sm);
@@ -483,8 +589,8 @@
   .project-git-detail {
     border-left: 0;
     padding-left: 0;
-    border-top: 1px solid var(--ds-border-default);
-    padding-top: 15px;
+    border-top: 1px solid var(--ds-border-subtle);
+    padding-top: 16px;
   }
   .project-session-tree {
     border-right: 0;

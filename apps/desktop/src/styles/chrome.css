@@ -640,6 +640,7 @@
    `flex: 0 0` keeps them square when a crowded band would otherwise squeeze
    them. */
 .conversation-topbar .ct-icon-btn,
+.workflow-header-actions .ct-icon-btn,
 .app-work-panel-toggle,
 .main-titlebar .title-nav-btn,
 .window-chrome-row .title-nav-btn,
@@ -661,6 +662,7 @@
 }
 
 .conversation-topbar .ct-icon-btn:hover:not(:disabled),
+.workflow-header-actions .ct-icon-btn:hover:not(:disabled),
 .app-work-panel-toggle:hover:not(:disabled),
 .main-titlebar .title-nav-btn:hover:not(:disabled),
 .window-chrome-row .title-nav-btn:hover:not(:disabled),
@@ -688,7 +690,8 @@
   absent; do not reintroduce them.
 */
 
-.conversation-topbar .ct-actions {
+.conversation-topbar .ct-actions,
+.workflow-header-actions {
   display: inline-flex;
   align-items: center;
   gap: 0;

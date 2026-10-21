@@ -80,16 +80,12 @@
 .workflow-evidence {
   display: grid;
   gap: 8px;
-  border-left: 2px solid var(--ds-border-default);
+  border-left: 2px solid var(--ds-border-subtle);
   padding-left: 12px;
 }
 .workflow-record-history {
   display: grid;
   gap: 12px;
-}
-.workflow-record-history > summary {
-  cursor: pointer;
-  padding: 8px 0;
 }
 .workflow-effects {
   display: grid;
