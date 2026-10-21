@@ -59,7 +59,7 @@ Read this file in full before authoring. Reread truncated ranges in smaller call
 
 ### External resources
 
-- The sandbox CSP allows only `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`, `esm.sh`, and `fonts.googleapis.com` (font files referenced by a Google Fonts stylesheet load from `fonts.gstatic.com`). Other origins are blocked and fail silently.
+- Each card loads a host-owned `pi-visualize://frame/index.html` document with an independent response CSP. It never inherits or widens the main application script policy. The sandbox CSP allows only `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`, `esm.sh`, and `fonts.googleapis.com` (font files referenced by a Google Fonts stylesheet load from `fonts.gstatic.com`). Other origins are blocked and fail silently.
 
 ## Host bridge
 

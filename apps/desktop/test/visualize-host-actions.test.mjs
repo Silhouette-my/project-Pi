@@ -20,7 +20,7 @@ function loadModule(relativePath, imports, globals = {}) {
 
 test("iframe load messages cannot send prompts or open links without host confirmation", () => {
   let listener;
-  const frameWindow = {};
+  const frameWindow = { postMessage: () => {} };
   const sent = [];
   const opened = [];
   const pending = [];
@@ -98,39 +98,46 @@ test("ordinary external links request host confirmation and do not navigate the 
   assert.equal(prevented, 1);
 });
 
-test("re-rendering unchanged cached content does not recreate the iframe document", () => {
-  let effectIndex = 0;
-  let documents = 0;
-  const previous = [];
-  const state = { activeSessionId: "session" };
-  const { VisualizeCard } = loadModule("../src/features/visualize/VisualizeCard.tsx", {
-    react: {
-      useEffect: (fn, dependencies) => {
-        const index = effectIndex++;
-        if (!previous[index] || dependencies.some((value, i) => value !== previous[index][i])) {
-          previous[index] = dependencies;
-          fn();
-        }
-      },
-      useMemo: (fn) => fn(), useRef: () => ({ current: null }),
-      useState: (value) => [value, () => {}],
-    },
-    "react/jsx-runtime": { jsx: () => null, jsxs: () => null },
-    "react-i18next": { useTranslation: () => ({ t: (key) => key }) },
-    "../../stores/app-store": { useAppStore: (fn) => fn(state) },
-    "../../plugins/renderer-slots/use-slots": { useSlotSessionId: () => null },
-    "../../lib/use-theme-mode": { useThemeMode: () => "light" },
-    "./use-visualize-fragment": { useVisualizeFragment: () => ({ kind: "text", content: "<p>same</p>" }) },
-    "./visualize-document": { buildVisualizeDocument: () => "document" },
-    "./widget-state": { readWidgetState: () => null },
-  }, {
-    Blob,
-    URL: { createObjectURL: () => { documents++; return "blob:test"; }, revokeObjectURL: () => {} },
-    window: { addEventListener: () => {}, removeEventListener: () => {} },
-  });
-  const props = { spec: { path: "/workspace/chart.html" }, sourcePosition: {}, sourceId: "message" };
-  VisualizeCard(props);
-  effectIndex = 0;
-  VisualizeCard(props);
-  assert.equal(documents, 1);
+test("frame initialization accepts the true parent once and ignores load resends", () => {
+  const { visualizeFrameBootstrap } = loadModule("../electron/shared/visualize-frame.ts", {});
+  const script = visualizeFrameBootstrap().match(/<script>([\s\S]*)<\/script>/)[1];
+  const owner = {};
+  let listener;
+  const writes = [];
+  const child = {
+    parent: owner,
+    addEventListener: (_, fn) => { listener = fn; },
+    removeEventListener: () => { listener = null; },
+  };
+  vm.runInNewContext(script, { window: child, document: {
+    open: () => {}, write: (content) => writes.push(content), close: () => {},
+  } });
+  const data = { source: "pi-visualize-host", type: "initialize", document: "<p>chart</p>" };
+  listener({ source: {}, data });
+  assert.equal(writes.length, 0);
+  listener({ source: owner, data });
+  assert.equal(writes.length, 1);
+  assert.equal(listener, null, "a repeated load cannot rewrite the document");
+});
+
+test("the frame protocol serves only its fixed GET document under an independent locked CSP", async () => {
+  const shared = loadModule("../electron/shared/visualize-frame.ts", {});
+  const { visualizeFrameResponse, VISUALIZE_FRAME_SCHEME_PRIVILEGES } = loadModule(
+    "../electron/main/visualize-frame-protocol.ts",
+    { "../shared/visualize-frame": shared },
+    { Response },
+  );
+  for (const [url, method] of [
+    [shared.VISUALIZE_FRAME_URL, "POST"],
+    ["pi-visualize://frame/private.html", "GET"],
+    ["pi-visualize://other/index.html", "GET"],
+    ["pi-visualize://frame/index.html?path=/private/file", "GET"],
+  ]) assert.equal(visualizeFrameResponse(new Request(url, { method })).status, 404);
+  const response = visualizeFrameResponse(new Request(shared.VISUALIZE_FRAME_URL));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+  assert.equal(response.headers.get("content-security-policy"), shared.visualizeFrameCsp());
+  assert.match(response.headers.get("content-security-policy"), /connect-src 'none'/);
+  assert.match(await response.text(), /event\.source !== owner/);
+  assert.equal(VISUALIZE_FRAME_SCHEME_PRIVILEGES.privileges.bypassCSP, undefined);
 });

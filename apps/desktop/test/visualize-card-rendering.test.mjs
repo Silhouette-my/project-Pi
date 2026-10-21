@@ -112,11 +112,11 @@ test("the card document carries the CSP, design system, bridge, and fragment", a
     );
     assert.match(doc, /img-src data: blob:/);
     assert.match(doc, /connect-src 'none'/);
-    // The parent must permit the blob navigation before the sandbox document's
+    // The parent must permit only the isolated document navigation before the sandbox document's
     // stricter content policy can apply. Do not permit arbitrary web frames.
     const { readFile } = await import("node:fs/promises");
     const parentHtml = await readFile(new URL("../index.html", import.meta.url), "utf8");
-    assert.match(parentHtml, /frame-src 'self' blob:;/);
+    assert.match(parentHtml, /frame-src 'self' pi-visualize:;/);
     assert.doesNotMatch(parentHtml, /frame-src[^;]*(?:https?:|\*)/);
     // The design system and the bridge are injected around the fragment.
     assert.match(doc, /--viz-series-1/);

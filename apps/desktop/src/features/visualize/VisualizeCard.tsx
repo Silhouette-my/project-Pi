@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../../styles/visualize.css";
 import { IconCircleAlert, IconSparkles } from "../../components/icons";
+import { VISUALIZE_FRAME_URL } from "../../../electron/shared/visualize-frame";
 import { Button } from "../../components/ui";
 import type { SourcePositionProps } from "../../lib/markdown-source";
 import { openHttpUrl } from "../../lib/open-http-url";
@@ -53,44 +54,22 @@ export function VisualizeCard({
   const [pendingAction, setPendingAction] = useState<{ kind: "follow-up" | "open-external"; value: string } | null>(null);
   useEffect(() => setPendingAction(null), [cardId]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [docUrl, setDocUrl] = useState<string | null>(null);
   const [height, setHeight] = useState(240);
 
   const fragmentContent = fragment.kind === "text" ? fragment.content : null;
 
-  // Build the sandbox document whenever the fragment changes. Theme changes
-  // are pushed into the live frame by the effect below instead of rebuilding,
-  // so an interacting user never loses in-flight fragment state.
-  useEffect(() => {
-    if (fragmentContent === null) {
-      setDocUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(
-      new Blob(
-        [
-          buildVisualizeDocument({
-            fragment: fragmentContent,
-            theme,
-            state: readWidgetState(cardId),
-          }),
-        ],
-        { type: "text/html" },
-      ),
-    );
-    setDocUrl(url);
-    return () => URL.revokeObjectURL(url);
-    // `theme` is read at build time only; live updates go by postMessage.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fragmentContent, cardId]);
+  const documentHtml = useMemo(() => fragmentContent === null ? null : buildVisualizeDocument({
+    fragment: fragmentContent,
+    theme,
+    state: readWidgetState(cardId),
+  }), [fragmentContent, cardId, theme]);
 
   useEffect(() => {
-    if (!docUrl) return;
     iframeRef.current?.contentWindow?.postMessage(
       { source: "pi-visualize-host", type: "theme", theme },
       "*",
     );
-  }, [docUrl, theme]);
+  }, [theme]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -184,11 +163,20 @@ export function VisualizeCard({
       )}
       {status ?? (
         <iframe
+          key={cardId}
           ref={iframeRef}
           className="visualize-frame"
           title={t("chat.visualizeFrame")}
           sandbox="allow-scripts"
-          src={docUrl ?? undefined}
+          src={VISUALIZE_FRAME_URL}
+          onLoad={() => {
+            iframeRef.current?.contentWindow?.postMessage({
+              source: "pi-visualize-host",
+              type: "initialize",
+              document: documentHtml,
+            }, "*");
+            iframeRef.current?.contentWindow?.postMessage({ source: "pi-visualize-host", type: "theme", theme }, "*");
+          }}
           style={{ height }}
           loading="lazy"
         />

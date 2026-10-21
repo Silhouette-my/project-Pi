@@ -20,6 +20,7 @@ Each ADR includes:
 
 | ID | Title | Status |
 |---|---|---|
+| isolated-visualize-frame-document | [Isolated visualization frame documents](isolated-visualize-frame-document.md) | Accepted for implementation |
 | chatgpt-conversation-browser-transport | [ChatGPT conversation browser transport](chatgpt-conversation-browser-transport.md) | Accepted for implementation |
 | provider-metadata-client-certificate-retry | [Provider metadata recovery from optional client certificates](provider-metadata-client-certificate-retry.md) | Implemented candidate |
 | device-local-project-lists-in-config-sync | [Device-local project lists in configuration sync](device-local-project-lists-in-config-sync.md) | Accepted |

@@ -8,6 +8,26 @@
 
 ## 1. Goals
 
+### E2E-VISUALIZE-isolated-document-policy
+
+- **Preconditions:** Built packaged candidate, temporary app/profile state, no
+  real provider credentials. Intercept test HTTPS resources with CDP and fulfill
+  the allowlisted script locally; fail every unmatched network request.
+- **Steps:** Mount the production sandbox frame URL under the actual renderer
+  CSP, initialize it from its true parent, load a script from an allowed CDN,
+  attempt another origin, and attempt parent DOM access. Try the same CDN script
+  in the main renderer. Repeat initialization and theme updates.
+- **Expected:** The frame loads the local CDN fixture, denies the other origin
+  and parent DOM access, and accepts initialization once. The main renderer
+  still rejects CDN scripts. No Node bridge, same-origin grant, new file access
+  or actual external request is introduced. Existing follow-up/link actions
+  still require trusted host confirmation.
+- **Coverage:** `visualize-host-actions.test.mjs`,
+  `visualize-card-rendering.test.mjs`, `plugin-renderer-protocol.test.mjs`, plus
+  packaged Electron/CDP policy evidence for the tested candidate.
+- **Decision:** [Isolated visualization frame documents](../../adr/isolated-visualize-frame-document.md).
+
+
 ### E2E-PROJECT-agent-entry-and-console-layout
 
 - **Preconditions:** Built task worktree, reused Electron/runtime dependencies,

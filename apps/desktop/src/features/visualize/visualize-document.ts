@@ -8,25 +8,14 @@ import bridgeJs from "./assets/visualize-bridge.js?raw";
  * agent-authored fragment, then the runtime that wires the documented
  * behaviors (tabs, tooltips, carousel, Lucide).
  *
- * The document is handed to the iframe as a blob: URL rather than a srcdoc
- * attribute on purpose: a srcdoc document inherits the renderer's own CSP
- * (`default-src 'self'`), which would silently block the CDN scripts the
- * fragment and runtime load. A blob document carries only the CSP declared
- * here, and the iframe stays `sandbox="allow-scripts"` with no same-origin
- * access, so the fragment runs in an opaque origin either way.
+ * The document is initialized inside the host-owned pi-visualize frame. Its
+ * response CSP is independent of the app document, and remains enforced when
+ * the one-shot bootstrap writes this markup. The sandbox still has no
+ * same-origin access.
  */
 
-/** Origins a fragment may load scripts, styles, and fonts from. */
-export const VISUALIZE_CDN_ORIGINS = [
-  "https://cdnjs.cloudflare.com",
-  "https://cdn.jsdelivr.net",
-  "https://unpkg.com",
-  "https://esm.sh",
-  "https://fonts.googleapis.com",
-] as const;
-
-/** Font files referenced by a Google Fonts stylesheet live on this origin. */
-const FONT_FILE_ORIGIN = "https://fonts.gstatic.com";
+import { VISUALIZE_CDN_ORIGINS, visualizeFrameCsp } from "../../../electron/shared/visualize-frame";
+export { VISUALIZE_CDN_ORIGINS };
 
 const FLOATING_UI_CORE =
   "https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js";
@@ -50,21 +39,6 @@ export function clampVisualizeHeight(height: unknown): number {
   return Math.min(Math.max(value, VISUALIZE_MIN_HEIGHT_PX), VISUALIZE_MAX_HEIGHT_PX);
 }
 
-function buildCsp(): string {
-  const cdn = VISUALIZE_CDN_ORIGINS.join(" ");
-  // 'unsafe-inline' is required for the injected runtime and for fragment
-  // scripts and styles; network access stays limited to the CDN allowlist,
-  // and connect-src 'none' keeps the fragment from exfiltrating data.
-  return [
-    "default-src 'none'",
-    `script-src 'unsafe-inline' ${cdn}`,
-    `style-src 'unsafe-inline' ${cdn}`,
-    "img-src data: blob:",
-    `font-src ${cdn} ${FONT_FILE_ORIGIN}`,
-    "connect-src 'none'",
-  ].join("; ");
-}
-
 /** JSON safe for an inline `<script type="application/json">` element. */
 function inlineJson(value: unknown): string {
   return JSON.stringify(value ?? null).replace(/</g, "\\u003c");
@@ -84,7 +58,7 @@ export function buildVisualizeDocument({
     `<html data-theme="${theme === "light" ? "light" : "dark"}">`,
     "<head>",
     '<meta charset="utf-8">',
-    `<meta http-equiv="Content-Security-Policy" content="${buildCsp()}">`,
+    `<meta http-equiv="Content-Security-Policy" content="${visualizeFrameCsp()}">`,
     `<style>${designCss}</style>`,
     "</head>",
     "<body>",

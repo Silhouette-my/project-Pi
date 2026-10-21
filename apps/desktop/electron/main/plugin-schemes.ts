@@ -1,9 +1,10 @@
 import { protocol } from "electron";
 import { PLUGIN_ASSET_SCHEME_PRIVILEGES } from "./plugin-asset-protocol";
 import { PLUGIN_RENDERER_SCHEME_PRIVILEGES } from "./plugin-renderer-protocol";
+import { VISUALIZE_FRAME_SCHEME_PRIVILEGES } from "./visualize-frame-protocol";
 
 /**
- * Reserve every host-owned plugin scheme before the app is ready.
+ * Reserve every host-owned scheme before the app is ready.
  *
  * Electron accepts `registerSchemesAsPrivileged` once per process: a second
  * call replaces the secure/fetch/CORS scheme lists that child processes
@@ -15,5 +16,6 @@ export function registerPluginSchemes(): void {
   protocol.registerSchemesAsPrivileged([
     PLUGIN_ASSET_SCHEME_PRIVILEGES,
     PLUGIN_RENDERER_SCHEME_PRIVILEGES,
+    VISUALIZE_FRAME_SCHEME_PRIVILEGES,
   ]);
 }
