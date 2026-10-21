@@ -1,13 +1,19 @@
 # Chat instruction presets
 
-To change how ChatGPT chat responds, copy a preset from
+Select one of the four built-in presets in the session composer's **Chat
+instructions** menu. The built-in texts include the v2 peer-review revisions;
+no file installation is needed.
+
+To customize one, copy its editable example from
 [`chat-instructions/`](chat-instructions/) into either:
 
 - `<workspace>/.pi/chat-instructions/` for one project.
 - `~/.pi/agent/chat-instructions/` for all projects.
 
 Then select its filename stem in the session composer's **Chat instructions**
-menu. A project preset takes precedence over a global preset with the same ID.
+menu. A project preset takes precedence over a global preset with the same ID;
+both take precedence over the built-in text. App updates preserve these custom
+overrides, so a same-named custom file continues to supply its own text.
 Keep any existing file you want to retain before copying a preset with that name.
 
 | Preset ID | Use |

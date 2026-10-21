@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DesktopAgentRuntime, type RuntimeMatchConfig } from "./runtime.js";
 import type { RuntimeProviderConfig } from "./provider-binding.js";
+import { BUILTIN_CHAT_INSTRUCTIONS } from "./builtin-chat-instructions.js";
 import {
   DEFAULT_CHAT_SYSTEM_PROMPT,
   DEFAULT_RUNTIME_SYSTEM_PROMPT,
@@ -69,6 +70,16 @@ function matchConfig(overrides: { chatInstructions?: string } = {}): RuntimeMatc
 }
 
 describe("chat instruction system prompt gating", () => {
+  it.each([...BUILTIN_CHAT_INSTRUCTIONS])("composes the bundled %s preset verbatim", async (_id, content) => {
+    const runtime = makeRuntime({ chatInstructions: content });
+    try {
+      expect(internals(runtime).composedSystemPrompt).toBe(content);
+      expect(internals(runtime).composedSections).toEqual({ runtime: content });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("uses the built-in chat persona when no chat instruction is set", async () => {
     const runtime = makeRuntime({});
     try {
