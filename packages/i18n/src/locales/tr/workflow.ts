@@ -86,8 +86,6 @@ export const workflowCatalog = {
     agentDockOpen: "Proje ajanını göster",
     agentDockClose: "Proje ajanını gizle",
     agentDockEmpty: "Hedefleri, ödünleşimleri veya sonraki adımları konuşun. Yanıtlar burada kalır ve işi başlatana kadar hiçbir şey çalışmaz.",
-    contextSheetDescription: "Tüm iş akışlarının paylaştığı referanslar ve kararlar.",
-    closeContext: "Paylaşılan bağlamı kapat",
     agentDiscussionHint: "Önce tartışın. Burada dosyalar değiştirilmez ve komutlar çalıştırılmaz.",
     agentOpenFailed: "Proje Agent açılamadı. Yeniden deneyin.",
     agentSendFailed: "Mesaj gönderilmedi. Taslağınız korundu.",

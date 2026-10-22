@@ -110,9 +110,9 @@ const clickAria = async (label, selector = "button[aria-label]") => page.evaluat
 const fillByLabel = async (label, value) => page.evaluate(`(() => { const labels=[...document.querySelectorAll('label')]; const label=labels.find(x=>x.textContent?.trim().startsWith(${json(label)})); const input=label?.querySelector('input,textarea,select') || (label?.htmlFor && document.getElementById(label.htmlFor)); if(!input) return false; const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value')?.set; setter?.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); return true })()`);
 const fillControl = async (selector, value) => page.evaluate(`(() => { const input=document.querySelector(${json(selector)}); if(!input) return false; Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value').set.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); return true })()`);
 const submitForm = async selector => page.evaluate(`(() => { const form=document.querySelector(${json(selector)}); if(!form) return false; form.requestSubmit(); return true })()`);
-const openAgentDock = async () => page.evaluate(`(() => { const toggle=document.querySelector('[data-project-agent-dock-toggle]'); if(!toggle) return false; if(toggle.getAttribute('aria-pressed')!=='true') toggle.click(); return true })()`);
-const openContextSheet = async () => page.evaluate(`(() => { const button=document.querySelector('[data-workflow-context-open]'); if(!button) return false; button.click(); return true })()`);
-const closeContextSheet = async () => page.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
+// Idempotent under until(): resolves only once the dock is actually rendered.
+const openAgentDock = async () => page.evaluate(`(() => { if(document.querySelector('[data-project-agent-dock]')) return true; const toggle=document.querySelector('[data-project-agent-dock-toggle]'); if(toggle && !toggle.disabled && toggle.getAttribute('aria-pressed')!=='true') toggle.click(); return false })()`);
+const openContextTab = async () => clickText("共享上下文", ".workflow-tabs button");
 const capture = async name => { const shot = await page.call("Page.captureScreenshot", { format: "png" }); await writeFile(join(output, name), Buffer.from(shot.data, "base64")); };
 try {
   const seed = new Host(hostBinary, data, { env: { HOME: home }, quiet: true });
@@ -239,8 +239,8 @@ try {
   const candidateOpenedPath = await main.evaluate(`globalThis.__workflowOpenedPaths[0]`);
   assert.equal(candidateOpenedPath, recordedPath);
 
-  // Context resource appears in the shared-context sheet and carries the source revision.
-  assert.ok(await openContextSheet(), "shared context opens from the project header");
+  // Context resource appears in the shared-context tab and carries the source revision.
+  assert.ok(await openContextTab(), "shared context tab");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "project resource context");
   const resourceUi = await page.evaluate(`document.querySelector('[data-workflow-resource="${resourceId}"]')?.innerText`);
   assert.match(resourceUi, /src-r2/);
@@ -248,9 +248,7 @@ try {
   await until(() => main.evaluate(`globalThis.__workflowOpenedPaths?.length===2`), "resource reference routed to isolated shell boundary");
   const resourceOpenedPath = await main.evaluate(`globalThis.__workflowOpenedPaths[1]`);
   assert.equal(resourceOpenedPath, recordedPath);
-  await closeContextSheet();
-  await until(() => page.evaluate(`!document.querySelector('[data-workflow-context-sheet]')`), "shared context sheet closed");
-  coverage.push("Opened the resource context through the header sheet, read its source revision, and verified both candidate/resource references resolve to their recorded path through the production IPC boundary");
+  coverage.push("Opened the resource context through the shared-context tab, read its source revision, and verified both candidate/resource references resolve to their recorded path through the production IPC boundary");
 
   // Folder management and chat placement/removal are actual sidebar DOM actions:
   // the Chats header button, the folder dialog, and the rows' "..." menus.
@@ -330,9 +328,8 @@ try {
   await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   assert.ok(await clickText("项目首页"));
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"][data-project-id="${projectId}"]')`), "return to Project Console from chat navigation");
-  assert.ok(await openContextSheet());
+  assert.ok(await openContextTab());
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "resource panel restored after chat navigation");
-  await closeContextSheet();
 
   // Resize the actual Electron window (not the emulated CSS viewport) to its supported minimum.
   const nativeSize = await main.evaluate(`(() => { const require=process.getBuiltinModule('module').createRequire(${json(join(root, "apps/desktop/package.json"))}); const {BrowserWindow}=require('electron'); const win=BrowserWindow.getAllWindows().find(item=>!item.isDestroyed() && item.webContents.getURL().includes('/out/renderer/index.html')); if(!win) throw new Error('workflow window not found'); win.setContentSize(800,600); return win.getContentSize(); })()`);
@@ -372,7 +369,7 @@ try {
   assert.ok(overviewDetail.candidate?.top >= 0 && overviewDetail.candidate.bottom <= 600, `Overview candidate is not visible: ${json(overviewDetail)}`);
   await capture("renderer-overview-detail.png");
 
-  assert.ok(await openContextSheet());
+  assert.ok(await openContextTab());
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "shared context screenshot");
   await page.evaluate("document.documentElement.dataset.theme='light'; document.querySelector('.workflow-console')?.scrollTo(0,0)"); await sleep(250);
   layout["renderer-context-light.png"] = await page.evaluate(`({width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,consoleWidth:document.querySelector('[data-workflow="console"]')?.getBoundingClientRect().width})`);

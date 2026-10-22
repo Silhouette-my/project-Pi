@@ -1,6 +1,6 @@
 /*
-  Project home composition: console + Agent dock, overview cards, the
-  workstream list/detail split and the shared-context sheet.
+  Project home composition: console + Agent dock, overview cards and the
+  workstream list/detail split.
 
   `--workflow-accent` is the project's accent: a per-project colour when set,
   otherwise the user's theme colour, otherwise the neutral shell accent. It
@@ -8,16 +8,13 @@
   keeps the semantic success / warning / error / purple vocabulary.
 */
 /* A project colour arrives as light/dark variants; pick the one for the theme. */
-.workflow-console[data-project-color],
-.workflow-context-sheet[data-project-color] {
+.workflow-console[data-project-color] {
   --ds-project-accent: var(--project-accent-light);
 }
-:root[data-theme="dark"] .workflow-console[data-project-color],
-:root[data-theme="dark"] .workflow-context-sheet[data-project-color] {
+:root[data-theme="dark"] .workflow-console[data-project-color] {
   --ds-project-accent: var(--project-accent-dark);
 }
-.workflow-console,
-.workflow-context-sheet {
+.workflow-console {
   --workflow-accent: var(--ds-project-accent, var(--ds-theme-accent, var(--ds-accent)));
 }
 .workflow-console {
@@ -541,54 +538,6 @@
 }
 .project-agent-dock-composer .send-btn:not(:disabled) {
   background: var(--workflow-accent);
-}
-
-/* Shared-context sheet. */
-.workflow-editor-dialog.workflow-context-sheet {
-  width: 720px;
-}
-.workflow-context-sheet-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 20px 20px 12px;
-}
-.workflow-context-sheet-head > div {
-  flex: 1;
-  min-width: 0;
-}
-.workflow-context-sheet-head h3 {
-  margin: 0 0 2px;
-  font-size: var(--text-base-plus);
-  font-weight: var(--font-weight-strong);
-}
-.workflow-context-sheet-head p {
-  font-size: var(--text-sm);
-}
-.workflow-context-sheet-glyph {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  place-items: center;
-  border-radius: var(--radius-xs);
-  background: color-mix(in oklab, var(--workflow-accent) 14%, transparent);
-  color: var(--workflow-accent);
-}
-.workflow-context-sheet-head .ct-icon-btn {
-  display: inline-flex;
-  width: var(--ds-control-size);
-  height: var(--ds-control-size);
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--ds-text-secondary);
-  cursor: pointer;
-}
-.workflow-context-sheet-body {
-  padding: 0 20px 20px;
 }
 
 @container (max-width: 640px) {

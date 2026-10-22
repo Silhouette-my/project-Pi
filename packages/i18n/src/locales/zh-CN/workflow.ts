@@ -83,8 +83,6 @@ export const workflowCatalog = {
     agentDockOpen: "显示项目 Agent",
     agentDockClose: "隐藏项目 Agent",
     agentDockEmpty: "在这里讨论目标、取舍或下一步。回复只留在这里，开始工作前不会执行任何操作。",
-    contextSheetDescription: "所有工作流共用的引用和决策。",
-    closeContext: "关闭共享上下文",
     agentDiscussionHint: "先讨论，不会修改文件或执行命令。",
     agentOpenFailed: "无法打开项目 Agent，请重试。",
     agentSendFailed: "消息尚未发送，草稿已保留。",

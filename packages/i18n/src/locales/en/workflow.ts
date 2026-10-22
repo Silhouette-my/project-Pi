@@ -86,8 +86,6 @@ export const workflowCatalog = {
     agentDockOpen: "Show Project Agent",
     agentDockClose: "Hide Project Agent",
     agentDockEmpty: "Talk through goals, trade-offs or next steps. Replies stay here, and nothing runs until you start work.",
-    contextSheetDescription: "References and decisions shared by every workstream.",
-    closeContext: "Close shared context",
     agentDiscussionHint: "Discuss first. Files and commands are not changed here.",
     agentOpenFailed: "Could not open the project Agent. Try again.",
     agentSendFailed: "Message was not sent. Your draft has been kept.",

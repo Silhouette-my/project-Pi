@@ -476,12 +476,11 @@ Its overview answers what the project is trying to achieve, what is active or
 complete, who owns each workstream, what is blocked or awaits a decision, which
 candidate is current, and what action is next. Progress is expressed through
 those concrete states, never a fabricated percentage or message count. The
-console has three tabs: Overview (real counts, items needing the user, current
-work with acceptance conditions, recent outputs), Workstreams (list beside the
-selected workstream's detail, including its candidate, controls and outputs and
-evidence; stacked below 720px of page width) and Structure. Shared context
-(canonical references and decisions) opens as a header sheet scoped by the same
-workstream filter rather than occupying a tab.
+console has four tabs: Overview (items needing the user, current work with
+acceptance conditions, recent outputs), Workstreams (list beside the selected
+workstream's detail, including its candidate, controls and outputs and evidence;
+stacked below 720px of page width), Shared context (canonical references and
+decisions, scoped by a workstream filter) and Structure.
 
 The canonical discussion-only Project Agent lives in a dock at the console's
 right edge. The dock reads the Agent session as a detached transcript, so the

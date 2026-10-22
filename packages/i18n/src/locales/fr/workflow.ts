@@ -86,8 +86,6 @@ export const workflowCatalog = {
     agentDockOpen: "Afficher l’agent du projet",
     agentDockClose: "Masquer l’agent du projet",
     agentDockEmpty: "Discutez des objectifs, des compromis ou des prochaines étapes. Les réponses restent ici et rien ne s’exécute avant que vous lanciez le travail.",
-    contextSheetDescription: "Références et décisions partagées par tous les axes de travail.",
-    closeContext: "Fermer le contexte partagé",
     agentDiscussionHint: "Discutons d’abord. Aucun fichier n’est modifié et aucune commande n’est exécutée ici.",
     agentOpenFailed: "Impossible d’ouvrir l’agent du projet. Réessayez.",
     agentSendFailed: "Le message n’a pas été envoyé. Votre brouillon est conservé.",

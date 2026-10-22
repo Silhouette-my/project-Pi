@@ -86,8 +86,6 @@ export const workflowCatalog = {
     agentDockOpen: "Mostrar el agente del proyecto",
     agentDockClose: "Ocultar el agente del proyecto",
     agentDockEmpty: "Habla de objetivos, compensaciones o próximos pasos. Las respuestas se quedan aquí y no se ejecuta nada hasta que empieces el trabajo.",
-    contextSheetDescription: "Referencias y decisiones compartidas por todas las líneas de trabajo.",
-    closeContext: "Cerrar el contexto compartido",
     agentDiscussionHint: "Primero, debatir. Aquí no se modifican archivos ni se ejecutan comandos.",
     agentOpenFailed: "No se pudo abrir el agente del proyecto. Inténtalo de nuevo.",
     agentSendFailed: "No se envió el mensaje. Se ha conservado el borrador.",

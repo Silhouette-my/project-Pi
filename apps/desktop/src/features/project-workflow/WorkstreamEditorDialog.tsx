@@ -1,17 +1,9 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { OverlayBackdrop, portalOverlay } from "../../components/ui";
 import { useBlockingOverlay } from "../../lib/blocking-overlay";
 
 /** Keep the full work contract available without making the project home a form. */
-export function WorkstreamEditorDialog({ children, onClose, labelledBy = "workflow-workstream-editor-title", className, style, dataProjectColor }: {
-  children: ReactNode;
-  onClose: () => void;
-  labelledBy?: string;
-  className?: string;
-  style?: CSSProperties;
-  /** Project colour id; pairs with `style` custom properties from `projectAccentStyle`. */
-  dataProjectColor?: string;
-}) {
+export function WorkstreamEditorDialog({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   useBlockingOverlay();
   const dialog = useRef<HTMLDivElement>(null);
   const returnFocus = useRef(document.activeElement);
@@ -32,6 +24,6 @@ export function WorkstreamEditorDialog({ children, onClose, labelledBy = "workfl
     return () => { window.removeEventListener("keydown", onKeyDown); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
   }, []);
   return portalOverlay(<OverlayBackdrop className="overlay workflow-editor-overlay" role="presentation" onClick={onClose}>
-    <div className={["dialog workflow-editor-dialog", className].filter(Boolean).join(" ")} ref={dialog} style={style} data-project-color={dataProjectColor} role="dialog" aria-modal="true" aria-labelledby={labelledBy} onClick={(event) => event.stopPropagation()}>{children}</div>
+    <div className="dialog workflow-editor-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="workflow-workstream-editor-title" onClick={(event) => event.stopPropagation()}>{children}</div>
   </OverlayBackdrop>);
 }

@@ -235,7 +235,7 @@ theme block, so no script tracks the active theme. `--ds-accent` stays neutral.
 |---|---|---|---|
 | `--ds-theme-accent` | preset light value (blue `#2f6fed`) | preset dark value (blue `#5b93ff`) | the surfaces listed below |
 | `--ds-on-theme-accent` | black or white, >= 4.5:1 on the light value | black or white, >= 4.5:1 on the dark value | ink on those surfaces |
-| `--ds-project-accent` | project preset light value | project preset dark value | Project Console only, set on `.workflow-console` and `.workflow-context-sheet` when the project has a colour |
+| `--ds-project-accent` | project preset light value | project preset dark value | Project Console only, set on `.workflow-console` when the project has a colour |
 
 Presets (light / dark): blue `#2f6fed` / `#5b93ff`, teal `#0f8b8d` / `#3cc3c4`,
 green `#1f8a4c` / `#4cc38a`, amber `#b86e00` / `#f0a33a`, rose `#c4365d` /
@@ -252,7 +252,7 @@ error, and purple remain semantic.
 A project colour is a preset id only, stored in renderer sidebar preferences
 (`ProjectMeta.color`, keyed by project path). It tints the folder glyph in the
 sidebar project header and feeds `--ds-project-accent`, so the Project Console
-and its context sheet use it for `--workflow-accent`. Absent means follow the
+uses it for `--workflow-accent`. Absent means follow the
 theme colour.
 
 Light-surface polish (D148):
@@ -1499,8 +1499,7 @@ adjacent form inputs; dense surfaces may override that metric locally.
 
 - **Project Console**: a compact project identity/header sits below the existing
   46px native titlebar safe area. Window controls remain Electron-owned. Overview,
-  Workstreams and Structure use a quiet underline navigation; shared context opens
-  as a header sheet. The Project Agent occupies a right dock (340px, `--ds-bg-dock`,
+  Workstreams, Shared context and Structure use a quiet underline navigation. The Project Agent occupies a right dock (340px, `--ds-bg-dock`,
   subtle leading divider) that renders the existing session pane and a Composer
   plate, and reaches the full chat surface through the existing Agent entry rather
   than a second transcript implementation. Overview leads with four real counts,

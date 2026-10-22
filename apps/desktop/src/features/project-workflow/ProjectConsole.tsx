@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord, ProjectWorkflowSearchHit } from "@pi-desktop/shared";
-import { Button, TooltipButton } from "../../components/ui";
-import { IconBookOpen, IconChevronLeft, IconFolder, IconMore, IconPanelOpen, IconPlus, IconSearch } from "../../components/icons";
+import { Button, Field, Select, TooltipButton } from "../../components/ui";
+import { IconChevronLeft, IconFolder, IconMore, IconPanelOpen, IconPlus, IconSearch } from "../../components/icons";
 import { ProjectInstructionsDialog } from "../../components/ProjectInstructionsDialog";
 import { ProjectMemoryDialog } from "../../components/ProjectMemoryDialog";
 import { api } from "../../lib/api";
@@ -19,7 +19,7 @@ import { WorkstreamEditorDialog } from "./WorkstreamEditorDialog";
 import { ProjectOverview } from "./ProjectOverview";
 import { ProjectStructureView } from "./ProjectStructureView";
 import { ProjectAgentDock } from "./ProjectAgentDock";
-import { ProjectContextSheet } from "./ProjectContextSheet";
+import { WorkflowContext } from "./WorkflowContext";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { useProjectAgentDockState } from "./project-agent-dock-state";
 import "./workflow.css";
@@ -40,8 +40,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   const [groupLoaded, setGroupLoaded] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("");
-  const [tab, setTab] = useState<"overview" | "work" | "structure">("overview");
-  const [contextOpen, setContextOpen] = useState(false);
+  const [tab, setTab] = useState<"overview" | "work" | "context" | "structure">("overview");
   const root = useRef<HTMLDivElement>(null);
   const [consoleWidth, setConsoleWidth] = useState(DOCKED_AGENT_MIN_WIDTH);
   const wide = consoleWidth >= DOCKED_AGENT_MIN_WIDTH;
@@ -58,9 +57,12 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTarget, setSearchTarget] = useState<ProjectWorkflowSearchHit | null>(null);
   const mounted = useRef(true);
-  useEffect(() => {
+  // Measure before first paint so the dock mode (docked vs overlay) is never
+  // decided from the placeholder width.
+  useLayoutEffect(() => {
     const element = root.current;
     if (!element) return;
+    setConsoleWidth(element.getBoundingClientRect().width);
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setConsoleWidth(entry.contentRect.width);
     });
@@ -133,7 +135,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [searchTarget, tab, contextOpen]);
+  }, [searchTarget, tab]);
   const fail = (cause: unknown) => {
     if (mounted.current) setLocalError(cause instanceof Error ? cause.message : String(cause));
   };
@@ -196,9 +198,6 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
             <div className="workflow-header-actions">
               <TooltipButton className="ct-icon-btn" tooltip={t("workflow.search")} ariaLabel={t("workflow.search")}
                 aria-expanded={searchOpen} onClick={() => setSearchOpen(!searchOpen)}><IconSearch size={16} /></TooltipButton>
-              <TooltipButton className="ct-icon-btn workflow-context-shortcut" tooltip={t("workflow.context")} ariaLabel={t("workflow.context")}
-                data-workflow-context-open={projectId} aria-expanded={contextOpen}
-                onClick={() => { consoleNavigation.current += 1; setContextOpen(true); }}><IconBookOpen size={16} /></TooltipButton>
               <details className="workflow-project-menu">
                 <summary className="ct-icon-btn" aria-label={t("workflow.projectMenu")}><IconMore size={16} /></summary>
                 <div className="workflow-project-menu-content">
@@ -211,7 +210,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
             <TooltipButton className={`ct-icon-btn workflow-agent-dock-toggle${dockVisible ? " is-active" : ""}`}
               tooltip={t(dockVisible ? "workflow.agentDockClose" : "workflow.agentDockOpen")}
               ariaLabel={t(dockVisible ? "workflow.agentDockClose" : "workflow.agentDockOpen")}
-              aria-pressed={dockVisible} data-project-agent-dock-toggle={projectId}
+              aria-pressed={dockVisible} data-project-agent-dock-toggle={projectId} disabled={!snapshot}
               onClick={() => setDockOpen(!dockVisible)}><IconPanelOpen size={16} /></TooltipButton>
           </div>
         </header>
@@ -231,9 +230,8 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
               projectId={projectId}
               onResult={(hit) => {
                 if (hit.kind === "decision") {
-                  consoleNavigation.current += 1;
-                  setSelectedId(hit.workstreamId ?? "");
-                  setContextOpen(true);
+                  selectWorkstream(hit.workstreamId ?? "", false);
+                  selectTab("context");
                 } else {
                   selectWorkstream(hit.workstreamId ?? "");
                 }
@@ -246,15 +244,30 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                 {t("workflow.workstreams")}
                 {workstreams.length ? <span className="workflow-tab-count">{workstreams.length}</span> : null}
               </Button>
+              <Button variant="ghost" aria-current={tab === "context" ? "page" : undefined} onClick={() => selectTab("context")}>{t("workflow.context")}</Button>
               <Button variant="ghost" aria-current={tab === "structure" ? "page" : undefined} onClick={() => selectTab("structure")}>{t("projectStructure.structure")}</Button>
             </nav>
             <div className="workflow-content">
             {tab === "overview" ? (
               <ProjectOverview projectId={projectId} snapshot={snapshot}
                 onSelectWorkstream={selectWorkstream} onCreateWorkstream={createWorkstream}
-                onOpenContext={(id) => { consoleNavigation.current += 1; setSelectedId(id ?? ""); setContextOpen(true); }}
+                onOpenContext={(id) => { selectWorkstream(id ?? "", false); selectTab("context"); }}
                 onOpenArtifacts={() => selectTab("work")}
                 onOpenArtifact={(id) => openReference({ kind: "artifact", id })} onError={fail} />
+            ) : tab === "context" ? (
+              <section className="workflow-context-page" data-workflow-context-page={projectId}>
+                <div className="project-structure-filters">
+                  <Field label={t("workflow.chooseWorkstream")}>
+                    <Select value={selectedId} onChange={(event) => selectWorkstream(event.target.value, false)}>
+                      <option value="">{t("workflow.allWorkstreams")}</option>
+                      {workstreams.map((item) => (
+                        <option key={item.id} value={item.id}>{item.title}</option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                <WorkflowContext projectId={projectId} workstreamId={selectedId || undefined} onOpenReference={openReference} />
+              </section>
             ) : tab === "structure" ? (
               <ProjectStructureView key={projectId} projectId={projectId} snapshot={snapshot}
                 projectPaths={group?.roots.map(root => root.path) ?? []}
@@ -356,11 +369,6 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
           workstream={editing === "edit" ? shown : undefined} onClose={() => setEditing(null)}
           onSaved={(id) => { if (renderNavigation !== consoleNavigation.current) return; setEditing(null); selectWorkstream(id); }} />
       </WorkstreamEditorDialog>}
-      {contextOpen && snapshot ? (
-        <ProjectContextSheet projectId={projectId} workstreams={workstreams} workstreamId={selectedId}
-          onWorkstreamChange={(id) => selectWorkstream(id, false)}
-          onOpenReference={openReference} onClose={() => setContextOpen(false)} color={projectColor} />
-      ) : null}
       {project && contextEditor === "instructions" && (
         <ProjectInstructionsDialog
           project={project}

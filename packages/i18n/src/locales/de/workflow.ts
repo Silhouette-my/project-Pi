@@ -86,8 +86,6 @@ export const workflowCatalog = {
     agentDockOpen: "Projekt-Agent einblenden",
     agentDockClose: "Projekt-Agent ausblenden",
     agentDockEmpty: "Besprich Ziele, Abwägungen oder nächste Schritte. Antworten bleiben hier, und nichts wird ausgeführt, bevor du die Arbeit startest.",
-    contextSheetDescription: "Referenzen und Entscheidungen, die alle Arbeitsstränge teilen.",
-    closeContext: "Gemeinsamen Kontext schließen",
     agentDiscussionHint: "Zuerst besprechen. Hier werden keine Dateien geändert oder Befehle ausgeführt.",
     agentOpenFailed: "Projekt-Agent konnte nicht geöffnet werden. Bitte erneut versuchen.",
     agentSendFailed: "Nachricht nicht gesendet. Dein Entwurf bleibt erhalten.",

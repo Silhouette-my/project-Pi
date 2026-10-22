@@ -77,7 +77,7 @@
   project Agent. Restart the app and continue the same discussion. Create a
   workstream through the shared dialog, open its detail, search and open a
   candidate in the workstream detail, submit revision-specific feedback, and
-  inspect shared context in its header sheet.
+  inspect shared context in its tab.
   Use sidebar folder controls and inspect conversation grouping. Inspect the
   native minimum 800×600 window in light and dark appearances.
 - **Expected:** The Agent entry needs no workstream and reuses one durable
