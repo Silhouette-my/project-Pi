@@ -17,11 +17,14 @@ export function WorkflowControls({
   workstream,
   projectPaths,
   onOpenSession,
+  onOpenSide,
   onCreateSession,
 }: {
   workstream: WorkflowWorkstream;
   projectPaths: string[];
   onOpenSession: (id: string) => Promise<void>;
+  /** Opens a created side conversation beside the console instead of navigating away. */
+  onOpenSide?: (id: string) => void;
   onCreateSession: () => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -73,7 +76,7 @@ export function WorkflowControls({
     return result;
   };
   const createSide = async () => {
-    const result = await run({
+    const result = await action({
       kind: "side.create",
       ...scope,
       purpose,
@@ -85,6 +88,10 @@ export function WorkflowControls({
         ? { authorizationId: selectedAuthorization.id }
         : {}),
     });
+    if (result?.sessionId) {
+      if (onOpenSide) onOpenSide(result.sessionId);
+      else await onOpenSession(result.sessionId);
+    }
     if (result) {
       setTask("");
       setPanel(null);

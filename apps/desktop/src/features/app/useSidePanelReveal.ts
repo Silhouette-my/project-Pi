@@ -45,7 +45,9 @@ export function useSidePanelReveal({
   const sidebarPinned = isPanelPinned(settings, "sidebarPinned");
   const workPanelPinned = isPanelPinned(settings, "workPanelPinned");
   const pageHidesWorkPanel =
-    page === "settings" || page === "plugins" || page === "scheduled";
+    page === "settings" || page === "plugins" || page === "scheduled" ||
+      // The Project Console owns its right edge (the project Agent dock).
+      page === "project";
 
   const leftReveal = useEdgeReveal({
     side: "left",

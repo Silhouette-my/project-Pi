@@ -619,6 +619,14 @@ Object.assign(window, {
       );
     }
     click("workflow.overview");
+    // The right panel is unpinned by default and reveals on request.
+    const openDock = () => {
+      if (document.querySelector('[data-workflow="project-intent"]')) return true;
+      const toggle = document.querySelector<HTMLButtonElement>("[data-project-agent-dock-toggle]");
+      if (toggle && !toggle.disabled) flushSync(() => toggle.click());
+      return Boolean(document.querySelector('[data-workflow="project-intent"]'));
+    };
+    await until(openDock, "Project Agent dock did not open");
     const intent = document.querySelector('[data-workflow="project-intent"]')!;
     check(!intent.querySelector("select"), "Project Agent required a workstream");
     fill("workflow.intentText", "Review a new direction", intent);
@@ -638,7 +646,7 @@ Object.assign(window, {
     flushSync(() => root.render(null));
     useAppStore.setState({ page: "project", projectConsoleId: "project-1", activeSessionId: null });
     mount();
-    await until(() => document.querySelector('[data-workflow="project-intent"]'), "Project overview missing after remount");
+    await until(openDock, "Project overview missing after remount");
     const restoredIntent = document.querySelector('[data-workflow="project-intent"]')!;
     check(field("workflow.intentText", restoredIntent).value === "Review a new direction", "Remount discarded project draft");
     rejectSend = false;

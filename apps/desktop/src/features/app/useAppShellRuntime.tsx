@@ -385,7 +385,9 @@ export function useAppShellRuntime() {
 
   useEffect(() => {
     const pageHidesWorkPanel =
-      page === "settings" || page === "plugins" || page === "scheduled";
+      page === "settings" || page === "plugins" || page === "scheduled" ||
+      // The Project Console owns its right edge (the project Agent dock).
+      page === "project";
     const shouldPresent =
       ready && !pageHidesWorkPanel && workPanelVisible;
     const request = ++workPanelReservationRequest.current;

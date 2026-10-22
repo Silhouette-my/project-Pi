@@ -1,95 +1,142 @@
-import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Textarea, TooltipButton } from "../../components/ui";
-import { IconArrowUp, IconChat, IconClose } from "../../components/icons";
-import { SessionPane } from "../../components/SessionPane";
+import type { HTMLAttributes } from "react";
+import { Badge, Button, TooltipButton } from "../../components/ui";
+import { IconChat, IconClose, IconPin } from "../../components/icons";
+import { DetachedConversation } from "../../components/conversation/DetachedConversation";
 import { useAppStore } from "../../stores/app-store";
-import { messageHasTranscriptContent } from "../../lib/chat-launch-error";
 import { ProjectAgentButton } from "./ProjectAgentButton";
 import { useProjectAgentDraft } from "./project-agent-draft";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 
+export const AGENT_TAB = "agent";
+
+type EdgePanelProps = HTMLAttributes<HTMLElement> & { ref?: React.Ref<HTMLElement> };
+
 /**
- * The project's discussion-only Agent beside the Project Console.
- *
- * The dock reads the canonical Agent session as a detached transcript, so the
- * console stays the visible page and the chat surface keeps its own panes.
- * Prompts go through the shared send path with an explicit session target;
- * the full conversation stays one click away through the existing entry.
+ * The project's right panel: the discussion-only Agent plus the workstream
+ * side conversations the user opened here (PRODUCT P6). Every tab reads its
+ * session as a detached transcript, so the Project Console stays the visible
+ * page; each tab still opens as a full conversation on request.
  */
 export function ProjectAgentDock({
   projectId,
   projectName,
+  sideSessionIds,
+  activeTab,
+  onSelectTab,
+  onCloseSide,
   onClose,
+  onOpenContext,
+  pinned,
+  onTogglePin,
+  edgePanel,
 }: {
   projectId: string;
   projectName?: string;
+  sideSessionIds: string[];
+  activeTab: string;
+  onSelectTab: (tab: string) => void;
+  onCloseSide: (sessionId: string) => void;
   onClose: () => void;
+  onOpenContext: (workstreamId?: string) => void;
+  pinned: boolean;
+  onTogglePin: () => void;
+  edgePanel?: EdgePanelProps;
 }) {
   const { t } = useTranslation();
   const { snapshot, action } = useProjectWorkflow();
-  const sessionId = snapshot?.projectAgents?.find((agent) => agent.projectId === projectId)
+  const sessions = useAppStore((state) => state.sessions);
+  const agentSessionId = snapshot?.projectAgents?.find((agent) => agent.projectId === projectId)
     ?.sessionId;
-  const attach = useAppStore((state) => state.attachSessionTranscript);
-  const attached = useAppStore((state) =>
-    sessionId
-      ? state.activeSessionId === sessionId || Boolean(state.retainedTranscripts[sessionId])
-      : false,
-  );
-  const hasContent = useAppStore((state) => {
-    if (!sessionId) return false;
-    const messages =
-      state.activeSessionId === sessionId ? state.messages : state.retainedTranscripts[sessionId];
-    return Boolean(messages?.some((message) => messageHasTranscriptContent(message)));
-  });
-  const [intent, setIntent] = useProjectAgentDraft(projectId);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [agentDraft, setAgentDraft] = useProjectAgentDraft(projectId);
+  const [sideDraft, setSideDraft] = useProjectAgentDraft(`side:${activeTab}`);
+  const side = activeTab === AGENT_TAB
+    ? undefined
+    : snapshot?.conversations.find((item) => item.sessionId === activeTab);
+  const sideWork = side ? snapshot?.workstreams.find((item) => item.id === side.workstreamId) : undefined;
+  const titleOf = (id: string) => sessions.find((session) => session.id === id)?.title?.trim();
+  const purposeOf = (id: string) => snapshot?.conversations.find((item) => item.sessionId === id)?.purpose;
+  const { className: edgeClassName, ...edgeRest } = edgePanel ?? {};
 
-  useEffect(() => {
-    if (sessionId && !attached) void attach(sessionId).catch(() => {});
-  }, [attach, attached, sessionId]);
-
-  async function send() {
-    const text = intent.trim();
-    if (!text || sending) return;
-    setSending(true);
-    setError(null);
-    try {
-      let target = sessionId;
-      if (!target) {
-        target = (await action({ kind: "agent.open", projectId }))?.sessionId;
-        if (!target) throw new Error(t("workflow.agentOpenFailed"));
-        await useAppStore.getState().refreshSessions();
-      }
-      // The transcript view is a convenience; a failed read must not block the send.
-      await attach(target).catch(() => {});
-      const accepted = await useAppStore
-        .getState()
-        .sendPrompt(text, { text, fileReferences: [] }, target);
-      if (!accepted) throw new Error(t("workflow.agentSendFailed"));
-      setIntent("");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSending(false);
+  async function sendToAgent(text: string) {
+    let target = agentSessionId;
+    if (!target) {
+      target = (await action({ kind: "agent.open", projectId }))?.sessionId;
+      if (!target) throw new Error(t("workflow.agentOpenFailed"));
+      await useAppStore.getState().refreshSessions();
     }
+    // The transcript view is a convenience; a failed read must not block the send.
+    await useAppStore.getState().attachSessionTranscript(target).catch(() => {});
+    const accepted = await useAppStore.getState().sendPrompt(text, { text, fileReferences: [] }, target);
+    if (!accepted) throw new Error(t("workflow.agentSendFailed"));
+  }
+  async function sendToSide(sessionId: string, text: string) {
+    const accepted = await useAppStore.getState().sendPrompt(text, { text, fileReferences: [] }, sessionId);
+    if (!accepted) throw new Error(t("workflow.agentSendFailed"));
   }
 
   return (
     <aside
-      className="project-agent-dock"
+      {...edgeRest}
+      className={["project-agent-dock", edgeClassName].filter(Boolean).join(" ")}
       aria-label={t("workflow.agentTitle")}
       data-project-agent-dock={projectId}
     >
       <header className="project-agent-dock-header">
-        <span className="project-agent-dock-glyph" aria-hidden="true">
-          <IconChat size={15} />
-        </span>
-        <h2>{t("workflow.agentTitle")}</h2>
-        <span className="project-agent-dock-tag">{t("workflow.agentDiscussionTag")}</span>
+        {sideSessionIds.length ? (
+          <div className="project-agent-dock-tabs" role="tablist" aria-label={t("workflow.dockTabs")}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === AGENT_TAB}
+              className="project-agent-dock-tab"
+              onClick={() => onSelectTab(AGENT_TAB)}
+            >
+              <IconChat size={13} />
+              <span>{t("workflow.agentTabShort")}</span>
+            </button>
+            {sideSessionIds.map((id) => (
+              <span key={id} className="project-agent-dock-tab-wrap" data-project-side-tab={id}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === id}
+                  className="project-agent-dock-tab"
+                  title={titleOf(id)}
+                  onClick={() => onSelectTab(id)}
+                >
+                  <span>{titleOf(id) || t(`workflow.purposes.${purposeOf(id) ?? "ask"}`)}</span>
+                </button>
+                <TooltipButton
+                  className="project-agent-dock-tab-close"
+                  tooltip={t("workflow.closeSideTab")}
+                  ariaLabel={t("workflow.closeSideTab")}
+                  onClick={() => onCloseSide(id)}
+                >
+                  <IconClose size={12} />
+                </TooltipButton>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <>
+            <span className="project-agent-dock-glyph" aria-hidden="true">
+              <IconChat size={15} />
+            </span>
+            <h2>{t("workflow.agentTitle")}</h2>
+            <span className="project-agent-dock-tag">{t("workflow.agentDiscussionTag")}</span>
+          </>
+        )}
         <span className="project-agent-dock-spacer" />
-        <ProjectAgentButton projectId={projectId} className="ct-icon-btn" />
+        <TooltipButton
+          className="ct-icon-btn edge-pin-btn"
+          tooltip={t(pinned ? "nav.unpinWorkPanel" : "nav.pinWorkPanel")}
+          ariaLabel={t(pinned ? "nav.unpinWorkPanel" : "nav.pinWorkPanel")}
+          aria-pressed={pinned}
+          onClick={onTogglePin}
+        >
+          <IconPin size={14} />
+        </TooltipButton>
         <TooltipButton
           className="ct-icon-btn"
           tooltip={t("workflow.agentDockClose")}
@@ -99,53 +146,62 @@ export function ProjectAgentDock({
           <IconClose size={15} />
         </TooltipButton>
       </header>
-      <div className="project-agent-dock-body">
-        {sessionId && attached ? (
-          <SessionPane sessionId={sessionId} visible />
-        ) : null}
-        {!hasContent ? (
-          <p className="project-agent-dock-empty">{t("workflow.agentDockEmpty")}</p>
-        ) : null}
-      </div>
-      {error ? (
-        <p role="alert" className="workflow-error project-agent-dock-error">
-          {error}
-        </p>
-      ) : null}
-      <form
-        className="project-agent-dock-composer"
-        data-workflow="project-intent"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send();
-        }}
-      >
-        <Textarea
-          aria-label={t("workflow.intentText")}
-          placeholder={t("workflow.agentPlaceholder")}
-          rows={2}
-          value={intent}
-          onChange={(event) => setIntent(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              void send();
-            }
-          }}
-        />
-        <div className="project-agent-dock-toolbar">
-          <span className="project-agent-dock-scope">{projectName}</span>
-          <TooltipButton
-            type="submit"
-            className="send-btn"
-            tooltip={t("workflow.sendAgent")}
-            ariaLabel={t("workflow.sendAgent")}
-            disabled={sending || !intent.trim()}
-          >
-            <IconArrowUp size={16} />
-          </TooltipButton>
-        </div>
-      </form>
+      {activeTab === AGENT_TAB ? (
+        <>
+          <div className="project-agent-dock-context">
+            <span>{t("workflow.agentDiscussionHint")}</span>
+            <ProjectAgentButton projectId={projectId} className="ct-icon-btn" />
+          </div>
+          <DetachedConversation
+            key={AGENT_TAB}
+            sessionId={agentSessionId}
+            draft={agentDraft}
+            onDraftChange={setAgentDraft}
+            onSend={sendToAgent}
+            emptyText={t("workflow.agentDockEmpty")}
+            placeholder={t("workflow.agentPlaceholder")}
+            inputLabel={t("workflow.intentText")}
+            sendLabel={t("workflow.sendAgent")}
+            scopeLabel={projectName}
+            formProps={{ "data-workflow": "project-intent" }}
+          />
+        </>
+      ) : (
+        <>
+          <div className="project-agent-dock-context" data-project-side-context={activeTab}>
+            {side ? <Badge>{t(`workflow.purposes.${side.purpose}`)}</Badge> : null}
+            <span className="project-agent-dock-context-text">
+              {sideWork ? t("workflow.sideFrom", { workstream: sideWork.title }) : null}
+            </span>
+            {side?.purpose === "explore" ? (
+              <Button variant="ghost" onClick={() => onOpenContext(side.workstreamId)}>
+                {t("workflow.reviewProposals")}
+              </Button>
+            ) : null}
+            <TooltipButton
+              className="ct-icon-btn"
+              tooltip={t("projectStructure.openSession")}
+              ariaLabel={t("projectStructure.openSession")}
+              onClick={() => void useAppStore.getState().selectSession(activeTab)}
+            >
+              <IconChat size={14} />
+            </TooltipButton>
+          </div>
+          <DetachedConversation
+            key={activeTab}
+            sessionId={activeTab}
+            draft={sideDraft}
+            onDraftChange={setSideDraft}
+            onSend={(text) => sendToSide(activeTab, text)}
+            emptyText={t("workflow.sideEmpty")}
+            placeholder={t("workflow.sidePlaceholder")}
+            inputLabel={t("workflow.sidePlaceholder")}
+            sendLabel={t("workflow.sendAgent")}
+            scopeLabel={sideWork?.title}
+            formProps={{ "data-workflow": "side-intent" }}
+          />
+        </>
+      )}
     </aside>
   );
 }

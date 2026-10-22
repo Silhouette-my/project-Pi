@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord, ProjectWorkflowSearchHit } from "@pi-desktop/shared";
-import { Button, Field, Select, TooltipButton } from "../../components/ui";
+import { Badge, Button, Field, Select, TooltipButton } from "../../components/ui";
 import { IconChevronLeft, IconFolder, IconMore, IconPanelOpen, IconPlus, IconSearch } from "../../components/icons";
 import { ProjectInstructionsDialog } from "../../components/ProjectInstructionsDialog";
 import { ProjectMemoryDialog } from "../../components/ProjectMemoryDialog";
@@ -18,7 +18,9 @@ import { WorkflowArtifacts } from "./WorkflowArtifacts";
 import { WorkstreamEditorDialog } from "./WorkstreamEditorDialog";
 import { ProjectOverview } from "./ProjectOverview";
 import { ProjectStructureView } from "./ProjectStructureView";
-import { ProjectAgentDock } from "./ProjectAgentDock";
+import { AGENT_TAB, ProjectAgentDock } from "./ProjectAgentDock";
+import { useEdgeReveal } from "../../hooks/use-edge-reveal";
+import { isPanelPinned, setPanelPinned } from "../../lib/panel-pin";
 import { WorkflowContext } from "./WorkflowContext";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { workflowOwnerLabel } from "./workflow-display";
@@ -52,8 +54,28 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (wide) setOverlayOpen(false);
   }, [wide]);
-  const dockOpen = wide ? dockedOpen : overlayOpen;
-  const setDockOpen = (open: boolean) => (wide ? setDockedOpen(open) : setOverlayOpen(open));
+  // The right-edge pin preference is shared with the chat work panel: one
+  // "right panel" choice. Unpinned, the dock auto-hides and reveals from the
+  // window edge (ADR auto-hide-side-panels); pinned keeps the docked layout.
+  const rightPinned = useAppStore((state) => isPanelPinned(state.settings, "workPanelPinned"));
+  const edgeDock = useEdgeReveal({ side: "right", enabled: !rightPinned && Boolean(snapshot) });
+  const pinnedDockOpen = wide ? dockedOpen : overlayOpen;
+  const dockOpen = rightPinned ? pinnedDockOpen : edgeDock.mounted;
+  const setDockOpen = (open: boolean) => {
+    if (!rightPinned) return open ? edgeDock.openPanel() : edgeDock.closePanel();
+    return wide ? setDockedOpen(open) : setOverlayOpen(open);
+  };
+  const [sideTabs, setSideTabs] = useState<string[]>([]);
+  const [dockTab, setDockTab] = useState(AGENT_TAB);
+  const openSide = (sessionId: string) => {
+    setSideTabs((tabs) => (tabs.includes(sessionId) ? tabs : [...tabs, sessionId]));
+    setDockTab(sessionId);
+    setDockOpen(true);
+  };
+  const closeSide = (sessionId: string) => {
+    setSideTabs((tabs) => tabs.filter((id) => id !== sessionId));
+    setDockTab((tab) => (tab === sessionId ? AGENT_TAB : tab));
+  };
   const [editing, setEditing] = useState<"new" | "edit" | null>(null);
   const [contextEditor, setContextEditor] = useState<"instructions" | "memory" | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -108,7 +130,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
       .filter((item) => item.projectId === projectId)
       .sort((left, right) => left.order - right.order) ?? [];
   const selected = workstreams.find((item) => item.id === selectedId);
-  const pageWidth = consoleWidth - (dockOpen && wide ? AGENT_DOCK_WIDTH : 0);
+  const pageWidth = consoleWidth - (rightPinned && dockOpen && wide ? AGENT_DOCK_WIDTH : 0);
   const splitWork = pageWidth >= SPLIT_WORK_MIN_WIDTH;
   // A split view shows list and detail together, so it never shows an empty
   // detail; a stacked one shows the list until a workstream is chosen.
@@ -187,7 +209,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   return (
     <div className="workflow-console" ref={root} data-workflow="console" data-project-id={projectId}
       data-project-color={projectColor} style={projectAccentStyle(projectColor)}
-      data-agent-dock={dockVisible ? (wide ? "docked" : "overlay") : "closed"}>
+      data-agent-dock={dockVisible ? (!rightPinned ? "edge" : wide ? "docked" : "overlay") : "closed"}>
       <div className="workflow-page">
         <header className="workflow-header">
           <div className="workflow-project-identity">
@@ -339,6 +361,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                         workstream={shown}
                         projectPaths={group?.roots.map((root) => root.path) ?? []}
                         onOpenSession={openSession}
+                        onOpenSide={openSide}
                         onCreateSession={async () => {
                           if (!group) return;
                           try {
@@ -348,6 +371,29 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                           }
                         }}
                       />
+                      {(() => {
+                        const sides = snapshot.conversations
+                          .filter((item) => item.workstreamId === shown.id && item.relation !== "main")
+                          .sort((left, right) => left.order - right.order);
+                        return sides.length ? (
+                          <section className="workflow-detail-sides" aria-label={t("workflow.sideConversations")}>
+                            <div className="project-section-label">
+                              <h2>{t("workflow.sideConversations")}</h2>
+                              <span className="project-section-count">{sides.length}</span>
+                            </div>
+                            {sides.map((item) => (
+                              <div key={item.sessionId} className="workflow-side-row" data-workflow-side-row={item.sessionId}>
+                                <Badge>{t(`workflow.purposes.${item.purpose}`)}</Badge>
+                                <span className="workflow-side-title">
+                                  {sessions.find((session) => session.id === item.sessionId)?.title || t(`workflow.purposes.${item.purpose}`)}
+                                </span>
+                                {item.archived ? <Badge>{t("projectStructure.archived")}</Badge> : null}
+                                <Button variant="ghost" onClick={() => openSide(item.sessionId)}>{t("workflow.openInPanel")}</Button>
+                              </div>
+                            ))}
+                          </section>
+                        ) : null;
+                      })()}
                       <section className="workflow-detail-outputs" aria-label={t("workflow.artifacts")}>
                         <div className="project-section-label"><h2>{t("workflow.artifacts")}</h2></div>
                         <WorkflowArtifacts projectId={projectId} workstreamId={shown.id} onOpenReference={openReference} />
@@ -362,8 +408,14 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
         )}
         {groupLoaded && !group && <p role="status">{t("workflow.projectMissing")}</p>}
       </div>
+      {!rightPinned && snapshot ? <div className="edge-reveal-zone" {...edgeDock.zoneProps} /> : null}
       {dockVisible ? (
-        <ProjectAgentDock projectId={projectId} projectName={group?.name} onClose={() => setDockOpen(false)} />
+        <ProjectAgentDock projectId={projectId} projectName={group?.name}
+          sideSessionIds={sideTabs} activeTab={sideTabs.includes(dockTab) ? dockTab : AGENT_TAB}
+          onSelectTab={setDockTab} onCloseSide={closeSide} onClose={() => setDockOpen(false)}
+          onOpenContext={(id) => { selectWorkstream(id ?? "", false); selectTab("context"); }}
+          pinned={rightPinned} onTogglePin={() => void setPanelPinned("workPanelPinned", !rightPinned)}
+          edgePanel={rightPinned ? undefined : { ...edgeDock.panelProps, className: "edge-panel" }} />
       ) : null}
       {editing && <WorkstreamEditorDialog onClose={() => setEditing(null)}>
         <WorkstreamEditor key={editing === "edit" ? shown?.id : "new"} projectId={projectId}
