@@ -4,6 +4,8 @@ import { Badge, Button, TooltipButton } from "../../components/ui";
 import { IconChat, IconClose, IconPin } from "../../components/icons";
 import { DetachedConversation } from "../../components/conversation/DetachedConversation";
 import { useAppStore } from "../../stores/app-store";
+import { applyPendingConfiguration } from "../../components/conversation/pending-configuration";
+import type { SessionConfigurationInput } from "../../stores/app-state";
 import { ProjectAgentButton } from "./ProjectAgentButton";
 import { useProjectAgentDraft } from "./project-agent-draft";
 import { useProjectWorkflow } from "./useProjectWorkflow";
@@ -58,13 +60,14 @@ export function ProjectAgentDock({
   const purposeOf = (id: string) => snapshot?.conversations.find((item) => item.sessionId === id)?.purpose;
   const { className: edgeClassName, ...edgeRest } = edgePanel ?? {};
 
-  async function sendToAgent(text: string) {
+  async function sendToAgent(text: string, configuration?: SessionConfigurationInput) {
     let target = agentSessionId;
     if (!target) {
       target = (await action({ kind: "agent.open", projectId }))?.sessionId;
       if (!target) throw new Error(t("workflow.agentOpenFailed"));
       await useAppStore.getState().refreshSessions();
     }
+    await applyPendingConfiguration(target, configuration);
     // The transcript view is a convenience; a failed read must not block the send.
     await useAppStore.getState().attachSessionTranscript(target).catch(() => {});
     const accepted = await useAppStore.getState().sendPrompt(text, { text, fileReferences: [] }, target);

@@ -1536,7 +1536,12 @@ adjacent form inputs; dense surfaces may override that metric locally.
   `--ds-bg-active` selection); disclosures use the shared chevron rather than the
   UA triangle; section rhythm stays within 24px and dividers use `border-subtle`.
   Sidebar navigation-tree actions stay hidden until their row or toolbar is
-  hovered or keyboard-focused, matching native sidebar rows. Status badges are plain
+  hovered or keyboard-focused, matching native sidebar rows. Detached conversations
+  (the project Agent dock, project side conversations and chat side chats) use
+  the chat Composer plate (`.composer-shell` / `.composer-toolbar`) and the same
+  model × reasoning picker bound to their own session; a choice made before the
+  conversation exists is applied to it before its first prompt, keeping the
+  created session's mode. Status badges are plain
   `Badge` capsules in the semantic colours (ready/accepted success, executing
   warning, blocked error, awaiting user purple, others neutral). Record times are
   localized with the exact value in a tooltip; paths and URIs are single-line mono

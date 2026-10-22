@@ -4,7 +4,12 @@ import { Textarea, TooltipButton } from "../ui";
 import { IconArrowUp, IconSquare } from "../icons";
 import { SessionPane } from "../SessionPane";
 import { useAppStore } from "../../stores/app-store";
+import type { SessionConfigurationInput } from "../../stores/app-state";
 import { messageHasTranscriptContent } from "../../lib/chat-launch-error";
+import { sessionAllows } from "../../lib/remote-session-safety";
+import { ComposerModelPicker } from "../../features/chat/composer/ComposerModelPicker";
+import { useComposerModelMenu } from "../../features/chat/composer/hooks/useComposerModelMenu";
+import { useSessionModelSelection } from "../../features/chat/composer/hooks/useSessionModelSelection";
 import "./detached-conversation.css";
 
 type FormDataAttributes = Pick<FormHTMLAttributes<HTMLFormElement>, "className"> & {
@@ -37,8 +42,13 @@ export function DetachedConversation({
   sessionId?: string;
   draft: string;
   onDraftChange: (text: string) => void;
-  /** Resolves when the prompt was accepted; throws with a visible message otherwise. */
-  onSend: (text: string) => Promise<void>;
+  /**
+   * Resolves when the prompt was accepted; throws with a visible message
+   * otherwise. `configuration` carries a model/effort chosen before the
+   * conversation existed; the caller applies it to the created session
+   * before its first prompt.
+   */
+  onSend: (text: string, configuration?: SessionConfigurationInput) => Promise<void>;
   emptyText: string;
   placeholder: string;
   inputLabel: string;
@@ -67,6 +77,8 @@ export function DetachedConversation({
   });
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Model/effort chosen before the conversation exists; applied on first send.
+  const [pendingConfiguration, setPendingConfiguration] = useState<SessionConfigurationInput>();
 
   useEffect(() => {
     if (sessionId && !attached) void attach(sessionId).catch(() => {});
@@ -78,8 +90,9 @@ export function DetachedConversation({
     setSending(true);
     setError(null);
     try {
-      await onSend(text);
+      await onSend(text, sessionId ? undefined : pendingConfiguration);
       onDraftChange("");
+      setPendingConfiguration(undefined);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -100,13 +113,14 @@ export function DetachedConversation({
       ) : null}
       <form
         {...formProps}
-        className={["detached-conversation-composer", formProps?.className].filter(Boolean).join(" ")}
+        className={["composer-shell", "detached-conversation-composer", formProps?.className].filter(Boolean).join(" ")}
         onSubmit={(event) => {
           event.preventDefault();
           void send();
         }}
       >
         <Textarea
+          className="composer-input"
           aria-label={inputLabel}
           placeholder={placeholder}
           rows={2}
@@ -119,31 +133,97 @@ export function DetachedConversation({
             }
           }}
         />
-        <div className="detached-conversation-toolbar">
-          <span className="detached-conversation-scope">{scopeLabel}</span>
-          {running && sessionId ? (
-            <TooltipButton
-              type="button"
-              className="send-btn"
-              tooltip={t("chat.stopGenerating")}
-              ariaLabel={t("chat.stopGenerating")}
-              onClick={() => void abortSession(sessionId)}
-            >
-              <IconSquare size={12} />
-            </TooltipButton>
-          ) : (
-            <TooltipButton
-              type="submit"
-              className="send-btn"
-              tooltip={sendLabel}
-              ariaLabel={sendLabel}
-              disabled={sending || !draft.trim() || Boolean(disabledReason)}
-            >
-              <IconArrowUp size={16} />
-            </TooltipButton>
-          )}
+        <div className="composer-toolbar">
+          <div className="composer-left">
+            {scopeLabel ? (
+              <span className="composer-mode-chip-face text-sm detached-conversation-scope">{scopeLabel}</span>
+            ) : null}
+          </div>
+          <div className="composer-right">
+            <DetachedModelPicker
+              sessionId={sessionId}
+              pending={pendingConfiguration}
+              onPendingChange={setPendingConfiguration}
+              blocked={running}
+            />
+            {running && sessionId ? (
+              <TooltipButton
+                type="button"
+                className="send-btn"
+                tooltip={t("chat.stopGenerating")}
+                ariaLabel={t("chat.stopGenerating")}
+                onClick={() => void abortSession(sessionId)}
+              >
+                <IconSquare size={12} />
+              </TooltipButton>
+            ) : (
+              <TooltipButton
+                type="submit"
+                className="send-btn"
+                tooltip={sendLabel}
+                ariaLabel={sendLabel}
+                disabled={sending || !draft.trim() || Boolean(disabledReason)}
+              >
+                <IconArrowUp size={16} />
+              </TooltipButton>
+            )}
+          </div>
         </div>
       </form>
     </div>
+  );
+}
+
+/**
+ * The chat Composer's model × reasoning picker, bound to one named session
+ * instead of the active one. Before the session exists the choice is held as
+ * a pending configuration for the caller to apply on creation.
+ */
+function DetachedModelPicker({
+  sessionId,
+  pending,
+  onPendingChange,
+  blocked,
+}: {
+  sessionId?: string;
+  pending?: SessionConfigurationInput;
+  onPendingChange: (configuration: SessionConfigurationInput) => void;
+  blocked: boolean;
+}) {
+  const { t } = useTranslation();
+  const session = useAppStore((state) => state.sessions.find((item) => item.id === sessionId));
+  const configureSession = useAppStore((state) => state.configureSession);
+  const mode = session?.mode ?? pending?.mode ?? "agent";
+  const { provider, modelId, thinkingProvider, thinkingLevel, modelLabel } = useSessionModelSelection({
+    session,
+    draft: session ? undefined : pending,
+    t,
+  });
+  const controlsBlocked = Boolean(session && !sessionAllows(session, "canConfigureModel"));
+  const controller = useComposerModelMenu({
+    mode,
+    activeSessionId: sessionId,
+    provider,
+    modelId,
+    thinkingProvider,
+    thinkingLevel,
+    controlsBlocked,
+    configureActiveSession: async (configuration) => {
+      if (sessionId) await configureSession(sessionId, configuration);
+      else onPendingChange({ ...pending, ...configuration });
+    },
+  });
+  return (
+    <ComposerModelPicker
+      t={t}
+      controller={controller}
+      modelLabel={modelLabel}
+      thinkingLabel={thinkingLevel}
+      thinkingLevel={thinkingLevel}
+      selectedProviderId={provider?.id}
+      selectedModelId={modelId}
+      controlsBlocked={controlsBlocked || (blocked && !sessionId)}
+      onCloseOtherMenus={() => {}}
+    />
   );
 }

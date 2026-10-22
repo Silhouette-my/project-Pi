@@ -106,6 +106,16 @@ export type RefreshSessionsOptions = {
 };
 
 /** Toolbar selections retained on the unpersisted new-task draft. */
+export type SessionConfigurationInput = {
+  mode: Mode;
+  providerId?: string;
+  modelId?: string;
+  thinkingLevel: SessionThinkingLevel;
+  permissionMode?: PermissionMode;
+  /** Chat instruction preset id; null resets to the built-in chat persona. */
+  promptPreset?: string | null;
+};
+
 export type DraftSessionConfiguration = {
   mode: Mode;
   thinkingLevel: SessionThinkingLevel;
@@ -232,15 +242,12 @@ export type AppState = {
   }) => Promise<string | void>;
   forkSession: (id: string) => Promise<void>;
   forkAssistantMessage: (messageId: string) => Promise<void>;
-  configureActiveSession: (config: {
-    mode: Mode;
-    providerId?: string;
-    modelId?: string;
-    thinkingLevel: SessionThinkingLevel;
-    permissionMode?: PermissionMode;
-    /** Chat instruction preset id; null resets to the built-in chat persona. */
-    promptPreset?: string | null;
-  }) => Promise<void>;
+  configureActiveSession: (config: SessionConfigurationInput) => Promise<void>;
+  /**
+   * Configure one named session without making it active (detached
+   * conversations); applies the same running-turn queue and optimistic update.
+   */
+  configureSession: (sessionId: string, config: SessionConfigurationInput) => Promise<void>;
   /** Returns true once accepted unless concurrent smart Stop restores it. */
   sendPrompt: (
     content: string,

@@ -4,6 +4,8 @@
  * The rules live in `side-chat-core.ts`; this module binds them to the store,
  * the per-session draft cache and the work-panel tabs.
  */
+import { applyPendingConfiguration } from "../../../components/conversation/pending-configuration";
+import type { SessionConfigurationInput } from "../../../stores/app-state";
 import { useSyncExternalStore } from "react";
 import i18n from "i18next";
 import { useAppStore } from "../../../stores/app-store";
@@ -48,7 +50,11 @@ export function useSideChatDraft(tabId: string) {
 }
 
 /** Send the draft. The first Send forks the child; later Sends reuse it. */
-export async function sendSideChatMessage(tab: WorkPanelTab, text: string): Promise<void> {
+export async function sendSideChatMessage(
+  tab: WorkPanelTab,
+  text: string,
+  configuration?: SessionConfigurationInput,
+): Promise<void> {
   const anchor = tab.sideChat;
   if (!anchor) return;
   const store = useAppStore.getState();
@@ -64,8 +70,10 @@ export async function sendSideChatMessage(tab: WorkPanelTab, text: string): Prom
           tabId: tab.id,
         }),
       attach: (childId) => useAppStore.getState().attachSessionTranscript(childId),
-      send: (childId, value) =>
-        useAppStore.getState().sendPrompt(value, { text: value, fileReferences: [] }, childId),
+      send: async (childId, value) => {
+        await applyPendingConfiguration(childId, configuration);
+        return useAppStore.getState().sendPrompt(value, { text: value, fileReferences: [] }, childId);
+      },
     },
     { known: tab.resource || undefined, rejected: i18n.t("sideChat.sendFailed") },
   );

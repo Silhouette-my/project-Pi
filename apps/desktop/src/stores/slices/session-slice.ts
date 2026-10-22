@@ -168,6 +168,7 @@ export function createSessionSlice({
   | "forkSession"
   | "forkAssistantMessage"
   | "configureActiveSession"
+  | "configureSession"
   | "abortSession"
 > {
   const pendingInteractiveRestoreGenerations = new Map<string, number>();
@@ -807,6 +808,10 @@ export function createSessionSlice({
         }));
         return;
       }
+      await get().configureSession(sessionId, config);
+    },
+
+    configureSession: async (sessionId, config) => {
       if (!sessionAllows(get().sessions.find((session) => session.id === sessionId), "canConfigureModel")) return;
       if (get().pendingPlans[sessionId]?.status === "pending") return;
       if (

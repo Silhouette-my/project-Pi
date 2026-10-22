@@ -83,7 +83,7 @@ export function SideChatTab({ tab }: { tab: WorkPanelTab }) {
         sessionId={childId}
         draft={draft}
         onDraftChange={setDraft}
-        onSend={(text) => sendSideChatMessage(tab, text)}
+        onSend={(text, configuration) => sendSideChatMessage(tab, text, configuration)}
         emptyText={t("sideChat.empty")}
         placeholder={t("sideChat.placeholder")}
         inputLabel={t("sideChat.placeholder")}
