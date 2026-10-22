@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectWorkflowSnapshot } from "@pi-desktop/shared";
-import { Badge, Button, Field, Select, TooltipButton } from "../../components/ui";
+import { Badge, Button, TooltipButton } from "../../components/ui";
+import { StructurePicker, StructureToolbar } from "./StructureToolbar";
 import { IconChat, IconChevronDown, IconChevronRight } from "../../components/icons";
 import { sessionArchived } from "../../lib/sidebar-session-groups";
 import { useAppStore } from "../../stores/app-store";
@@ -18,6 +19,8 @@ type Props = {
   projectPaths: string[];
   onOpenSession: (id: string) => Promise<void>;
   onOpenWorkstream: (id: string) => void;
+  /** The Structure view switcher, rendered first in this view's toolbar. */
+  switcher?: ReactNode;
 };
 export function SessionStructureView({
   projectId,
@@ -25,6 +28,7 @@ export function SessionStructureView({
   projectPaths,
   onOpenSession,
   onOpenWorkstream,
+  switcher,
 }: Props) {
   const { t } = useTranslation();
   const sessions = useAppStore((state) => state.sessions);
@@ -135,27 +139,29 @@ export function SessionStructureView({
   }
   return (
     <section className="project-session-structure" data-project-structure="sessions">
-      <div className="project-structure-filters">
-        <Field label={t("workflow.chooseWorkstream")}>
-          <Select value={workstreamId} onChange={(event) => setWorkstreamId(event.target.value)}>
-            <option value="">{t("workflow.allWorkstreams")}</option>
-            {snapshot.workstreams
+      <StructureToolbar switcher={switcher}>
+        <StructurePicker
+          label={t("workflow.chooseWorkstream")}
+          value={workstreamId}
+          onChange={setWorkstreamId}
+          options={[
+            { id: "", label: t("workflow.allWorkstreams") },
+            ...snapshot.workstreams
               .filter((item) => item.projectId === projectId)
-              .map((work) => (
-                <option key={work.id} value={work.id}>
-                  {work.title}
-                </option>
-              ))}
-          </Select>
-        </Field>
-        <Field label={t("projectStructure.visibility")}>
-          <Select value={filter} onChange={(event) => setFilter(event.target.value)}>
-            <option value="all">{t("projectStructure.allSessions")}</option>
-            <option value="active">{t("projectStructure.notArchived")}</option>
-            <option value="archived">{t("projectStructure.archived")}</option>
-          </Select>
-        </Field>
-      </div>
+              .map((work) => ({ id: work.id, label: work.title })),
+          ]}
+        />
+        <StructurePicker
+          label={t("projectStructure.visibility")}
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { id: "all", label: t("projectStructure.allSessions") },
+            { id: "active", label: t("projectStructure.notArchived") },
+            { id: "archived", label: t("projectStructure.archived") },
+          ]}
+        />
+      </StructureToolbar>
       {model.nodes.length ? (
         <div className="project-session-layout">
           <nav className="project-session-tree" aria-label={t("projectStructure.sessions")}>

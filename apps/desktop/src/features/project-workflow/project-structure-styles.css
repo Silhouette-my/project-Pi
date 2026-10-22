@@ -1,73 +1,42 @@
 .workflow-content:has(> .project-structure) {
   max-width: 100%;
 }
-.project-structure-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-/* In-page headings use the native section header line (projects.css
-   .projects-group-label): the destination title already lives in the header,
-   so content sections never repeat a page-scale title. */
-.project-structure-heading h2 {
-  display: flex;
-  align-items: center;
-  min-height: 28px;
-  font-size: var(--text-2xs);
-  font-weight: var(--font-weight-strong);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--ds-text-secondary);
-}
-.project-structure-heading p {
-  color: var(--ds-text-muted);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-  margin-top: 2px;
-  max-width: 600px;
-}
-/* Filters form one compact toolbar row (06 §toolbar, projects.css 32px
-   controls): each label reads inline before its picker instead of stacking
-   form-style above a tall field. */
+/* One toolbar row per Structure view (06 §toolbar; projects.css 32px
+   controls): the view switcher leads, labelled menu pickers follow inline and
+   reload sits at the trailing edge. The view's description is the switcher's
+   tooltip, not a heading. */
 .project-structure-filters {
   display: flex;
   align-items: center;
   gap: 8px 16px;
   margin: 0 0 16px;
   flex-wrap: wrap;
+  min-height: 32px;
 }
-.project-structure-filters > label {
+.project-structure-heading {
+  display: inline-flex;
+}
+.project-structure-picker {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
   max-width: 100%;
 }
-/* Field's stacked `space-y` spacing would offset the inline label from its picker. */
-.project-structure-filters > label > * {
-  margin-block: 0;
-}
-.project-structure-filters > label > div {
+.project-structure-picker-label {
   font-size: var(--text-sm);
   color: var(--ds-text-muted);
   white-space: nowrap;
 }
-.project-structure-filters .field-select {
-  width: auto;
-  min-width: 140px;
-  max-width: min(560px, 100%);
-  min-height: 32px;
-  height: 32px;
-  padding: 0 28px 0 12px;
-  border-radius: var(--radius-full);
-  background-color: var(--ds-raised);
-  box-shadow: var(--ds-raised-shadow);
-  font-size: var(--text-sm-plus);
+.project-architecture-picker {
+  flex: 1 1 280px;
 }
-.project-structure-filters > .btn {
-  height: 32px;
+.project-architecture-picker .settings-menu-select-anchor {
+  min-width: 0;
+  flex: 1;
+}
+.project-structure-toolbar-spacer {
+  flex: 1 1 0;
 }
 .project-session-layout,
 .project-git-layout {
@@ -111,18 +80,32 @@
   white-space: normal;
   text-align: left;
 }
+/* One-line sidebar row voice: title ellipsizes, the relation reads as the
+   trailing muted meta (sidebar-threads.css .thread-item-meta). */
 .project-session-node > span:first-child {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
+}
+.project-session-node > span:first-child > strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-session-node > span:first-child > small {
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
 }
 .project-session-node strong {
   font-size: var(--text-md);
   font-weight: var(--font-weight-normal);
   line-height: var(--leading-row);
   color: var(--ds-text-primary);
-  overflow-wrap: anywhere;
 }
 .project-session-node small {
   font-size: var(--text-xs-plus);
@@ -226,18 +209,15 @@
   font-size: var(--text-xs);
 }
 .project-git-summary {
-  display: flex;
-  align-items: baseline;
-  gap: 8px 12px;
-  flex-wrap: wrap;
-  margin: -4px 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--text-sm);
-}
-.project-git-summary span {
   color: var(--ds-text-muted);
+}
+.project-git-summary code {
   font-family: var(--font-mono);
   font-size: var(--text-xs-plus);
-  overflow-wrap: anywhere;
 }
 .project-git-working.btn {
   width: 100%;
@@ -461,10 +441,6 @@ details[open] > summary > .project-disclosure-icon {
   background: var(--ds-bg-hover);
 }
 @container (max-width: 760px) {
-  .project-structure-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
   .project-session-layout,
   .project-git-layout {
     grid-template-columns: minmax(0, 1fr);

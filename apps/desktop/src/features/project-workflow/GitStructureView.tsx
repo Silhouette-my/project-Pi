@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectGitSnapshot, WorkspaceDiff } from "@pi-desktop/shared";
-import { Badge, Button, Field, Select } from "../../components/ui";
+import { Badge, Button } from "../../components/ui";
+import { StructurePicker, StructureToolbar } from "./StructureToolbar";
 import { IconChevronRight } from "../../components/icons";
 import { api } from "../../lib/api";
 import { gitGraph } from "./git-structure-model";
 
-export function GitStructureView({ projectId }: { projectId: string }) {
+export function GitStructureView({ projectId, switcher }: { projectId: string; switcher?: ReactNode }) {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<ProjectGitSnapshot>();
   const [rootId, setRootId] = useState("");
@@ -53,26 +54,23 @@ export function GitStructureView({ projectId }: { projectId: string }) {
   const commit = repo?.commits.find((item) => item.oid === selection);
   return (
     <section data-project-structure="git">
-      <div className="project-structure-filters">
-        <Field label={t("projectStructure.repository")}>
-          <Select
-            value={repo?.rootId ?? ""}
-            onChange={(event) => {
-              setRootId(event.target.value);
-              setSelection("");
-            }}
-          >
-            {snapshot?.repositories.map((item) => (
-              <option key={item.rootId} value={item.rootId}>
-                {item.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Button variant="ghost" onClick={() => setRevision((value) => value + 1)}>
-          {t("workflow.retry")}
-        </Button>
-      </div>
+      <StructureToolbar switcher={switcher} onReload={() => setRevision((value) => value + 1)}>
+        <StructurePicker
+          label={t("projectStructure.repository")}
+          value={repo?.rootId ?? ""}
+          onChange={(id) => {
+            setRootId(id);
+            setSelection("");
+          }}
+          options={(snapshot?.repositories ?? []).map((item) => ({ id: item.rootId, label: item.label }))}
+        />
+        {repo?.isRepository && !repo.error ? (
+          <span className="project-git-summary" title={`${repo.rootPath}\n${repo.head ?? ""}`}>
+            <Badge>{repo.branch || t("projectStructure.detached")}</Badge>
+            <code>{repo.head?.slice(0, 7)}</code>
+          </span>
+        ) : null}
+      </StructureToolbar>
       {error ? (
         <p role="alert" className="workflow-error">
           {error}
@@ -90,11 +88,6 @@ export function GitStructureView({ projectId }: { projectId: string }) {
         <p>{t("projectStructure.notRepository")}</p>
       ) : (
         <>
-          <div className="project-git-summary">
-            <strong>{repo.branch || t("projectStructure.detached")}</strong>
-            <code>{repo.head?.slice(0, 10)}</code>
-            <span>{repo.rootPath}</span>
-          </div>
           <div className="project-git-layout">
             <div className="project-git-history">
               <Button

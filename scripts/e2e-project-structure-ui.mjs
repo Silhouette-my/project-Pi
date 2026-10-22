@@ -506,8 +506,16 @@ try {
     "sandbox must not access parent DOM",
   );
   await capture("project-archify-viewer.png");
+  // The artifact picker is the shared menu select: open it, then choose the row.
   await page.evaluate(
-    "(()=>{const el=document.querySelector('.project-architecture select');const option=[...el.options].find(x=>x.textContent.includes('source-reference.json'));el.value=option.value;el.dispatchEvent(new Event('change',{bubbles:true}));})()",
+    "document.querySelector('.project-architecture-picker .settings-menu-select-trigger').click()",
+  );
+  await until(
+    () =>
+      page.evaluate(
+        "(()=>{const option=[...document.querySelectorAll('.settings-menu-select-option')].find(x=>x.textContent.includes('source-reference.json'));if(!option)return false;option.click();return true})()",
+      ),
+    "architecture artifact menu option",
   );
   await until(
     () =>

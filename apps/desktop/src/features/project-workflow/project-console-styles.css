@@ -1,9 +1,8 @@
 /* Project composition reuses the shell tokens, shared UI kit and Composer plate. */
 .workflow-project-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.workflow-project-identity > div:last-child { min-width: 0; }
+.workflow-project-identity > h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
 /* Compact identity (07 §Destination pages): glyph seat matches .projects-glyph, the path uses the archive path voice. */
 .workflow-project-mark { width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius-xs); background: color-mix(in oklab, var(--workflow-accent) 14%, transparent); color: var(--workflow-accent); display: grid; place-items: center; }
-.workflow-project-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap !important; max-width: 460px; font-family: var(--font-mono); font-size: var(--text-xs-plus); line-height: var(--leading-normal) !important; }
 .workflow-header-actions { flex-shrink: 0; }
 /* Quiet underline navigation (07 §11.5): px-3 py-2 text-sm, secondary at rest. */
 .workflow-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--ds-border-subtle); flex-wrap: wrap; margin: 0 -12px; }
@@ -41,8 +40,7 @@
   .workflow-page { padding: 8px 16px 48px; }
   .workflow-header { gap: 8px; }
   .workflow-project-mark { display: none; }
-  .workflow-project-path { max-width: 230px; }
-  .workflow-context-shortcut.btn { display: none; }
+    .workflow-context-shortcut.btn { display: none; }
   .workflow-content { padding-top: 12px; }
   .workflow-workstream.btn { flex-wrap: wrap; gap: 7px; }
   .workflow-workstream .workflow-row-copy { flex-basis: calc(100% - 32px); }

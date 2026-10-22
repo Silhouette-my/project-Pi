@@ -15,26 +15,28 @@ export function ProjectStructureView(props: {
 }) {
   const { t } = useTranslation();
   const [view, setView] = useState("sessions");
+  // The switcher leads each view's single toolbar row; its description is the tooltip.
+  const switcher = (
+    <span className="project-structure-heading" title={t(`projectStructure.descriptions.${view}`)}>
+      <SegmentedControl
+        value={view}
+        onChange={setView}
+        label={t("projectStructure.structure")}
+        options={["sessions", "git", "architecture"].map((value) => ({
+          value,
+          label: t(`projectStructure.${value}`),
+        }))}
+      />
+    </span>
+  );
   return (
     <section className="project-structure" data-project-structure-view={view}>
-      <div className="project-structure-heading">
-        <p>{t(`projectStructure.descriptions.${view}`)}</p>
-        <SegmentedControl
-          value={view}
-          onChange={setView}
-          label={t("projectStructure.structure")}
-          options={["sessions", "git", "architecture"].map((value) => ({
-            value,
-            label: t(`projectStructure.${value}`),
-          }))}
-        />
-      </div>
       {view === "sessions" ? (
-        <SessionStructureView {...props} />
+        <SessionStructureView {...props} switcher={switcher} />
       ) : view === "git" ? (
-        <GitStructureView projectId={props.projectId} />
+        <GitStructureView projectId={props.projectId} switcher={switcher} />
       ) : (
-        <ArchitectureStructureView projectId={props.projectId} />
+        <ArchitectureStructureView projectId={props.projectId} switcher={switcher} />
       )}
     </section>
   );

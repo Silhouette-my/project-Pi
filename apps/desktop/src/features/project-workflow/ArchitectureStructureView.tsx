@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   ProjectArchitectureArtifact,
@@ -7,14 +7,21 @@ import type {
   ProjectGitSnapshot,
   ProjectStructureFile,
 } from "@pi-desktop/shared";
-import { Badge, Button, Field, Select } from "../../components/ui";
+import { Badge, Button } from "../../components/ui";
+import { StructurePicker, StructureToolbar } from "./StructureToolbar";
 import { api } from "../../lib/api";
 import { useThemeMode } from "../../lib/use-theme-mode";
 import { VISUALIZE_FRAME_URL } from "../../../electron/shared/visualize-frame";
 import { architectureRevisionState } from "./architecture-structure-model";
 import { buildVisualizeDocument } from "../visualize/visualize-document";
 
-export function ArchitectureStructureView({ projectId }: { projectId: string }) {
+export function ArchitectureStructureView({
+  projectId,
+  switcher,
+}: {
+  projectId: string;
+  switcher?: ReactNode;
+}) {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<ProjectArchitectureSnapshot>();
   const [git, setGit] = useState<ProjectGitSnapshot>();
@@ -96,24 +103,18 @@ export function ArchitectureStructureView({ projectId }: { projectId: string }) 
   const revisionState = artifact ? architectureRevisionState(artifact, repo) : "unknown";
   return (
     <section className="project-architecture" data-project-structure="architecture">
-      <div className="project-structure-filters">
-        <Field label={t("projectStructure.architectureFile")}>
-          <Select
-            value={artifact ? identity(artifact) : ""}
-            onChange={(event) => setSelectedId(event.target.value)}
-          >
-            {snapshot?.artifacts.map((item) => (
-              <option value={identity(item)} key={identity(item)}>
-                {snapshot.roots.find((root) => root.rootId === item.rootId)?.label} ·{" "}
-                {item.relativePath}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Button variant="ghost" onClick={() => setRevision((value) => value + 1)}>
-          {t("workflow.retry")}
-        </Button>
-      </div>
+      <StructureToolbar switcher={switcher} onReload={() => setRevision((value) => value + 1)}>
+        <StructurePicker
+          className="project-architecture-picker"
+          label={t("projectStructure.architectureFile")}
+          value={artifact ? identity(artifact) : ""}
+          onChange={setSelectedId}
+          options={(snapshot?.artifacts ?? []).map((item) => ({
+            id: identity(item),
+            label: `${snapshot?.roots.find((root) => root.rootId === item.rootId)?.label ?? ""} · ${item.relativePath}`,
+          }))}
+        />
+      </StructureToolbar>
       {error ? (
         <p role="alert" className="workflow-error">
           {error}

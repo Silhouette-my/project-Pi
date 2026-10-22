@@ -214,9 +214,8 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
         <header className="workflow-header">
           <div className="workflow-project-identity">
             <div className="workflow-project-mark"><IconFolder size={14} /></div>
-            <div><h1>{group?.name ?? projectId}</h1>
-              <p className="workflow-muted workflow-project-path">{group?.primaryPath}</p>
-            </div>
+            {/* The path is the title's tooltip, like the sidebar project row (08 §3.9). */}
+            <h1 title={group?.primaryPath}>{group?.name ?? projectId}</h1>
           </div>
           <div className="workflow-header-tools">
             <div className="workflow-header-actions">

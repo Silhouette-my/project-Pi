@@ -432,8 +432,7 @@
 .workflow-controls .field-select:focus {
   background-color: var(--ds-raised);
 }
-.workflow-controls .field-select:disabled,
-.project-structure-filters .field-select:disabled {
+.workflow-controls .field-select:disabled {
   background-color: var(--ds-tile);
   box-shadow: none;
   color: var(--ds-text-muted);
