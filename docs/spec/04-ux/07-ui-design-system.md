@@ -1508,7 +1508,9 @@ adjacent form inputs; dense surfaces may override that metric locally.
 
 - **Project Console**: a compact project identity/header sits below the existing
   46px native titlebar safe area. Window controls remain Electron-owned. Overview,
-  Workstreams, Shared context and Structure use a quiet underline navigation. The Project Agent occupies a right dock (340px, `--ds-bg-dock`,
+  Workstreams, Shared context and Structure use a quiet underline navigation. The Project Agent occupies a right dock (340px, `--ds-bg-dock`, with compact
+  28px tabs for opened side conversations and a pin control shared with the work
+  panel; unpinned it is an `.edge-panel` overlay below the titlebar,
   subtle leading divider) that renders the existing session pane and a Composer
   plate, and reaches the full chat surface through the existing Agent entry rather
   than a second transcript implementation. Overview leads with one muted summary

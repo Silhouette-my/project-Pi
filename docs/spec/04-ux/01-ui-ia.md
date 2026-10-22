@@ -548,6 +548,15 @@ identifiers, bounded attempts and stop conditions; existing tool approvals remai
 authoritative. A late conversation-creation result cannot replace a newer project
 or workstream navigation choice.
 
+Side conversations open beside the console rather than replacing it: creating
+one, or choosing "Open beside" on a workstream's side-conversation list, adds a
+tab to the project dock next to the Agent. A side tab shows its purpose and
+source workstream, reads its session as a detached transcript, sends only to
+that session, links Explore proposals to Shared context, and can still open as a
+full conversation. The dock follows the right-edge pin preference (ADR
+auto-hide-side-panels): unpinned it reveals from the window edge, pinned it
+docks; on the project page the chat work panel neither presents nor reveals.
+
 Side conversations start with an explicit Ask, Explore or Work intent. Ask uses
 selection and necessary background without writing effective project context.
 Explore proposes a conclusion that must be adopted before it becomes effective;
