@@ -131,6 +131,13 @@
   background-image: var(--ds-bg-sidebar-image, none);
 }
 
+/* The dark sidebar colour is pure black because it sits on the vibrancy
+   material; as a floating layer over the #181818 page it reads as a hole.
+   A dark overlay uses the raised secondary surface instead. */
+:root[data-theme="dark"] .sidebar-surface.edge-panel {
+  background-color: var(--ds-bg-secondary);
+}
+
 /* Header pin button shared by every panel. Pressed means docked. */
 .edge-pin-btn svg {
   transition: transform var(--motion-duration-fast) var(--motion-ease-out);

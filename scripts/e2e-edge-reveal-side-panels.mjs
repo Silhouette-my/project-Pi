@@ -134,10 +134,12 @@ try {
   await move(2, 400);
   await sleep(30);
   assert.equal(await state(LEFT), "closed", "30ms is below the dwell");
-  await until(async () => (await state(LEFT)) === "open", "left reveal after the dwell", 2000);
-  await sleep(350); // let the slide-in settle
+  await until(async () => (await state(LEFT)) === "open", "left reveal after the dwell", 5000);
+  // Wait for the slide-in to settle rather than sleeping: a background test
+  // window throttles animations, so a fixed delay can sample mid-slide.
+  await until(async () => Math.abs((await rect(LEFT)).left) < 0.5, "left slide-in settled", 5000);
   const overlay = await rect(LEFT);
-  assert.equal(Math.round(overlay.left), 0, "overlay sits at the left edge");
+  assert.ok(Math.abs(overlay.left) < 0.5, `overlay sits at the left edge: ${overlay.left}`);
   assert.ok(overlay.width >= 240 && overlay.width <= 520, `sidebar keeps its width: ${overlay.width}`);
   assert.ok(await page.evaluate("!!document.querySelector('.sidebar.edge-panel').getAttribute('aria-label')"), "labelled region");
   const whileOpen = await rect(".main-pane");
@@ -157,7 +159,7 @@ try {
 
   // 5. A menu opened from inside holds the overlay open; closing it releases the hold.
   await move(2, 400);
-  await until(async () => (await state(LEFT)) === "open", "left reveal for the menu hold", 2000);
+  await until(async () => (await state(LEFT)) === "open", "left reveal for the menu hold", 5000);
   await move(100, 300);
   assert.ok(await page.evaluate("(() => { const more=document.querySelector('.sidebar.edge-panel .project-more'); if(!more) return false; more.click(); return true; })()"), "project overflow menu opens");
   await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu')"), "menu rendered");
@@ -171,20 +173,20 @@ try {
 
   // 6. Cmd/Ctrl+B is sticky, Escape closes, the shortcut again toggles.
   await key("b", "KeyB", 66, mod);
-  await until(async () => (await state(LEFT)) === "open", "shortcut reveal", 2000);
+  await until(async () => (await state(LEFT)) === "open", "shortcut reveal", 5000);
   await move(900, 400); await sleep(700);
   assert.equal(await state(LEFT), "open", "a shortcut reveal stays until dismissed");
   await key("Escape", "Escape", 27);
-  await until(async () => (await state(LEFT)) === "closed", "Escape closes the overlay", 2000);
+  await until(async () => (await state(LEFT)) === "closed", "Escape closes the overlay", 5000);
   await key("b", "KeyB", 66, mod);
-  await until(async () => (await state(LEFT)) === "open", "shortcut reveal again", 2000);
+  await until(async () => (await state(LEFT)) === "open", "shortcut reveal again", 5000);
   await key("b", "KeyB", 66, mod);
-  await until(async () => (await state(LEFT)) === "closed", "shortcut hides", 2000);
+  await until(async () => (await state(LEFT)) === "closed", "shortcut hides", 5000);
 
   // 7. Right edge: the work panel overlay, with the same rules.
   await move(vw - 2, 400);
-  await until(async () => (await state(RIGHT)) === "open", "right reveal after the dwell", 2000);
-  await sleep(800);
+  await until(async () => (await state(RIGHT)) === "open", "right reveal after the dwell", 5000);
+  await until(async () => Math.abs((await rect(RIGHT)).right - (await viewport()).width) <= 1, "right slide-in settled", 5000);
   const panel = await rect(RIGHT);
   const nowW = (await viewport()).width;
   assert.ok(Math.abs(panel.right - nowW) <= 1, `work panel sits at the right edge: ${JSON.stringify(panel)} vw=${nowW}`);
@@ -193,13 +195,15 @@ try {
   await move(300, 400);
   await until(() => page.evaluate("!document.querySelector('.work-panel')"), "right panel unmounted after the delay", 3000);
   await key("j", "KeyJ", 74, mod);
-  await until(async () => (await state(RIGHT)) === "open", "Cmd/Ctrl+J reveal", 2000);
+  await until(async () => (await state(RIGHT)) === "open", "Cmd/Ctrl+J reveal", 5000);
   await key("Escape", "Escape", 27);
   await until(() => page.evaluate("!document.querySelector('.work-panel')"), "Escape closes the work panel", 3000);
 
   // 8. Pin the sidebar from its header: docked layout, persisted flag.
   await move(2, 400);
-  await until(async () => (await state(LEFT)) === "open", "left reveal before pinning", 2000);
+  await until(async () => (await state(LEFT)) === "open", "left reveal before pinning", 5000);
+  // Coordinates are only valid once the slide-in has settled.
+  await until(async () => Math.abs((await rect(LEFT)).left) < 0.5, "left slide-in settled before pinning", 5000);
   const pin = await centerOf('.sidebar.edge-panel [data-nav="pin-sidebar"]');
   await click(pin.x, pin.y);
   await until(() => page.evaluate("!document.querySelector('.sidebar.edge-panel') && !!document.querySelector('.sidebar') && !document.querySelector('.app-shell').classList.contains('sidebar-collapsed')"), "docked sidebar after pinning", 4000);
@@ -220,9 +224,9 @@ try {
   await until(() => page.evaluate("!!document.querySelector('.edge-reveal-zone[data-edge-zone=right]')"), "right hot zone after reload");
   const { width: vw2 } = await viewport();
   await move(vw2 - 2, 400);
-  await until(async () => (await state(RIGHT)) === "open", "right reveal with the sidebar docked", 2000);
+  await until(async () => (await state(RIGHT)) === "open", "right reveal with the sidebar docked", 5000);
   await until(() => page.evaluate("!!document.querySelector('.work-panel.edge-panel [data-nav=pin-work-panel]')"), "work panel pin button");
-  await sleep(600);
+  await until(async () => Math.abs((await rect(RIGHT)).right - (await viewport()).width) <= 1, "right slide-in settled before pinning", 5000);
   const pinRight = await centerOf('.work-panel.edge-panel [data-nav="pin-work-panel"]');
   await click(pinRight.x, pinRight.y);
   await until(() => page.evaluate("!!document.querySelector('.work-panel') && !document.querySelector('.work-panel.edge-panel')"), "docked work panel after pinning", 4000);
