@@ -173,7 +173,7 @@ export function GitStructureView({ projectId, switcher }: { projectId: string; s
                 <p className="workflow-muted">
                   {commit.authorName} · {commit.authoredAt}
                   <br />
-                  <code>{commit.oid}</code>
+                  <code title={commit.oid}>{commit.oid.slice(0, 7)}</code>
                   <br />
                   {t("projectStructure.parents")}:{" "}
                   {commit.parents.map((oid) => oid.slice(0, 10)).join(", ") ||

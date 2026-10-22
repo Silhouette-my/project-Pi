@@ -181,7 +181,7 @@ export function SessionStructureView({
               <div className="workflow-section-heading">
                 <div>
                   <small>{role(selected)}</small>
-                  <h2>{title(selected)}</h2>
+                  <h2 title={selected.session?.projectPath}>{title(selected)}</h2>
                 </div>
                 <Button
                   disabled={opening || !selected.session}
@@ -197,11 +197,6 @@ export function SessionStructureView({
                   <Badge>{t(`workflow.purposes.${selected.link.purpose}`)}</Badge>
                 ) : null}
               </div>
-              {selected.session?.projectPath ? (
-                <p className="workflow-muted project-structure-path">
-                  {selected.session.projectPath}
-                </p>
-              ) : null}
               {!selected.session ? (
                 <p className="workflow-muted">{t("projectStructure.transcriptUnavailable")}</p>
               ) : null}
