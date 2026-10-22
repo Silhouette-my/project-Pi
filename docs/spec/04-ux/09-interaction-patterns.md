@@ -1503,9 +1503,17 @@ Project drag/drop follows these patterns:
   visible conversation, then the reply streams in the panel; while the parent
   runs or is read-only the first Send is disabled with a visible reason and
   recovers when the parent is idle. A fork that succeeded but whose send failed
-  keeps the child for the retry. **Add to main chat** appends the newest side
-  answer to the parent composer draft as a `> ` quote with the "Quoted from"
-  attribution (2000-character cap), keeps typed text and never sends.
+  keeps the child for the retry. A compact **Return to main thread** radiogroup
+  in the header picks what goes back: **None** (default, nothing returns),
+  **Summary** or **Everything**; the **Return to main thread** action is disabled
+  with a reason while the mode is None, before a child exists and while the side
+  chat is running. Summary sends a visible summary request in the side chat,
+  shows progress on the button, waits for that turn (timeout and error shown in
+  the header) and quotes the answer under a Summary label (4000-character cap).
+  Everything quotes the post-anchor user and assistant text with role labels
+  (12000-character cap, a note names the omitted earlier messages). Both append
+  to the parent composer draft as a `> ` quote with the "Quoted from"
+  attribution, keep typed text and never send.
   **Open as a conversation** closes the tab and selects the child. Closing a tab
   removes only the tab and its draft.
 - A delegation tab uses the same single-body scroll owner as the work panel.

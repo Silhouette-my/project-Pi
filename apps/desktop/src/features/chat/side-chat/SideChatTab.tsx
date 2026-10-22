@@ -1,14 +1,20 @@
 import { useTranslation } from "react-i18next";
-import { Button } from "../../../components/ui";
+import { Button, SegmentedControl } from "../../../components/ui";
 import { DetachedConversation } from "../../../components/conversation/DetachedConversation";
 import { useAppStore } from "../../../stores/app-store";
 import type { WorkPanelTab } from "../../../lib/work-panel-tabs";
-import { sideChatFirstSendBlockReason, newestAssistantAnswer } from "./side-chat-core";
 import {
-  addSideChatAnswerToMain,
+  DEFAULT_SIDE_CHAT_RETURN_MODE,
+  SIDE_CHAT_RETURN_MODES,
+  sideChatFirstSendBlockReason,
+  sideChatReturnBlockReason,
+} from "./side-chat-core";
+import {
   installSideChatLifecycle,
   openSideChatAsConversation,
+  returnSideChatToMain,
   sendSideChatMessage,
+  sideChatDiscussion,
   useSideChatDraft,
 } from "./side-chat-session";
 import "./side-chat.css";
@@ -35,16 +41,33 @@ export function SideChatTab({ tab }: { tab: WorkPanelTab }) {
   const childTitle = useAppStore((state) =>
     childId ? state.sessions.find((session) => session.id === childId)?.title.trim() : undefined,
   );
-  const hasAnswer = useAppStore((state) => {
-    if (!childId) return false;
-    const messages =
-      state.activeSessionId === childId ? state.messages : state.retainedTranscripts[childId];
-    return Boolean(newestAssistantAnswer(messages ?? []));
-  });
+  const returnState = useAppStore((state) => state.sideChatReturn[tab.id]);
+  const setReturnMode = useAppStore((state) => state.setSideChatReturnMode);
+  const childRunning = useAppStore((state) =>
+    childId ? state.runningSessions[childId] === true : false,
+  );
+  // Count only: the selector returns a number so a streaming token that adds no
+  // new exchange does not re-render the header.
+  const turnCount = useAppStore((state) => sideChatDiscussion(state, tab).length);
   if (!anchor) return null;
 
   const blocked = childId ? undefined : sideChatFirstSendBlockReason(parent, parentRunning);
   const title = childTitle || tab.label || t("sideChat.title");
+  const mode = returnState?.mode ?? DEFAULT_SIDE_CHAT_RETURN_MODE;
+  const returning = returnState?.status === "running";
+  const returnBlock = sideChatReturnBlockReason({
+    mode,
+    hasChild: Boolean(childId),
+    childRunning,
+    turnCount,
+  });
+  // Only a reason the user did not just cause is spelled out under the actions;
+  // "no mode chosen" and "nothing sent yet" are explained by the button tooltip.
+  const returnHint = returnState?.error
+    ? returnState.error
+    : returnBlock === "sideChat.returnBusy" && !returning
+      ? t(returnBlock)
+      : undefined;
 
   return (
     <div className="side-chat" data-side-chat={tab.id} data-side-chat-session={childId ?? ""}>
@@ -55,16 +78,34 @@ export function SideChatTab({ tab }: { tab: WorkPanelTab }) {
             {t("sideChat.parentExcerpt", { excerpt: anchor.excerpt })}
           </p>
         ) : null}
+        <div className="side-chat-return" data-side-chat-return-mode={mode}>
+          <span className="side-chat-return-label">{t("sideChat.returnLabel")}</span>
+          <SegmentedControl
+            label={t("sideChat.returnLabel")}
+            role="radiogroup"
+            value={mode}
+            onChange={(next) => setReturnMode(tab.id, next)}
+            disabled={returning}
+            className="side-chat-return-modes"
+            itemClassName="side-chat-return-mode"
+            options={SIDE_CHAT_RETURN_MODES.map((value) => ({
+              value,
+              label: t(`sideChat.returnMode.${value}`),
+            }))}
+          />
+        </div>
         <div className="side-chat-actions">
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            data-side-chat-action="add-to-main"
-            disabled={!hasAnswer}
-            onClick={() => addSideChatAnswerToMain(tab)}
+            data-side-chat-action="return-to-main"
+            disabled={Boolean(returnBlock) || returning}
+            aria-busy={returning || undefined}
+            title={returnBlock && !returning ? t(returnBlock) : undefined}
+            onClick={() => void returnSideChatToMain(tab)}
           >
-            {t("sideChat.addToMain")}
+            {returning ? t("sideChat.returning") : t("sideChat.returnToMain")}
           </Button>
           <Button
             type="button"
@@ -77,6 +118,15 @@ export function SideChatTab({ tab }: { tab: WorkPanelTab }) {
             {t("sideChat.openAsSession")}
           </Button>
         </div>
+        {returnHint ? (
+          <p
+            className={`side-chat-return-hint${returnState?.error ? " is-error" : ""}`}
+            role={returnState?.error ? "alert" : "status"}
+            data-side-chat-return-hint
+          >
+            {returnHint}
+          </p>
+        ) : null}
       </header>
       <DetachedConversation
         key={tab.id}

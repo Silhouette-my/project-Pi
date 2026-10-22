@@ -1268,8 +1268,11 @@ entirely inside the plugin's isolated page:
   parent session and anchor message, so asking again reuses it; no agent event
   opens it (ADR 0033). The tab strip label is `sideChat.title` (repeats gain
   `#n`). The body is a compact header (side-chat title, a one-line excerpt of
-  the anchored message, **Add to main chat**, **Open as a conversation**) above
-  the shared `DetachedConversation`. Before the first Send there is no session:
+  the anchored message, the **Return to main thread** radiogroup built on the
+  shared `SegmentedControl` with **None** (default) / **Summary** / **Everything**,
+  the mode-aware **Return to main thread** action, **Open as a conversation**)
+  above the shared `DetachedConversation`. The return action only appends a
+  quote to the parent draft and never sends. Before the first Send there is no session:
   opening and typing create nothing, and the first Send forks the child without
   activating it, attaches its detached transcript and sends to it; the tab then
   refers to the child id. A running or read-only parent disables the first Send

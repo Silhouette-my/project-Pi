@@ -52,6 +52,10 @@ import type {
 } from "../lib/composer-smart-stop";
 import type { SidebarSessionOutcome } from "../lib/sidebar-session-status";
 import type { WorkPanelContext, WorkPanelTab } from "../lib/work-panel-tabs";
+import type {
+  SideChatReturnMode,
+  SideChatReturnState,
+} from "../features/chat/side-chat/side-chat-core";
 
 export type { WorkPanelTab } from "../lib/work-panel-tabs";
 
@@ -441,6 +445,12 @@ export type AppState = {
     title: string;
     tabId: string;
   }) => Promise<string>;
+  /** Return-to-main-thread state of each side-chat tab, keyed by tab id (renderer only). */
+  sideChatReturn: Record<string, SideChatReturnState>;
+  setSideChatReturnMode: (tabId: string, mode: SideChatReturnMode) => void;
+  patchSideChatReturn: (tabId: string, patch: Partial<SideChatReturnState>) => void;
+  /** Drop the state of tabs that no longer exist. */
+  pruneSideChatReturn: (live: ReadonlySet<string>) => void;
   /** Abort one session's running turn, visible or not. */
   abortSession: (sessionId: string) => Promise<void>;
   openWorkPanel: () => void;

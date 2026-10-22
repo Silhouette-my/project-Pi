@@ -5,8 +5,9 @@
  * E2E-CHAT-side-chat-detached-panel. A real chat is driven against a loopback model
  * fixture: Ask in side chat opens a draft tab (no session), typing creates nothing,
  * the first Send forks the child without switching the visible session, the reply
- * streams in the panel, Add to main chat puts a quote in the parent draft without
- * sending, Open as a conversation activates the child, and closing a tab keeps its
+ * streams in the panel, Return to main thread is off by default (None), Summary asks
+ * the side chat for a summary and Everything quotes the exchange, both only into the
+ * parent draft and never sending, Open as a conversation activates the child, and closing a tab keeps its
  * child session. All mutable Host data is isolated; input is real CDP pointer input.
  */
 import assert from "node:assert/strict";
@@ -57,9 +58,11 @@ const model = createServer(async (req, res) => {
     model: request.model, choices: [{ index: 0, delta, finish_reason }],
   })}\n\n`);
   if (prompt.includes("HOLD_PARENT") && holdParent) await holdParent.promise;
-  const label = prompt.includes("SIDE_QUESTION") ? "SIDE_REPLY" : "MAIN_REPLY";
+  // A side-chat request whose newest user turn is not the question is the summary prompt.
+  const sideHistory = json(request.messages ?? []).includes("SIDE_QUESTION");
+  const label = prompt.includes("SIDE_QUESTION") ? "SIDE_REPLY" : sideHistory ? "SIDE_SUMMARY" : "MAIN_REPLY";
   frame({ role: "assistant", content: `${label}_${modelRequests.length}: ` });
-  await sleep(120);
+  await sleep(label === "SIDE_SUMMARY" ? 900 : 120);
   frame({ content: `a short answer for request ${modelRequests.length}.` });
   frame({}, "stop");
   res.end("data: [DONE]\n\n");
@@ -199,18 +202,60 @@ try {
   await capture("02-first-send-streaming-light.png");
   coverage.push("First Send forks one durable child without activating it, the tab refers to the child, and the reply streams through the detached transcript while the parent stays visible");
 
-  // 5. Add to main chat: a quote in the parent draft, never sent.
-  await until(() => page.evaluate("!document.querySelector('.work-panel [data-side-chat-action=add-to-main]')?.disabled"), "Add to main chat enabled");
+  // 5. Return to main thread. The default mode is None: nothing returns.
+  const RETURN = ".work-panel [data-side-chat-action=return-to-main]";
+  const radios = ".work-panel [data-side-chat-return-mode] [role=radio]";
+  const radioState = () => page.evaluate(`[...document.querySelectorAll(${json(radios)})].map((el) => el.getAttribute('aria-checked'))`);
+  const pickMode = async (index) => { await realClick(`${radios}:nth-child(${index + 1})`, `return mode ${index}`); await until(async () => (await radioState())[index] === "true", `mode ${index} selected`); };
+  const returnState = () => page.evaluate(`(() => { const el = document.querySelector(${json(RETURN)}); return el ? { disabled: el.disabled, busy: el.getAttribute('aria-busy') === 'true', title: el.title } : null })()`);
+  assert.equal(await page.evaluate(`!!document.querySelector('.work-panel [data-side-chat-return-mode] [role=radiogroup]')`), true, "the modes are a radiogroup");
+  assert.deepEqual(await radioState(), ["true", "false", "false"], "None is selected by default");
+  const initial = await returnState();
+  assert.equal(initial.disabled, true, "Return is disabled while the mode is None");
+  assert.ok(initial.title, "the disabled button explains why");
+  await capture("03-return-none-default-light.png");
+  coverage.push("The side-chat header offers a Return to main thread radiogroup that defaults to None, and the return action is disabled with a reason");
+
+  // 5a. Summary: a visible prompt in the side chat, then the answer quoted into the parent draft.
   await page.evaluate(`(() => { const input=document.querySelector('.composer-input'); input.focus(); input.textContent='my own draft'; input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'x'})); input.blur(); })()`);
-  await realClick(".work-panel [data-side-chat-action=add-to-main]", "Add to main chat");
-  await until(async () => (await composerText()).includes("SIDE_REPLY_2"), "quote in the parent composer");
-  const draftText = await composerText();
-  assert.ok(draftText.includes("my own draft"), "typed text is kept");
-  assert.ok(/Quoted from|引用自/.test(draftText), "attribution line present");
-  assert.equal(modelRequests.length, 2, "Add to main chat never sends");
+  await pickMode(1);
+  await until(async () => (await returnState()).disabled === false, "Return enabled in Summary mode");
+  await realClick(RETURN, "Return to main thread (summary)");
+  await until(async () => (await returnState()).busy, "progress on the button while the summary runs", 8000);
+  assert.equal((await returnState()).disabled, true, "a second click is blocked while running");
+  await capture("04-return-summary-running-light.png");
+  await until(() => panelText().then((text) => text.includes("SIDE_SUMMARY_3")), "summary answer visible in the side chat", 30000);
+  await until(async () => (await composerText()).includes("SIDE_SUMMARY_3"), "summary quote in the parent composer", 30000);
+  const summaryDraft = await composerText();
+  assert.ok(summaryDraft.includes("my own draft"), "typed text is kept");
+  assert.ok(/Quoted from|引用自/.test(summaryDraft), "attribution line present");
+  assert.ok(/Summary|摘要/.test(summaryDraft), "summary label present");
+  assert.ok(summaryDraft.includes("> "), "quoted as a Markdown blockquote");
+  assert.equal(modelRequests.length, 3, "exactly one extra request, to the side chat");
+  const summaryPrompt = lastUserText(modelRequests[2]);
+  assert.ok(summaryPrompt.length > 10 && !summaryPrompt.includes("SIDE_QUESTION"), `summary prompt: ${summaryPrompt}`);
+  assert.ok(json(modelRequests[2].messages).includes("SIDE_REPLY_2"), "the summary request went to the side chat");
+  assert.ok((await page.evaluate("[...document.querySelectorAll('.main-pane [data-message-id]')].map((el) => el.innerText).join('|')")).includes("MAIN_REPLY_1") && !(await page.evaluate("[...document.querySelectorAll('.main-pane [data-message-id]')].map((el) => el.innerText).join('|')")).includes("SIDE_SUMMARY"), "nothing reached the parent transcript");
   assert.equal(await visibleMainSession(), parentId);
-  await capture("03-add-to-main-light.png");
-  coverage.push("Add to main chat appends the newest side answer as a Markdown quote with attribution to the parent draft, keeps typed text, and sends nothing");
+  await until(async () => !(await returnState()).busy, "button idle again");
+  await capture("05-return-summary-draft-light.png");
+  coverage.push("Summary sends a visible prompt in the side chat, shows progress and blocks a second click, then quotes the new answer with a Summary label and attribution into the parent draft without sending");
+
+  // 5b. Everything: the exchange after the fork anchor, quoted with role labels.
+  await pickMode(2);
+  await realClick(RETURN, "Return to main thread (everything)");
+  await until(async () => (await composerText()).includes("SIDE_QUESTION: why that sentence?"), "full transcript in the parent composer");
+  const fullDraft = await composerText();
+  assert.ok(fullDraft.includes("SIDE_REPLY_2") && fullDraft.includes("SIDE_SUMMARY_3"), "assistant turns present");
+  assert.ok(/\*\*(You|我):\*\*/.test(fullDraft), "role labels present");
+  assert.ok(!fullDraft.includes("MAIN_REPLY_1"), "the parent prefix is not quoted");
+  assert.ok(fullDraft.includes("my own draft"), "earlier draft text kept");
+  assert.equal(modelRequests.length, 3, "Everything sends nothing");
+  assert.equal(await visibleMainSession(), parentId);
+  await capture("06-return-everything-draft-light.png");
+  coverage.push("Everything quotes every user and assistant exchange after the fork anchor in order with role labels, excludes the parent prefix, appends to the parent draft and sends nothing");
+  await pickMode(0);
+  await until(async () => (await returnState()).disabled === true, "Return disabled again in None");
 
   // 6. Open as a conversation: the child becomes the visible session; the tab is gone.
   await until(async () => (await panelState()) === "open" || (await page.evaluate("!!document.querySelector('.work-panel [data-side-chat]')")), "panel still available");
@@ -219,7 +264,7 @@ try {
   await realClick(".work-panel [data-side-chat-action=open-as-session]", "Open as a conversation");
   await until(async () => (await visibleMainSession()) === childId, "child is the visible session");
   assert.equal(await page.evaluate("!!document.querySelector('.work-panel [data-side-chat]')"), false, "the side-chat tab closed");
-  await capture("04-open-as-conversation-light.png");
+  await capture("07-open-as-conversation-light.png");
   coverage.push("Open as a conversation selects the child through the normal path and closes the tab");
 
   // 7. Back in the parent: closing a tab keeps its created child.
@@ -233,7 +278,7 @@ try {
   assert.ok(await setTextarea(RIGHT_FORM, "SIDE_QUESTION: second question"));
   await realClick(".work-panel [data-side-chat-form] .send-btn", "Send (second)");
   const secondChild = await until(async () => (await sideSession()) || null, "second child bound", 20000);
-  await until(() => panelText().then((text) => text.includes("SIDE_REPLY_3")), "second side reply", 30000);
+  await until(() => panelText().then((text) => text.includes("SIDE_REPLY_4")), "second side reply", 30000);
   const withSecond = await sessionIds();
   assert.ok(withSecond.includes(secondChild));
   await realClick(".work-panel [role=tab] .work-panel-tab-close, .work-panel .work-panel-tab-close", "tab close");
@@ -249,18 +294,18 @@ try {
   await page.evaluate(`(() => { const input=document.querySelector('.composer-input'); input.focus(); input.textContent='HOLD_PARENT keep running'; input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'x'})); })()`);
   await until(() => page.evaluate("!!document.querySelector('.composer-toolbar .send-btn:not(:disabled)')"), "send enabled for hold");
   await page.evaluate("document.querySelector('.composer-toolbar .send-btn').click()");
-  await until(() => modelRequests.length >= 4, "held request reached the model");
+  await until(() => modelRequests.length >= 5, "held request reached the model");
   await realClick(".main-pane [data-side-chat-role=assistant]", "Ask in side chat button (busy parent)");
   await until(() => page.evaluate("!!document.querySelector('.work-panel [data-side-chat]')"), "draft tab while the parent runs");
   assert.ok(await setTextarea(RIGHT_FORM, "SIDE_QUESTION: blocked"));
   const notice = await until(() => page.evaluate("document.querySelector('.work-panel .detached-conversation-notice')?.textContent ?? ''"), "blocked reason visible");
   assert.ok(/still replying|仍在回复/.test(notice), `blocked reason: ${notice}`);
   assert.equal(await page.evaluate("document.querySelector('.work-panel [data-side-chat-form] .send-btn')?.disabled"), true);
-  await capture("05-parent-running-blocks-send-light.png");
+  await capture("08-parent-running-blocks-send-light.png");
   release();
   await until(() => page.evaluate("!document.querySelector('.work-panel .detached-conversation-notice')"), "Send re-enabled once the parent finished", 30000);
   assert.equal(await page.evaluate("document.querySelector('.work-panel [data-side-chat-form] .send-btn')?.disabled"), false);
-  assert.equal(modelRequests.length, 4, "the blocked draft sent nothing");
+  assert.equal(modelRequests.length, 5, "the blocked draft sent nothing");
   coverage.push("A running parent disables the first Send with a visible reason, and Send recovers automatically");
 
   await writeFile(join(output, "result.json"), json({ ok: true, coverage, modelRequestCount: modelRequests.length }, null, 2));
