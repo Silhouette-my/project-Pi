@@ -91,6 +91,7 @@ import {
   sidebarPointerResize,
   sidebarResetWidth,
 } from "../lib/sidebar-resize";
+import type { UseEdgeRevealResult } from "../hooks/use-edge-reveal";
 import { BrandLogo } from "./BrandLogo";
 import { NotificationCenter } from "./NotificationCenter";
 import {
@@ -253,6 +254,9 @@ export function Sidebar({
   onResizeCollapse,
   className,
   onAnimationEnd,
+  edgePanel,
+  pinned = true,
+  onTogglePin,
 }: {
   onToggleSidebar: () => void;
   sidebarToggleShortcut: string;
@@ -263,6 +267,14 @@ export function Sidebar({
   onResizeCollapse: () => void;
   className?: string;
   onAnimationEnd?: ReactAnimationEventHandler<HTMLElement>;
+  /**
+   * Present while the sidebar is an edge-reveal overlay (unpinned): the
+   * `useEdgeReveal` panel props that slide it over the content.
+   */
+  edgePanel?: UseEdgeRevealResult["panelProps"];
+  /** Docked permanently; false while it auto-hides. */
+  pinned?: boolean;
+  onTogglePin?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const workflow = useProjectWorkflow();
@@ -2643,8 +2655,10 @@ export function Sidebar({
   return (
     <aside
       className={cx("sidebar", "sidebar-surface", className)}
+      aria-label={t("nav.sidebarRegion")}
       data-window-blur={windowFocused ? undefined : "true"}
       onAnimationEnd={onAnimationEnd}
+      {...edgePanel}
     >
       <div className="sidebar-header">
         <TooltipButton
@@ -2659,21 +2673,36 @@ export function Sidebar({
           <span>{t("app.shellName")}</span>
         </TooltipButton>
         <div className="sidebar-header-actions no-drag">
-          <TooltipButton
-            type="button"
-            className="icon-btn icon-btn-square"
-            tooltip={
-              sidebarToggleShortcut
-                ? `${t("nav.collapseSidebar")} (${sidebarToggleShortcut})`
-                : t("nav.collapseSidebar")
-            }
-            ariaLabel={t("nav.collapseSidebar")}
-            aria-expanded={true}
-            data-nav="toggle-sidebar"
-            onClick={onToggleSidebar}
-          >
-            <IconSidebar size={15} />
-          </TooltipButton>
+          {onTogglePin ? (
+            <TooltipButton
+              type="button"
+              className="icon-btn icon-btn-square edge-pin-btn"
+              tooltip={pinned ? t("nav.unpinSidebar") : t("nav.pinSidebar")}
+              ariaLabel={pinned ? t("nav.unpinSidebar") : t("nav.pinSidebar")}
+              aria-pressed={pinned}
+              data-nav="pin-sidebar"
+              onClick={onTogglePin}
+            >
+              <IconPin size={15} />
+            </TooltipButton>
+          ) : null}
+          {edgePanel ? null : (
+            <TooltipButton
+              type="button"
+              className="icon-btn icon-btn-square"
+              tooltip={
+                sidebarToggleShortcut
+                  ? `${t("nav.collapseSidebar")} (${sidebarToggleShortcut})`
+                  : t("nav.collapseSidebar")
+              }
+              ariaLabel={t("nav.collapseSidebar")}
+              aria-expanded={true}
+              data-nav="toggle-sidebar"
+              onClick={onToggleSidebar}
+            >
+              <IconSidebar size={15} />
+            </TooltipButton>
+          )}
         </div>
       </div>
 

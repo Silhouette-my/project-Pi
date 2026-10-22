@@ -213,6 +213,19 @@ export type AppSettings = {
    * disabled, so a fresh install shows a clean sidebar until the user opts in.
    */
   sidebarSessionTime?: boolean;
+  /**
+   * Dock the main sidebar permanently. Absent or false means the sidebar
+   * auto-hides: it takes no layout width and slides in over the content when
+   * the pointer reaches the left window edge (or on Cmd/Ctrl+B).
+   */
+  sidebarPinned?: boolean;
+  /**
+   * Dock the work panel permanently. Absent or false means the panel
+   * auto-hides: it takes no layout width and slides in over the content when
+   * the pointer reaches the right window edge (or on Cmd/Ctrl+J). The panel
+   * stays unavailable while no session is active.
+   */
+  workPanelPinned?: boolean;
   /** Voice input settings (D-voice-runtime). */
   voice?: VoiceInputSettings;
   onboardingDismissed: boolean;

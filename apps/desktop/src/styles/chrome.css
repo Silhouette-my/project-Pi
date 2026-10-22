@@ -644,6 +644,7 @@
 .app-work-panel-toggle,
 .main-titlebar .title-nav-btn,
 .window-chrome-row .title-nav-btn,
+.work-panel-pin,
 .work-panel-new-tab,
 .work-panel-maximize {
   display: inline-flex;
@@ -666,6 +667,7 @@
 .app-work-panel-toggle:hover:not(:disabled),
 .main-titlebar .title-nav-btn:hover:not(:disabled),
 .window-chrome-row .title-nav-btn:hover:not(:disabled),
+.work-panel-pin:hover:not(:disabled),
 .work-panel-new-tab:hover:not(:disabled),
 .work-panel-maximize:hover:not(:disabled) {
   background: var(--ds-bg-hover);
@@ -676,6 +678,7 @@
 .app-work-panel-toggle:disabled,
 .main-titlebar .title-nav-btn:disabled,
 .window-chrome-row .title-nav-btn:disabled,
+.work-panel-pin:disabled,
 .work-panel-new-tab:disabled,
 .work-panel-maximize:disabled {
   opacity: 0.4;

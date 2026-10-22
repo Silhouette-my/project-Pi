@@ -556,6 +556,15 @@ The expanded sidebar is user-resizable from 240px to 520px (default 275px).
 Dragging the right-edge handle below 160px collapses the column. Collapse/open
 preserves the preferred expanded width.
 
+Auto-hide side panels (the default) use the shared `edge-reveal.css` classes: a
+6px edge hot zone below `--ds-toolbar-height` (inert marker `.edge-reveal-zone`,
+measured from pointer samples so it never steals the scrollbar), and a fixed
+`.edge-panel` overlay (`z-index: 25`, `--ds-shadow-edge-panel`, 24px slide plus
+fade over `--motion-duration-normal`, `0.01ms` under `prefers-reduced-motion`).
+macOS overlays paint the solid `--ds-bg-sidebar` instead of the glass tint. The
+header pin button (`.edge-pin-btn`) shows `aria-pressed` and keeps a 2px
+`--ds-accent` focus ring. Overlays never enter the 450px MainPane budget.
+
 The profile menu is `280px` wide, opens `8px` above the footer, and uses the
 standard opaque elevated-menu surface, subtle border, and dialog shadow. Its
 first block repeats the local identity with the same glyph and two-line text,

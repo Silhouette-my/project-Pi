@@ -105,6 +105,12 @@ function AppShellContent() {
     sidebarToggleShortcut,
     workPanelToggleTooltip,
     requestedWorkPanelWidth,
+    sidebarPinned,
+    workPanelPinned,
+    leftReveal,
+    rightReveal,
+    toggleSidebarPinned,
+    toggleWorkPanelPinned,
   } = useAppShellRuntime();
   useCopyTex();
 
@@ -120,6 +126,15 @@ function AppShellContent() {
       console.error("Failed to preload the work panel", error);
     });
   }, [page, ready, workPanelOpen]);
+
+  // An unpinned panel is revealed without its store flag: preload it too.
+  const rightRevealOpen = rightReveal.open;
+  useEffect(() => {
+    if (!ready || page !== "chat" || !rightRevealOpen) return;
+    void loadWorkPanel().catch((error: unknown) => {
+      console.error("Failed to preload the work panel", error);
+    });
+  }, [page, ready, rightRevealOpen]);
 
   const pendingWorkPanelWidth = workPanelLayout({
     containerWidth: shellWidth,
@@ -164,7 +179,33 @@ function AppShellContent() {
                 onWidthChange={handleSidebarWidthChange}
                 onWidthCommit={handleSidebarWidthCommit}
                 onResizeCollapse={handleSidebarResizeCollapse}
+                pinned={sidebarPinned}
+                onTogglePin={toggleSidebarPinned}
               />
+            ) : null}
+
+            {/* Unpinned: the sidebar takes no layout width. It stays mounted
+                (scroll position, expanded groups) and slides in over the
+                content from the left edge. */}
+            {!sidebarPinned ? (
+              <>
+                {leftReveal.enabled ? (
+                  <div className="edge-reveal-zone" {...leftReveal.zoneProps} />
+                ) : null}
+                <Sidebar
+                  className="edge-panel"
+                  edgePanel={leftReveal.panelProps}
+                  onToggleSidebar={toggleSidebar}
+                  sidebarToggleShortcut={sidebarToggleShortcut}
+                  sidebarWidth={sidebarWidth}
+                  widthMax={sidebarWidthMax}
+                  onWidthChange={handleSidebarWidthChange}
+                  onWidthCommit={handleSidebarWidthCommit}
+                  onResizeCollapse={handleSidebarResizeCollapse}
+                  pinned={false}
+                  onTogglePin={toggleSidebarPinned}
+                />
+              </>
             ) : null}
 
             {workPanelMaximized && (
@@ -336,6 +377,47 @@ function AppShellContent() {
                   onAutoCollapseSidebar={autoCollapseSidebar}
                   maximized={workPanelMaximized}
                   onToggleMaximize={toggleWorkPanelMaximize}
+                  pinned={workPanelPinned}
+                  onTogglePin={toggleWorkPanelPinned}
+                />
+              </Suspense>
+            )}
+
+            {/* Unpinned: the panel is mounted only while revealed, so its
+                native views follow it in and out, and it never changes the
+                main pane's width. */}
+            {!workPanelPinned && rightReveal.enabled ? (
+              <div className="edge-reveal-zone" {...rightReveal.zoneProps} />
+            ) : null}
+            {!workPanelPinned && rightReveal.mounted && (
+              <Suspense
+                fallback={
+                  <aside
+                    className="work-panel work-panel-pending edge-panel"
+                    role="status"
+                    aria-label={t("app.loadingView")}
+                    data-edge-reveal="right"
+                    data-edge-state="open"
+                    style={
+                      {
+                        "--work-panel-width": `${pendingWorkPanelWidth}px`,
+                        width: pendingWorkPanelWidth,
+                      } as CSSProperties
+                    }
+                  >
+                    <span className="route-pending-indicator" aria-hidden />
+                  </aside>
+                }
+              >
+                <WorkPanel
+                  panelBlocked={searchOpen || rightReveal.phase === "closing"}
+                  containerWidth={shellWidth}
+                  sidebarWidth={sidebarWidth}
+                  sidebarCollapsed
+                  edgePanel={rightReveal.panelProps}
+                  onCloseOverlay={rightReveal.closePanel}
+                  pinned={false}
+                  onTogglePin={toggleWorkPanelPinned}
                 />
               </Suspense>
             )}
@@ -345,7 +427,11 @@ function AppShellContent() {
               className="app-work-panel-toggle no-drag"
               tooltip={workPanelToggleTooltip}
               ariaLabel={workPanelToggleTooltip}
-              aria-pressed={workPanelOpen || presentedWorkPanelOpen}
+              aria-pressed={
+                workPanelPinned
+                  ? workPanelOpen || presentedWorkPanelOpen
+                  : rightReveal.open
+              }
               disabled={!activeSessionId && !presentedWorkPanelOpen && !workPanelExiting}
               onClick={togglePresentedWorkPanel}
             >

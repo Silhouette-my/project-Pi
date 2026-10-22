@@ -115,7 +115,7 @@ async function seedSidebarProjects(hostBinary, dataDir, tempDirs) {
   const host = new Host(hostBinary, dataDir);
   try {
     await host.start();
-    await host.call("settings.set", { sidebarSessionTime: true });
+    await host.call("settings.set", { sidebarSessionTime: true, sidebarPinned: true, workPanelPinned: true });
     await host.call("workspace.set", { path: alpha });
     const importRow = async (id, title, projectPath, updatedMs) => {
       const result = await host.call("session.import", {

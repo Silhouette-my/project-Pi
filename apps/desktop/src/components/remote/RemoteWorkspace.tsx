@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import type { FsEntry, FsReadResult, SessionSummary, WorkspaceDiff } from "@pi-desktop/shared";
+import type { UseEdgeRevealResult } from "../../hooks/use-edge-reveal";
 import { api } from "../../lib/api";
 import { sessionAllows } from "../../lib/remote-session-safety";
 import { useAppStore } from "../../stores/app-store";
 import { Button, SegmentedControl } from "../ui";
 import "../../styles/remote-mvp.css";
 
-export function RemoteWorkspace({ session, width, exiting, onExitAnimationEnd }: {
+export function RemoteWorkspace({ session, width, exiting, onExitAnimationEnd, edgePanel, onClose }: {
   session: SessionSummary; width: number; exiting?: boolean; onExitAnimationEnd?: () => void;
+  /** Present while the workspace is an edge-reveal overlay (unpinned). */
+  edgePanel?: UseEdgeRevealResult["panelProps"];
+  /** Closes an overlay; a docked workspace collapses through the store. */
+  onClose?: () => void;
 }) {
   const { t } = useTranslation("remote");
   const [tab, setTab] = useState<"files" | "review">("files");
@@ -57,15 +62,16 @@ export function RemoteWorkspace({ session, width, exiting, onExitAnimationEnd }:
     finally { if (current(request)) setBusy(false); }
   };
   return (
-    <aside className={`work-panel remote-workspace${exiting ? " is-exiting" : ""}`}
+    <aside className={`work-panel remote-workspace${edgePanel ? " edge-panel" : ""}${exiting ? " is-exiting" : ""}`}
       style={{ "--work-panel-width": `${width}px` } as CSSProperties}
+      {...edgePanel}
       onAnimationEnd={(event) => { if (event.target === event.currentTarget && exiting) onExitAnimationEnd?.(); }}
       aria-label={t("workspace")}>
       <div className="remote-actions">
         <SegmentedControl value={tab} onChange={setTab} label={t("workspace")}
           options={[{ value: "files", label: t("files") }, { value: "review", label: t("review") }]} />
         <Button variant="ghost" disabled={busy} onClick={() => setRevision((value) => value + 1)}>{t("refresh")}</Button>
-        <Button variant="ghost" onClick={() => useAppStore.getState().collapseWorkPanel()}>{t("close")}</Button>
+        <Button variant="ghost" onClick={() => (onClose ? onClose() : useAppStore.getState().collapseWorkPanel())}>{t("close")}</Button>
       </div>
       <p className="remote-hint">{t("identity", { host: session.remoteHostLabel ?? session.remoteHostKey, workspace: session.remoteWorkspaceLabel ?? t("workspace") })}</p>
       <div className="remote-workspace-content" aria-busy={busy}>

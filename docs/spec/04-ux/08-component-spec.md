@@ -37,6 +37,12 @@ Outer frame that positions Topbar, Sidebar, MainChat, and WorkPanel. Owns resize
 +--------------------------------------------------------------------+
 ```
 
+Each side panel is either docked (pinned) or an edge-reveal overlay (default,
+`sidebarPinned` / `workPanelPinned` absent). Only docked panels take layout
+width and take part in the MainPane 450px budget; overlays are fixed layers
+driven by `useEdgeReveal` (`hooks/use-edge-reveal.ts`, ADR auto-hide-side-panels)
+and mounted/hidden by `features/app/useSidePanelReveal.ts`.
+
 ### 1.3 States
 
 | State | Behavior |
@@ -373,6 +379,11 @@ combined model × reasoning selection (§11).
 ---
 
 ## 3. Sidebar
+
+> States: **docked** (pinned; header shows the pin button pressed and Collapse),
+> **overlay closed** (mounted, `inert`, hidden, keeps scroll position),
+> **overlay open** (labelled `aside`, shadow, pin button unpressed, no Collapse
+> button). Default is overlay; `AppSettings.sidebarPinned` docks it.
 
 ### 3.1 Purpose
 
@@ -980,6 +991,12 @@ pending action cards remain reachable outside a hidden process. See
 ---
 
 ## 5. WorkPanel
+
+> States: **docked** (pinned; today's in-flow column with maximize) and
+> **overlay** (unpinned; fixed, mounted only while revealed, native plugin views
+> wait for the slide to settle, no maximize). Both show a header pin button
+> bound to `AppSettings.workPanelPinned`. No active session means no hot zone
+> and a disabled toggle in either mode.
 
 > Replaces the former ContextPanel overlay. The workspace/model/status
 > summary it carried lives in the composer chips and Settings.

@@ -89,6 +89,7 @@
   `AppSettings.keepAwakeWhileRunning` 和 `AppSettings.preventScreenSleep`，
   切换立即生效、启动时恢复，关闭对应开关或退出应用时分别释放阻止器。
   手动睡眠和合盖遵循系统设置。
+- **面板布局**卡片：**始终显示侧边栏**（`sidebarPinned`）与**始终显示侧边面板**（`workPanelPinned`），默认关闭（自动隐藏），两侧独立持久化，与面板头部图钉按钮一致；不参与配置同步。
 - **侧边栏**卡片：一个项目运行活动总开关
   (`AppSettings.sidebarRunningIndicators`) 与独立的**数量徽标**和**活动流光**开关
   (`sidebarRunningBadge`、`sidebarRunningRail`)。未设置时总开关和数量徽标默认开启，活动流光默认关闭；
