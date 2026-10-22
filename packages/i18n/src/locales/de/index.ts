@@ -2904,6 +2904,43 @@ sklm: {
       "continue": "Weiter",
       "dismiss": "Verwerfen"
     }
+  },
+  projectPanel: {
+    agentTab: "Agent",
+    sideTab: "Nebenkonversation",
+    emptyHint: "Hier ist noch nichts geöffnet.",
+    openAgent: "Projekt-Agent öffnen",
+    untitled: "Unbenannte Konversation",
+    sendOpen: "An Konversation senden…",
+    bringOpen: "Konversation einbringen…",
+    sendTitle: "An Konversation senden",
+    sendDescription: "Wähle eine Projektkonversation und den Inhalt, der mitgehen soll. Erst mit „Senden“ wird etwas verschickt.",
+    target: "Konversation",
+    content: "Inhalt",
+    contentLatest: "Letzte Agent-Antwort",
+    contentLast1: "Letzter Austausch",
+    contentLast3: "Letzte 3 Austausche",
+    contentAll: "Gesamte Diskussion",
+    preview: "Vorschau (bearbeitbar)",
+    fromAgent: "Vom Projekt-Agenten:",
+    youLabel: "Du",
+    agentLabel: "Agent",
+    kindWorkstream: "Arbeitsstrang",
+    kindChat: "Chat",
+    kindSide: "Nebenkonversation",
+    noTargets: "Dieses Projekt hat noch keine weiteren Konversationen.",
+    nothingToSend: "Der Agent hat noch nicht geantwortet, es gibt nichts zu senden.",
+    send: "Senden",
+    insertDraft: "In den Entwurf einfügen",
+    sent: "An {{title}} gesendet",
+    inserted: "Zum Entwurf von {{title}} hinzugefügt",
+    sendFailed: "Die Nachricht wurde nicht gesendet.",
+    bringTitle: "Konversation einbringen",
+    bringDescription: "Zitiere die letzte Antwort einer Konversation in den Agent-Entwurf. Erst wenn du sendest, wird etwas verschickt.",
+    source: "Konversation",
+    quotedFrom: "Zitiert aus {{title}}",
+    noAnswer: "Diese Konversation hat noch keine Antwort zum Zitieren.",
+    insertAgentDraft: "In Agent-Entwurf einfügen"
   }
 } satisfies EnglishCatalog;
 

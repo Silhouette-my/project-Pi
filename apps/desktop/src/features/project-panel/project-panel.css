@@ -1,0 +1,90 @@
+/*
+  Project work-panel tabs: the Agent and project side conversations. They fill
+  the work panel's tab body; the panel owns the header, the tab strip and the
+  pin / resize controls (docs/spec 08 WorkPanel).
+*/
+.project-agent-tab,
+.project-side-tab {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.project-panel-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px 4px 14px;
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm);
+}
+.project-panel-context-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-panel-context .ct-icon-btn {
+  display: inline-flex;
+  width: var(--ds-control-size);
+  height: var(--ds-control-size);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ds-text-secondary);
+  cursor: pointer;
+}
+.project-panel-context .ct-icon-btn:hover:not(:disabled) {
+  background: var(--ds-bg-hover);
+  color: var(--ds-text-primary);
+}
+
+.project-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 6px 10px;
+}
+
+.project-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  color: var(--ds-text-muted);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+.project-panel-empty p {
+  margin: 0;
+}
+
+/* Send to conversation / Bring in a conversation. */
+.project-panel-dialog {
+  width: min(100%, 560px);
+}
+.project-panel-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.project-panel-dialog-form .field-select,
+.project-panel-dialog-form .field-textarea {
+  width: 100%;
+}
+.project-panel-dialog-preview {
+  min-height: 9lh;
+  resize: vertical;
+}
+.project-panel-dialog-note {
+  margin: 6px 0 0;
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm);
+}

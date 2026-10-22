@@ -1,6 +1,11 @@
 import { api } from "../../lib/api";
 import { isRemoteSession } from "../../lib/remote-session-safety";
 import {
+  isProjectPanelContextKey,
+  markProjectAgentTabClosed,
+  workPanelContextKey,
+} from "../../lib/project-panel";
+import {
   activateWorkPanelTabState,
   browserPluginTab,
   browserTabLabel,
@@ -65,30 +70,83 @@ export function currentWorkPanelContext(state: AppState): WorkPanelContext {
   };
 }
 
-export function switchWorkPanelSession(
-  state: AppState,
-  nextSessionId?: string,
-): Pick<
+/** The context the panel presents now: the project's on the project page, else the session's. */
+export function presentedWorkPanelContextKey(
+  state: Pick<AppState, "page" | "projectConsoleId" | "activeSessionId">,
+): string | undefined {
+  return workPanelContextKey(state);
+}
+
+type WorkPanelProjection = Pick<
   AppState,
   | "workPanelContexts"
   | "workPanelOpen"
   | "workPanelTabs"
   | "activeWorkPanelTabId"
   | "workPanelFileRequest"
-> {
+>;
+
+function projectionOf(
+  contexts: Record<string, WorkPanelContext>,
+  visible: WorkPanelContext,
+): WorkPanelProjection {
+  return {
+    workPanelContexts: contexts,
+    workPanelOpen: visible.open,
+    workPanelTabs: visible.tabs,
+    activeWorkPanelTabId: visible.activeTabId,
+    workPanelFileRequest: visible.fileRequest,
+  };
+}
+
+/**
+ * Move the visible projection to another session's context. While the project
+ * page is presented the projection belongs to the project context, which a
+ * session change underneath must not disturb: the session's own context is
+ * picked up when the page leaves the project.
+ */
+export function switchWorkPanelSession(
+  state: AppState,
+  nextSessionId?: string,
+): WorkPanelProjection {
+  if (isProjectPanelContextKey(presentedWorkPanelContextKey(state))) {
+    return projectionOf(state.workPanelContexts, currentWorkPanelContext(state));
+  }
   const switched = switchWorkPanelContextState(
     state.workPanelContexts,
     state.activeSessionId,
     currentWorkPanelContext(state),
     nextSessionId,
   );
-  return {
-    workPanelContexts: switched.contexts,
-    workPanelOpen: switched.visible.open,
-    workPanelTabs: switched.visible.tabs,
-    activeWorkPanelTabId: switched.visible.activeTabId,
-    workPanelFileRequest: switched.visible.fileRequest,
-  };
+  return projectionOf(switched.contexts, switched.visible);
+}
+
+/**
+ * Swap the visible projection when the page enters or leaves a project, or
+ * moves between projects (ADR 0028 contexts, project-scoped). Session changes
+ * on the chat page keep their own switch in `selectSession`; this only
+ * handles the page-level change, so both contexts survive the round trip.
+ * Returns undefined when the presented context did not change kind.
+ */
+export function switchWorkPanelPage(
+  state: AppState,
+  previous: Pick<AppState, "page" | "projectConsoleId">,
+): WorkPanelProjection | undefined {
+  const before = presentedWorkPanelContextKey({
+    page: previous.page,
+    projectConsoleId: previous.projectConsoleId,
+    activeSessionId: state.activeSessionId,
+  });
+  const after = presentedWorkPanelContextKey(state);
+  if (before === after) return undefined;
+  if (!isProjectPanelContextKey(before) && !isProjectPanelContextKey(after)) return undefined;
+  const switched = switchWorkPanelContextState(
+    state.workPanelContexts,
+    before,
+    currentWorkPanelContext(state),
+    after,
+  );
+  return projectionOf(switched.contexts, switched.visible);
 }
 
 export type WorkPanelSliceDependencies = StoreAccess & {
@@ -134,7 +192,7 @@ export function createWorkPanelSlice({
 
   openWorkPanel: () => {
     const state = get();
-    const sessionId = state.activeSessionId;
+    const sessionId = presentedWorkPanelContextKey(state);
     if (!sessionId) return;
     const context = currentWorkPanelContext(state);
     set({
@@ -157,11 +215,16 @@ export function createWorkPanelSlice({
 
   openWorkPanelTabForSession: (sessionId, tab) => {
     if (!sessionId) return;
-    if (isRemoteSession(get().sessions.find((session) => session.id === sessionId)) || sessionId.startsWith("remote:")) return;
+    const projectContext = isProjectPanelContextKey(sessionId);
+    if (!projectContext && (isRemoteSession(get().sessions.find((session) => session.id === sessionId)) || sessionId.startsWith("remote:"))) return;
     set((state) => {
       const affectsVisibleSession =
-        state.activeSessionId === sessionId &&
-        (!isSessionSelectionPending(sessionId));
+        presentedWorkPanelContextKey(state) === sessionId &&
+        (projectContext ||
+          !isSessionSelectionPending(sessionId) ||
+          // The selection has committed (the projection is this session's);
+          // only the runtime's own pending marker has not been released yet.
+          (state.activeSessionId === sessionId && !state.selectingSessionId));
       const context = affectsVisibleSession
         ? currentWorkPanelContext(state)
         : state.workPanelContexts[sessionId] ?? emptyWorkPanelContext();
@@ -196,20 +259,20 @@ export function createWorkPanelSlice({
     });
   },
   openWorkPanelTab: (tab) => {
-    const sessionId = get().activeSessionId;
+    const sessionId = presentedWorkPanelContextKey(get());
     if (!sessionId) return;
     get().openWorkPanelTabForSession(sessionId, tab);
   },
   openNewWorkPanelTab: () => {
-    const sessionId = get().activeSessionId;
+    const sessionId = presentedWorkPanelContextKey(get());
     if (!sessionId) return;
     get().openWorkPanelTabForSession(sessionId, newWorkPanelTab());
   },
   replaceWorkPanelTab: (sourceTabId, tab) => {
     set((state) => {
-      const sessionId = state.activeSessionId;
+      const sessionId = presentedWorkPanelContextKey(state);
       if (!sessionId) return {};
-      if (isRemoteSession(state.sessions.find((session) => session.id === sessionId)) || sessionId.startsWith("remote:")) return {};
+      if (!isProjectPanelContextKey(sessionId) && (isRemoteSession(state.sessions.find((session) => session.id === sessionId)) || sessionId.startsWith("remote:"))) return {};
       const next = replaceWorkPanelTabState(
         {
           tabs: state.workPanelTabs,
@@ -240,7 +303,7 @@ export function createWorkPanelSlice({
   },
   activateWorkPanelTab: (tabId) => {
     set((state) => {
-      const sessionId = state.activeSessionId;
+      const sessionId = presentedWorkPanelContextKey(state);
       if (!sessionId) return {};
       const next = activateWorkPanelTabState(
         {
@@ -269,7 +332,7 @@ export function createWorkPanelSlice({
   },
   reorderWorkPanelTabs: (sourceTabId, targetTabId, insertAfter) => {
     set((state) => {
-      const sessionId = state.activeSessionId;
+      const sessionId = presentedWorkPanelContextKey(state);
       if (!sessionId) return {};
       const next = reorderWorkPanelTabsState(
         {
@@ -299,12 +362,16 @@ export function createWorkPanelSlice({
   },
   closeWorkPanelTab: (tabId) => {
     const current = get();
-    if (current.activeSessionId && current.workPanelTabs.some((tab) => tab.id === tabId && tab.resource === "pi.browser/browser")) {
+    const closing = current.workPanelTabs.find((tab) => tab.id === tabId);
+    const closingKey = presentedWorkPanelContextKey(current);
+    // Closing the project Agent tab is a choice a default open must respect.
+    if (closing?.kind === "project-agent" && closingKey) markProjectAgentTabClosed(closingKey);
+    if (current.activeSessionId && !isProjectPanelContextKey(closingKey) && current.workPanelTabs.some((tab) => tab.id === tabId && tab.resource === "pi.browser/browser")) {
       void api.pluginViewClose("pi.browser", "browser", { sessionId: current.activeSessionId, tabId })
         .catch((error) => get().showToast(String(error), { variant: "error" }));
     }
     set((state) => {
-      const sessionId = state.activeSessionId;
+      const sessionId = presentedWorkPanelContextKey(state);
       if (!sessionId) return {};
       const next = closeWorkPanelTabState(
         {
@@ -337,7 +404,7 @@ export function createWorkPanelSlice({
   },
   collapseWorkPanel: () => {
     const state = get();
-    const sessionId = state.activeSessionId;
+    const sessionId = presentedWorkPanelContextKey(state);
     if (!sessionId || !state.workPanelOpen) return;
     set({
       workPanelOpen: false,
@@ -375,7 +442,7 @@ export function createWorkPanelSlice({
     const sessionId = event.sessionId;
     if (!sessionId || !event.tabId || !event.url) return;
     set((state) => {
-      const visible = state.activeSessionId === sessionId && !isSessionSelectionPending(sessionId);
+      const visible = presentedWorkPanelContextKey(state) === sessionId && !isSessionSelectionPending(sessionId);
       const context = visible ? currentWorkPanelContext(state) : state.workPanelContexts[sessionId];
       if (!context || !context.tabs.some((tab) => tab.id === event.tabId && tab.resource === "pi.browser/browser")) return {};
       const tabs = context.tabs.map((tab) => tab.id === event.tabId
@@ -390,7 +457,8 @@ export function createWorkPanelSlice({
     const hasBrowser = get().pluginViews.some(
       (view) => view.pluginId === "pi.browser" && view.viewId === "browser",
     );
-    if (!hasBrowser) {
+    // The project context has no session to own a browser view.
+    if (!hasBrowser || isProjectPanelContextKey(presentedWorkPanelContextKey(get()))) {
       if (/^https?:\/\//i.test(url.trim())) {
         void api.browserOpenExternal(url.trim());
       }

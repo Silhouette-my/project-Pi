@@ -2902,6 +2902,43 @@ sklm: {
       "continue": "Continuer",
       "dismiss": "Ignorer"
     }
+  },
+  projectPanel: {
+    agentTab: "Agent",
+    sideTab: "Conversation annexe",
+    emptyHint: "Rien n'est encore ouvert ici.",
+    openAgent: "Ouvrir l'agent du projet",
+    untitled: "Conversation sans titre",
+    sendOpen: "Envoyer à une conversation…",
+    bringOpen: "Importer une conversation…",
+    sendTitle: "Envoyer à une conversation",
+    sendDescription: "Choisissez une conversation du projet et ce qu'il faut transmettre. Rien n'est envoyé tant que vous n'appuyez pas sur Envoyer.",
+    target: "Conversation",
+    content: "Contenu",
+    contentLatest: "Dernière réponse de l'agent",
+    contentLast1: "Dernier échange",
+    contentLast3: "3 derniers échanges",
+    contentAll: "Toute la discussion",
+    preview: "Aperçu (modifiable)",
+    fromAgent: "De l'agent du projet :",
+    youLabel: "Vous",
+    agentLabel: "Agent",
+    kindWorkstream: "Ligne de travail",
+    kindChat: "Chat",
+    kindSide: "Conversation annexe",
+    noTargets: "Ce projet n'a pas encore d'autres conversations.",
+    nothingToSend: "L'agent n'a pas encore répondu, il n'y a rien à envoyer.",
+    send: "Envoyer",
+    insertDraft: "Insérer dans son brouillon",
+    sent: "Envoyé à {{title}}",
+    inserted: "Ajouté au brouillon de {{title}}",
+    sendFailed: "Le message n'a pas été envoyé.",
+    bringTitle: "Importer une conversation",
+    bringDescription: "Citez la dernière réponse d'une conversation dans le brouillon de l'agent. Rien n'est envoyé tant que vous ne l'envoyez pas.",
+    source: "Conversation",
+    quotedFrom: "Cité depuis {{title}}",
+    noAnswer: "Cette conversation n'a pas encore de réponse à citer.",
+    insertAgentDraft: "Insérer dans le brouillon de l'agent"
   }
 } satisfies EnglishCatalog;
 

@@ -1,5 +1,5 @@
 /*
-  Project home composition: console + Agent dock, overview cards and the
+  Project home composition: console, overview cards and the
   workstream list/detail split.
 
   `--workflow-accent` is the project's accent: a per-project colour when set,
@@ -31,16 +31,12 @@
   container-type: inline-size;
 }
 
-/* Header tools: the console action group plus the dock toggle. */
+/* Header tools: the console action group plus the Agent entry. */
 .workflow-header-tools {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-}
-.workflow-header-tools .workflow-agent-dock-toggle.is-active {
-  color: var(--workflow-accent);
-  background: color-mix(in oklab, var(--workflow-accent) 12%, transparent);
 }
 
 /* Section header line shared by overview and workstream list. */
@@ -443,74 +439,6 @@
   background: var(--workflow-accent);
 }
 
-/* Project Agent dock. */
-.project-agent-dock {
-  display: flex;
-  flex: 0 0 340px;
-  flex-direction: column;
-  width: 340px;
-  min-width: 0;
-  min-height: 0;
-  border-left: 1px solid var(--ds-border-subtle);
-  background: var(--ds-bg-dock);
-}
-.workflow-console[data-agent-dock="overlay"] > .project-agent-dock {
-  position: absolute;
-  z-index: 3;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(340px, 92%);
-  box-shadow: var(--ds-shadow-dialog);
-}
-.project-agent-dock-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  flex-shrink: 0;
-  padding: 0 8px 0 14px;
-  border-bottom: 1px solid var(--ds-border-subtle);
-}
-.project-agent-dock-glyph {
-  display: inline-flex;
-  color: var(--workflow-accent);
-}
-.project-agent-dock-header h2 {
-  margin: 0;
-  font-size: var(--text-md);
-  font-weight: var(--font-weight-strong);
-}
-.project-agent-dock-tag {
-  padding: 1px 6px;
-  border-radius: var(--radius-2xs);
-  background: var(--ds-tile);
-  color: var(--ds-text-muted);
-  font-size: var(--text-xs);
-}
-.project-agent-dock-spacer {
-  flex: 1;
-}
-.project-agent-dock-header .ct-icon-btn {
-  display: inline-flex;
-  width: var(--ds-control-size);
-  height: var(--ds-control-size);
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--ds-text-secondary);
-  cursor: pointer;
-}
-.project-agent-dock-header .ct-icon-btn:hover:not(:disabled) {
-  background: var(--ds-bg-hover);
-  color: var(--ds-text-primary);
-}
-.project-agent-dock .send-btn:not(:disabled) {
-  background: var(--workflow-accent);
-}
-
 @container (max-width: 640px) {
   .project-card-acceptance {
     display: none;
@@ -541,97 +469,4 @@
   font-size: var(--text-md);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Dock tabs and the per-tab context line. */
-.project-agent-dock.edge-panel {
-  top: var(--ds-toolbar-height);
-  width: 340px;
-  border-left: 0;
-}
-.project-agent-dock-tabs {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.project-agent-dock-tab-wrap {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-}
-.project-agent-dock-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 140px;
-  height: 28px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--ds-text-secondary);
-  font-size: var(--text-sm-plus);
-  cursor: pointer;
-}
-.project-agent-dock-tab span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.project-agent-dock-tab:hover,
-.project-agent-dock-tab[aria-selected="true"] {
-  background: var(--ds-bg-hover);
-  color: var(--ds-text-primary);
-}
-.project-agent-dock-tab-close {
-  display: inline-grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border: 0;
-  border-radius: var(--radius-2xs);
-  background: transparent;
-  color: var(--ds-text-muted);
-  cursor: pointer;
-}
-.project-agent-dock-tab-close:hover {
-  background: var(--ds-bg-hover);
-  color: var(--ds-text-primary);
-}
-.project-agent-dock-context {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 4px 8px 4px 14px;
-  color: var(--ds-text-muted);
-  font-size: var(--text-sm);
-}
-.project-agent-dock-context > span:first-child,
-.project-agent-dock-context-text {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.project-agent-dock-context .ct-icon-btn {
-  display: inline-flex;
-  width: var(--ds-control-size);
-  height: var(--ds-control-size);
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--ds-text-secondary);
-  cursor: pointer;
-}
-.project-agent-dock-context .ct-icon-btn:hover {
-  background: var(--ds-bg-hover);
-  color: var(--ds-text-primary);
 }

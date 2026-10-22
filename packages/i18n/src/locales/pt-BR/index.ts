@@ -2872,6 +2872,43 @@ export const ptBR = {
       continue: "Continuar",
       dismiss: "Dispensar"
     }
+  },
+  projectPanel: {
+    agentTab: "Agente",
+    sideTab: "Conversa lateral",
+    emptyHint: "Ainda não há nada aberto aqui.",
+    openAgent: "Abrir o agente do projeto",
+    untitled: "Conversa sem título",
+    sendOpen: "Enviar para uma conversa…",
+    bringOpen: "Trazer uma conversa…",
+    sendTitle: "Enviar para uma conversa",
+    sendDescription: "Escolha uma conversa do projeto e o que levar. Nada é enviado até você pressionar Enviar.",
+    target: "Conversa",
+    content: "Conteúdo",
+    contentLatest: "Última resposta do agente",
+    contentLast1: "Última troca",
+    contentLast3: "Últimas 3 trocas",
+    contentAll: "Toda a discussão",
+    preview: "Prévia (editável)",
+    fromAgent: "Do agente do projeto:",
+    youLabel: "Você",
+    agentLabel: "Agente",
+    kindWorkstream: "Linha de trabalho",
+    kindChat: "Chat",
+    kindSide: "Conversa lateral",
+    noTargets: "Este projeto ainda não tem outras conversas.",
+    nothingToSend: "O agente ainda não respondeu, então não há nada para enviar.",
+    send: "Enviar",
+    insertDraft: "Inserir no rascunho dela",
+    sent: "Enviado para {{title}}",
+    inserted: "Adicionado ao rascunho de {{title}}",
+    sendFailed: "A mensagem não foi enviada.",
+    bringTitle: "Trazer uma conversa",
+    bringDescription: "Cite a última resposta de uma conversa no rascunho do agente. Nada é enviado até você enviar.",
+    source: "Conversa",
+    quotedFrom: "Citado de {{title}}",
+    noAnswer: "Esta conversa ainda não tem uma resposta para citar.",
+    insertAgentDraft: "Inserir no rascunho do agente"
   }
 } satisfies EnglishCatalog;
 

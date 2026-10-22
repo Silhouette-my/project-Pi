@@ -49,6 +49,13 @@ import { FilesTab } from "./FilesTab";
 import { PluginViewTab } from "./PluginViewTab";
 import { SubagentTranscriptTab } from "./SubagentTranscriptTab";
 import { SideChatTab } from "../../features/chat/side-chat/SideChatTab";
+import { ProjectAgentTab } from "../../features/project-panel/ProjectAgentTab";
+import { ProjectSideTab } from "../../features/project-panel/ProjectSideTab";
+import { ProjectPanelEmpty } from "../../features/project-panel/ProjectPanelEmpty";
+import {
+  isProjectPanelContextKey,
+  workPanelContextKey,
+} from "../../lib/project-panel";
 import {
   MAIN_PANE_MIN_WIDTH,
   WORK_PANEL_COMPACT_MIN_WIDTH,
@@ -67,6 +74,8 @@ const TAB_ICONS = {
   plugin: IconPlug,
   subagent: IconBot,
   sidechat: IconChat,
+  "project-agent": IconBot,
+  "project-side": IconChat,
 } as const;
 
 type WorkPanelResizeState = {
@@ -122,6 +131,8 @@ function tabLabel(
   if (tab.kind === "new") return t("panel.new.title");
   if (tab.kind === "subagent") return tab.label ?? t("panel.tabs.subagent");
   if (tab.kind === "sidechat") return t("sideChat.title");
+  if (tab.kind === "project-agent") return t("projectPanel.agentTab");
+  if (tab.kind === "project-side") return tab.label || t("projectPanel.sideTab");
   if (tab.kind !== "file") return t(`panel.tabs.${tab.kind}`);
   const path = tab.resource ?? "";
   return path.split("/").filter(Boolean).pop() || t("panel.tabs.file");
@@ -169,7 +180,11 @@ const EDGE_PANEL_CONTENT_MARGIN = 48;
 export function WorkPanel(props: Parameters<typeof LocalWorkPanel>[0]) {
   const session = useAppStore((state) => state.sessions.find((item) => item.id === state.activeSessionId));
   const sessionId = useAppStore((state) => state.activeSessionId);
+  const projectPage = useAppStore((state) => state.page === "project");
   const width = useAppStore((state) => state.workPanelWidth);
+  // The project page presents the project's own context, whatever session
+  // happens to be active underneath it.
+  if (projectPage) return <LocalWorkPanel {...props} />;
   if (session && isRemoteSession(session)) {
     return <RemoteWorkspace key={session.id} session={session} width={Math.min(width, Math.max(280, (props.containerWidth || 900) - 320))}
       exiting={props.exiting} onExitAnimationEnd={props.onExitAnimationEnd}
@@ -247,6 +262,10 @@ function LocalWorkPanel({
   const tabs = rawTabs.filter(isKnownWorkPanelTab);
   const activeTabId = useAppStore((s) => s.activeWorkPanelTabId);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
+  // The context key is what tab reordering must not outlive: the session's id,
+  // or `project:<id>` on the project page.
+  const contextKey = useAppStore((s) => workPanelContextKey(s));
+  const projectContext = isProjectPanelContextKey(contextKey);
   const pluginViews = useAppStore((s) => s.pluginViews);
   const width = useAppStore((s) => s.workPanelWidth);
   const yieldedWidth = useAppStore((s) => s.workPanelYieldedWidth);
@@ -405,14 +424,14 @@ function LocalWorkPanel({
     const state = tabReorderState.current;
     if (
       state &&
-      (state.activeSessionId !== activeSessionId ||
+      (state.activeSessionId !== contextKey ||
         state.activeTabId !== activeTabId ||
         state.tabSignature !== tabSignature)
     ) {
       suppressedTabClickPointerIdsRef.current.add(state.pointerId);
       finishTabReorder();
     }
-  }, [activeSessionId, activeTabId, finishTabReorder, tabSignature]);
+  }, [contextKey, activeTabId, finishTabReorder, tabSignature]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -617,7 +636,7 @@ function LocalWorkPanel({
       const state: WorkPanelTabReorderState = {
         pointerId: event.pointerId,
         sourceTabId,
-        activeSessionId,
+        activeSessionId: contextKey,
         activeTabId,
         tabSignature,
         startClientX: event.clientX,
@@ -637,7 +656,7 @@ function LocalWorkPanel({
       window.addEventListener("pointerup", onUp, true);
       window.addEventListener("pointercancel", onCancel, true);
     },
-    [activeSessionId, activeTabId, finishTabReorder, reorderTab, tabSignature],
+    [contextKey, activeTabId, finishTabReorder, reorderTab, tabSignature],
   );
 
   const selectTool = useCallback(
@@ -953,7 +972,7 @@ function LocalWorkPanel({
                         aria-grabbed={draggingTabId === tab.id}
                         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
                         className="work-panel-tab-button"
-                        title={tab.kind === "subagent" || tab.kind === "sidechat" ? tab.label ?? label : tab.resource ?? label}
+                        title={tab.kind === "subagent" || tab.kind === "sidechat" || tab.kind === "project-agent" || tab.kind === "project-side" ? tab.label ?? label : tab.resource ?? label}
                         onPointerDown={(event) => beginTabReorder(event, tab.id)}
                         onDragStart={(event) => event.preventDefault()}
                         onClick={() => activateTab(tab.id)}
@@ -986,16 +1005,20 @@ function LocalWorkPanel({
               </div>
           </div>
           <div className="work-panel-actions no-drag">
-              <TooltipButton
-                ref={newTabButtonRef}
-                type="button"
-                className="work-panel-new-tab"
-                tooltip={t("panel.new.open")}
-                ariaLabel={t("panel.new.open")}
-                onClick={openNewWorkPanelTab}
-              >
-                <IconPlus size={16} />
-              </TooltipButton>
+              {/* The project context holds only project conversations: the
+                  launcher's tools need a session of their own. */}
+              {projectContext ? null : (
+                <TooltipButton
+                  ref={newTabButtonRef}
+                  type="button"
+                  className="work-panel-new-tab"
+                  tooltip={t("panel.new.open")}
+                  ariaLabel={t("panel.new.open")}
+                  onClick={openNewWorkPanelTab}
+                >
+                  <IconPlus size={16} />
+                </TooltipButton>
+              )}
             {onTogglePin ? (
               <TooltipButton
                 type="button"
@@ -1050,6 +1073,28 @@ function LocalWorkPanel({
               <SideChatTab tab={activeTab} />
             </div>
           )}
+          {activeTab?.kind === "project-agent" && activeTab.resource && (
+            <div
+              key={activeTab.id}
+              id={`work-panel-surface-${activeTab.id}`}
+              className="work-panel-tabpane"
+              role="tabpanel"
+              aria-labelledby={`work-panel-tab-${activeTab.id}`}
+            >
+              <ProjectAgentTab projectId={activeTab.resource} />
+            </div>
+          )}
+          {activeTab?.kind === "project-side" && activeTab.resource && (
+            <div
+              key={activeTab.id}
+              id={`work-panel-surface-${activeTab.id}`}
+              className="work-panel-tabpane"
+              role="tabpanel"
+              aria-labelledby={`work-panel-tab-${activeTab.id}`}
+            >
+              <ProjectSideTab sessionId={activeTab.resource} label={activeTab.label} />
+            </div>
+          )}
           {activeTab?.kind === "review" && (
             <div
               id={`work-panel-surface-${activeTab.id}`}
@@ -1097,7 +1142,12 @@ function LocalWorkPanel({
                 </div>
               );
             })()}
-          {(!activeTab || activeTab.kind === "new") && (
+          {!activeTab && projectContext && (
+            <div className="work-panel-tabpane" data-testid="work-panel-empty">
+              <ProjectPanelEmpty contextKey={contextKey} />
+            </div>
+          )}
+          {(!activeTab || activeTab.kind === "new") && !(projectContext && !activeTab) && (
             <div
               className="work-panel-tabpane"
               data-testid="work-panel-empty"

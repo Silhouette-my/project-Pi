@@ -71,8 +71,9 @@
 - **Preconditions:** Built task worktree, reused Electron/runtime dependencies,
   temporary HOME, Host data and Chromium profile, loopback-only model fixture.
   No installed profile or real provider is used.
-- **Steps:** Open an empty project from the sidebar, send from the project
-  Agent dock, read the reply in the dock while the console stays the page, open
+- **Steps:** Open an empty project from the sidebar (the right work panel
+  presents the project Agent tab by default), send from the Agent tab, read the
+  reply there while the console stays the page, open
   the full conversation in the existing ChatSurface, return and reopen the
   project Agent. Restart the app and continue the same discussion. Create a
   workstream through the shared dialog, open its detail, search and open a
@@ -87,11 +88,13 @@
   ordinary sessions preserve their permission behavior. Header actions stay
   below the native titlebar, overview and work details are distinct, and
   navigation shows each standalone conversation once without moving its folder.
-  Failed sends retain the dock draft; later navigation cannot send it to a
-  different session.
+  Failed sends retain the Agent draft; later navigation cannot send it to a
+  different session. A project chat shows the Agent tab by default and a closed
+  tab is not re-added to that chat.
 - **Coverage:** `scripts/e2e-project-workflow-ui.mjs` exercises the production
   process/renderer journey and captures native screenshots.
-  `project-agent-navigation.test.mjs`, Project Workflow UI component journeys,
+  `project-agent-navigation.test.mjs`, `project-panel-*.test.mjs`, Project
+  Workflow UI component journeys,
   desktop workflow composition tests, runtime discussion-catalog tests, and
   Host project-agent/tools-execute tests cover routing, compatibility and
   enforcement below the UI.
@@ -18697,3 +18700,24 @@ host-created files. The full app's file-preview viewer is covered separately.
 - **Status**: Automated by `scripts/e2e-edge-reveal-side-panels.mjs` (real CDP
   pointer and keyboard input) plus `edge-reveal.test.mjs`. The navigation and
   three-column scripts pin both panels at setup.
+
+### E2E-PROJECT-agent-send-to-conversation
+
+- **Preconditions:** As E2E-PROJECT-agent-entry-and-console-layout; the project
+  Agent has answered and a project chat session exists.
+- **Steps:** From the Agent tab open **Send to conversation…**, pick the project
+  chat, keep the latest Agent answer, edit the preview and press Send. Select
+  the project chat from the sidebar, close its Agent tab, return to the project
+  page and reopen the chat.
+- **Expected:** The target session receives exactly the previewed text, led by
+  the attribution line, and runs a turn (the loopback model sees it); the
+  console stays the visible page and no workflow run starts. The Agent itself
+  advertises no tools. The project chat shows the Agent tab by default; after
+  closing it, it is not re-added to that chat while the project page presents it
+  again.
+- **Coverage:** `scripts/e2e-project-workflow-ui.mjs`;
+  `project-panel-text.test.mjs` (text assembly) and
+  `project-panel-context.test.mjs` / `project-panel-store.test.mjs` (context
+  keying, default open, close memory).
+- **Specs:** `04-ux/01-ui-ia.md` §3.6; ADR project-structure-views, ADR 0033
+  amendments.

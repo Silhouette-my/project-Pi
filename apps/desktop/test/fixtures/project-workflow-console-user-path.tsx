@@ -23,6 +23,7 @@ import {
   useProjectWorkflow,
 } from "../../src/features/project-workflow/useProjectWorkflow";
 import { ProjectConsole } from "../../src/features/project-workflow/ProjectConsole";
+import { ProjectAgentTab } from "../../src/features/project-panel/ProjectAgentTab";
 import { useAppStore } from "../../src/stores/app-store";
 import { useUnfiledNewSession } from "../../src/features/project-workflow/useUnfiledNewSession";
 import "../../src/styles/globals.css";
@@ -336,6 +337,19 @@ function RevisionProbe() {
     </>
   );
 }
+/**
+ * Stands in for the right work panel, which the console no longer renders: it
+ * shows the project Agent tab once the project's panel context holds one,
+ * exactly what WorkPanel does for a `project-agent` tab.
+ */
+function WorkPanelProbe() {
+  const tab = useAppStore((state) => state.workPanelTabs.find((item) => item.kind === "project-agent"));
+  return tab?.resource ? (
+    <aside data-work-panel-probe style={{ width: 340, display: "flex", flexDirection: "column" }}>
+      <ProjectAgentTab projectId={tab.resource} />
+    </aside>
+  ) : null;
+}
 const root = createRoot(document.getElementById("root")!);
 function mount() {
   flushSync(() =>
@@ -343,6 +357,7 @@ function mount() {
       <ProjectWorkflowProvider>
         <RevisionProbe />
         <ProjectConsole projectId="project-1" />
+        <WorkPanelProbe />
       </ProjectWorkflowProvider>,
     ),
   );
@@ -619,7 +634,8 @@ Object.assign(window, {
       );
     }
     click("workflow.overview");
-    // The right panel is unpinned by default and reveals on request.
+    // The Agent lives in the right work panel's project context; the header
+    // entry asks the panel to show it.
     const openDock = () => {
       if (document.querySelector('[data-workflow="project-intent"]')) return true;
       const toggle = document.querySelector<HTMLButtonElement>("[data-project-agent-dock-toggle]");
@@ -647,6 +663,8 @@ Object.assign(window, {
     useAppStore.setState({ page: "project", projectConsoleId: "project-1", activeSessionId: null });
     mount();
     await until(openDock, "Project overview missing after remount");
+    // Sending needs the reloaded snapshot; the Agent tab says so until it arrives.
+    await until(() => !document.querySelector(".detached-conversation-notice"), "Agent tab stayed unavailable after remount");
     const restoredIntent = document.querySelector('[data-workflow="project-intent"]')!;
     check(field("workflow.intentText", restoredIntent).value === "Review a new direction", "Remount discarded project draft");
     rejectSend = false;

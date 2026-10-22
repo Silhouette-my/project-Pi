@@ -114,9 +114,13 @@ destination, chat as the home surface, tools and permissions inline.
 - **Work panel**: docked right column when pinned (`AppSettings.workPanelPinned`),
   otherwise an auto-hide overlay revealed from the right window edge with the
   same dwell, hide delay, hold rules, Escape and `Cmd/Ctrl + J` behavior as the
-  sidebar. It needs an active session: without one there is no hot zone and no
-  reveal. Agent and tool results never open or reveal it; only an explicit user
-  gesture does. The overlay keeps the stored panel width, floats above MainPane
+  sidebar. It needs a presented context (the active session, or the project on the
+  project page): without one there is no hot zone and no reveal. Agent and tool
+  results never open or reveal it; only an explicit user gesture does. The one
+  exception is navigation, not an agent: entering a project, or a chat of a
+  workflow project, adds the project Agent tab and opens the panel (revealing an
+  auto-hidden one once) unless the user closed that tab in that context (ADR
+  0033 amendment). The overlay keeps the stored panel width, floats above MainPane
   (no width budget, no sidebar yield, no preview/maximize; pin the panel for
   those), and is mounted only while revealed. A side-chat tab opened by the
   explicit Ask in side chat click reveals it through the same user-gesture
@@ -506,16 +510,20 @@ workstream's detail, including its candidate, controls and outputs and evidence;
 stacked below 720px of page width), Shared context (canonical references and
 decisions, scoped by a workstream filter) and Structure.
 
-The canonical discussion-only Project Agent lives in a dock at the console's
-right edge. The dock reads the Agent session as a detached transcript, so the
-console stays the visible page, the active chat session is unchanged and the
-chat surface mounts no extra pane. Its composer sends to the Agent session
-explicitly and never inherits an unrelated active chat; the full conversation
-opens through the existing Agent entry. The dock is docked when the console is
-at least 960px wide, where an explicit open/close choice is remembered per
-project (open by default). Narrower consoles show it as an overlay only on
-request, and the overlay closes when the console is left or widens. Explicit
-Work actions still require a workstream.
+The canonical discussion-only Project Agent is a tab of the right work panel,
+open by default on the project page and in the project's conversations (ADR
+project-structure-views amendment, ADR 0033 amendment). The tab reads the Agent
+session as a detached transcript, so the console stays the visible page, the
+active chat session is unchanged and the chat surface mounts no extra pane. Its
+composer sends to the Agent session explicitly and never inherits an unrelated
+active chat; the full conversation opens through the existing Agent entry. The
+panel follows the right-edge pin/width rules: docked it sits beside the console,
+auto-hidden it is revealed once over the page on entry. In the tab, **Send to
+conversation…** hands the Agent's latest answer (or its last 1, 3 or all
+exchanges) to a project conversation after the user picks the thread and edits a
+preview, and **Bring in a conversation…** quotes a thread's latest answer into
+the Agent draft; the Agent itself still has no tools. Explicit Work actions
+still require a workstream.
 
 Structure is a separate project tab with Sessions, Git and Architecture views.
 Sessions shows only recorded `parentSessionId` edges; main-session and execution
@@ -550,12 +558,13 @@ or workstream navigation choice.
 
 Side conversations open beside the console rather than replacing it: creating
 one, or choosing "Open beside" on a workstream's side-conversation list, adds a
-tab to the project dock next to the Agent. A side tab shows its purpose and
-source workstream, reads its session as a detached transcript, sends only to
-that session, links Explore proposals to Shared context, and can still open as a
-full conversation. The dock follows the right-edge pin preference (ADR
-auto-hide-side-panels): unpinned it reveals from the window edge, pinned it
-docks; on the project page the chat work panel neither presents nor reveals.
+`project-side` tab to the work panel's project context next to the Agent. A
+side tab shows its purpose, read-only return policy and source workstream, reads
+its session as a detached transcript, sends only to that session, links Explore
+proposals to Shared context, and can still open as a full conversation. The
+panel follows the right-edge pin preference (ADR auto-hide-side-panels): unpinned
+it reveals from the window edge, pinned it docks; the project page presents its
+own `project:<id>` context.
 
 Side conversations start with an explicit Ask, Explore or Work intent. Ask uses
 selection and necessary background without writing effective project context.

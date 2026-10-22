@@ -1263,6 +1263,17 @@ entirely inside the plugin's isolated page:
   The "open a project" empty states carry no action button: opening a project
   resets the panel context and hides the panel, so the button would undo the
   surface that offered it (D224).
+- Project Agent tab (`project-agent`, resource: projectId) and project side
+  tab (`project-side`, resource: side session id), ADR project-structure-views
+  amendment. They live in the project-scoped context `project:<projectId>`
+  presented on the project page (the page no longer hides the panel) and, for the
+  Agent, in the contexts of chats that belong to a workflow project. The Agent
+  tab renders the canonical Agent through `DetachedConversation` (first send
+  creates the session with `agent.open`), with **Send to conversation…** and
+  **Bring in a conversation…** dialogs; the side tab shows purpose, return
+  policy, source workstream, an Explore review link and open-as-conversation. A
+  closed Agent tab is not re-added to that session context. The project context
+  has no `+` launcher.
 - Side-chat tab (`sidechat`, ADR side-chats-on-detached-transcripts): created
   only by the explicit **Ask in side chat** action on a message, keyed by
   parent session and anchor message, so asking again reuses it; no agent event

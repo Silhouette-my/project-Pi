@@ -38,6 +38,7 @@ import {
 import type { StoreAccess } from "./slices/types";
 import {
   createWorkPanelSlice,
+  switchWorkPanelPage,
   switchWorkPanelSession,
 } from "./slices/work-panel-slice";
 import {
@@ -464,6 +465,8 @@ export const useAppStore = create<AppState>((set, get) => {
 useAppStore.subscribe((state, previous) => {
   transcriptReading.reconcile(state, previous);
   sessionRuntime.syncTranscriptProjection(state, previous);
+  const panel = switchWorkPanelPage(state, previous);
+  if (panel) useAppStore.setState(panel);
 });
 
 export async function materializeDraftSession(

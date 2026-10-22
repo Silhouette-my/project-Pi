@@ -6,9 +6,9 @@ The overview projects the existing Host workflow: current goals and acceptance
 counts, actual workstream states, blockers, proposed decisions, next actions and
 recent openable artifacts. It never synthesizes project completion or a progress
 percentage from execution completion. The canonical Agent discussion moved from
-an overview composer to a right-edge project dock that reads the Agent session as
-a detached transcript (no active-session change); drafts and Chat/Work
-continuation retain their current behavior. Outputs and evidence are shown in the
+an overview composer to the right work panel (see the amendment below), which
+reads the Agent session as a detached transcript (no active-session change);
+drafts and Chat/Work continuation retain their current behavior. Outputs and evidence are shown in the
 workstream detail; shared context remains a tab, leaving four tabs.
 
 A separate Structure tab contains switchable Sessions, Git and Architecture
@@ -49,3 +49,29 @@ Project previews do not handle follow-up messages as execution commands.
 Filesystem reads reject traversal, binary/oversized files and symlink escapes.
 The installed Archify skill supplies a fixture format reference only; neither
 the skill nor its generator is an application dependency.
+
+## Amendment: the Agent moves from the project dock to the work panel (2026-10-22)
+
+The console no longer renders its own right-edge dock. The project Agent and
+project side conversations are tabs of the existing right work panel
+(`components/workpanel/WorkPanel.tsx`), in a project-scoped context
+(ADR auto-hide-side-panels amendment):
+
+- `project-agent` (resource: projectId) renders the canonical Agent session
+  through `DetachedConversation`; its first send still creates the session with
+  `agent.open`. The tab root keeps `data-project-agent-dock` and its composer
+  form keeps `data-workflow="project-intent"`.
+- `project-side` (resource: side-conversation session id) shows the purpose, the
+  read-only return policy label, the source workstream, an Explore "review
+  proposals" link to the Shared context tab and "open as conversation", above a
+  `DetachedConversation`. Creating a side conversation or choosing "Open beside"
+  opens this tab through `openProjectPanelTab`.
+- The Agent has no tools and stays discussion-only
+  (ADR project-agent-discussion-boundary). Moving words between the Agent and
+  conversation threads is done by the user in the Agent tab: **Send to
+  conversation…** (target thread, latest answer or last 1/3/all exchanges, an
+  editable preview, then Send with an attribution line, or insert into the
+  target's composer draft) and **Bring in a conversation…** (a thread's latest
+  answer as a quoted block in the Agent draft). Neither lets the Agent act.
+- The console header's `data-project-agent-dock-toggle` button now reveals the
+  Agent tab. The old per-project dock state and its CSS are removed.

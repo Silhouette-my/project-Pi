@@ -95,3 +95,20 @@ failure mode, for no benefit over measuring the in-flow rect.
 - `apps/desktop/electron/main/browser-view.ts` (`BrowserPane.setBounds`)
 - `docs/spec/06-delivery/04-e2e-test-plan.md` (E2E-056)
 - `docs/spec/08-meta/decisions-log.md` (D163)
+
+## Amendment: navigation-driven default open of the project Agent (2026-10-22)
+
+"No agent or tool event opens the panel" still holds. The one exception is
+driven by the user's navigation, never by an agent: entering the project page,
+or selecting a chat that belongs to a workflow project (its project path is a
+root of a project group), adds the project Agent tab to the context being
+presented and opens the panel. Docked panels open in place; an auto-hidden one
+is revealed once as an edge overlay.
+
+- The rule runs once per visit to a context and reads only navigation state
+  (`useProjectPanelDefaults`); agent, tool and workflow-snapshot events cannot
+  trigger it.
+- It is skipped when the selected session is the project's own Agent session.
+- If the user closes the Agent tab in a session context it is not re-added for
+  that context (renderer memory only). The project page re-presents it on every
+  entry.
