@@ -190,10 +190,12 @@ Settings is a **full-window page** that replaces the app sidebar + main chrome (
   `AppSettings.keepAwakeWhileRunning` and `AppSettings.preventScreenSleep`,
   take effect immediately, restore on startup, and release their own blocker
   when disabled or during shutdown. Manual sleep and lid close follow the OS.
-- **Panel layout** card: **Always show sidebar** (`AppSettings.sidebarPinned`)
-  and **Always show side panel** (`AppSettings.workPanelPinned`). Both default
-  off: the panel auto-hides and slides in from its window edge. Each side
-  persists independently and mirrors the header pin buttons. Not part of config
+- **Panel layout** card: **Sidebar** (`AppSettings.sidebarPinned`) and **Side
+  panel** (`AppSettings.workPanelPinned`), each an Auto / Docked / Auto-hide
+  segmented control. Auto (flag absent) docks the panel when the window is at
+  least 960px (sidebar) or 1280px (side panel) wide and auto-hides it below;
+  Docked and Auto-hide store `true`/`false` and mirror the header pin buttons.
+  Each side persists independently. Not part of config
   sync: pin state is a per-device layout preference.
 - **Sidebar** card: one master switch for project running activity
   (`AppSettings.sidebarRunningIndicators`) plus independently gated

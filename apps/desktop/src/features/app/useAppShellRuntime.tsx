@@ -245,6 +245,16 @@ export function useAppShellRuntime() {
     reopenDockedSidebar();
     void setPanelPinned("sidebarPinned", true);
   }, [closeLeftOverlay, reopenDockedSidebar]);
+  // The visible sidebar button is how people bring the sidebar back, so on an
+  // unpinned sidebar it docks it again (a hover overlay that retracts would
+  // read as "cannot restore"); the shortcut keeps the transient overlay.
+  const toggleSidebarFromChrome = useCallback(() => {
+    if (!sidebarPinnedRef.current) {
+      toggleSidebarPinned();
+      return;
+    }
+    toggleSidebar();
+  }, [toggleSidebar, toggleSidebarPinned]);
   const toggleWorkPanelPinned = useCallback(() => {
     if (workPanelPinnedRef.current) {
       void setPanelPinned("workPanelPinned", false);
@@ -1180,6 +1190,7 @@ export function useAppShellRuntime() {
     leftReveal,
     rightReveal,
     toggleSidebarPinned,
+    toggleSidebarFromChrome,
     toggleWorkPanelPinned,
   };
 }

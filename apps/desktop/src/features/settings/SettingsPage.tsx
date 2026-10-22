@@ -39,6 +39,7 @@ import { FontFamilyRow } from "../../components/settings/FontFamilyRow";
 import { ShowThinkingRow } from "../../components/settings/ShowThinkingRow";
 import { KeepCommandsExpandedRow } from "../../components/settings/KeepCommandsExpandedRow";
 import { AccentColorRow } from "../../components/settings/AccentColorRow";
+import { panelPinMode, setPanelPinMode } from "../../lib/panel-pin";
 import { FontSizeRow } from "../../components/settings/FontSizeRow";
 import { LanguageRow } from "../../components/settings/LanguageRow";
 import { SettingsMenuSelect } from "../../components/settings/SettingsMenuSelect";
@@ -472,30 +473,23 @@ export function SettingsPage() {
               </SettingsCard>
 
               <SettingsCard title={t("settings.panelLayout")}>
-                <SettingsRow
-                  title={t("settings.sidebarPinned")}
-                  description={t("settings.sidebarPinnedDesc")}
-                >
-                  <SettingsToggle
-                    checked={settings.sidebarPinned === true}
-                    label={t("settings.sidebarPinned")}
-                    onChange={() => void saveSettings({
-                      sidebarPinned: settings.sidebarPinned !== true,
-                    })}
-                  />
-                </SettingsRow>
-                <SettingsRow
-                  title={t("settings.workPanelPinned")}
-                  description={t("settings.workPanelPinnedDesc")}
-                >
-                  <SettingsToggle
-                    checked={settings.workPanelPinned === true}
-                    label={t("settings.workPanelPinned")}
-                    onChange={() => void saveSettings({
-                      workPanelPinned: settings.workPanelPinned !== true,
-                    })}
-                  />
-                </SettingsRow>
+                {(["sidebarPinned", "workPanelPinned"] as const).map((key) => (
+                  <SettingsRow
+                    key={key}
+                    title={t(`settings.${key}`)}
+                    description={t(`settings.${key}Desc`)}
+                  >
+                    <SegmentedControl
+                      value={panelPinMode(settings, key)}
+                      label={t(`settings.${key}`)}
+                      onChange={(mode) => void setPanelPinMode(key, mode)}
+                      options={(["auto", "pinned", "hidden"] as const).map((mode) => ({
+                        value: mode,
+                        label: t(`settings.panelMode.${mode}`),
+                      }))}
+                    />
+                  </SettingsRow>
+                ))}
               </SettingsCard>
 
               <NetworkProxySection settings={settings} saveSettings={saveSettings} />

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useViewportWidth } from "../../hooks/use-viewport-width";
 import type { AppSettings } from "@pi-desktop/shared";
 import { type UseEdgeRevealResult, useEdgeReveal } from "../../hooks/use-edge-reveal";
 import { isPanelPinned } from "../../lib/panel-pin";
@@ -42,8 +43,10 @@ export function useSidePanelReveal({
   workPanelOpen: boolean;
   settings: AppSettings | null | undefined;
 }): SidePanelReveal {
-  const sidebarPinned = isPanelPinned(settings, "sidebarPinned");
-  const workPanelPinned = isPanelPinned(settings, "workPanelPinned");
+  // "Auto" panels dock on wide windows and auto-hide on narrow ones.
+  const viewportWidth = useViewportWidth();
+  const sidebarPinned = isPanelPinned(settings, "sidebarPinned", viewportWidth);
+  const workPanelPinned = isPanelPinned(settings, "workPanelPinned", viewportWidth);
   const pageHidesWorkPanel =
     page === "settings" || page === "plugins" || page === "scheduled" ||
       // The Project Console owns its right edge (the project Agent dock).

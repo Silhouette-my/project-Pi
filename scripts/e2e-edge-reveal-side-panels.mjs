@@ -103,8 +103,17 @@ try {
   const { width: vw } = await viewport();
   assert.ok(vw >= 900, `viewport wide enough: ${vw}`);
 
-  // 1. Defaults: both panels auto-hide, content uses the full width.
-  assert.equal(await state(LEFT), "closed", "sidebar starts closed");
+  // 0. "Auto" (no saved choice) follows the window width: at this width the
+  // sidebar docks and the narrower-threshold right panel stays hidden.
+  await until(() => page.evaluate("!!document.querySelector('.sidebar') && !document.querySelector('.sidebar.edge-panel')"), "auto sidebar docks on a wide window", 5000);
+  assert.equal(await page.evaluate("!!document.querySelector('.work-panel')"), false, "auto right panel hidden below its width");
+  // The rest exercises the auto-hide mode, chosen explicitly.
+  await invoke("settingsSet", { ...await invoke("settingsGet"), sidebarPinned: false, workPanelPinned: false });
+  await page.call("Page.reload");
+  await until(() => page.evaluate("!!document.querySelector('.app-shell:not(.is-booting)')"), "renderer reload after choosing auto-hide");
+
+  // 1. Auto-hide: both panels hidden, content uses the full width.
+  await until(async () => (await state(LEFT)) === "closed", "sidebar starts closed", 5000);
   assert.equal(await page.evaluate("document.querySelectorAll('.sidebar').length"), 1, "one sidebar instance");
   assert.equal(await page.evaluate("document.querySelector('.sidebar.edge-panel')?.hasAttribute('inert')"), true, "closed sidebar is inert");
   const full = await rect(".main-pane");

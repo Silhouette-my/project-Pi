@@ -81,6 +81,7 @@ function AppShellContent() {
     handleSidebarResizeCollapse,
     toggleSidebar,
     reopenSidebar,
+    toggleSidebarFromChrome,
     autoCollapseSidebar,
     appShellRef,
     shellWidth,
@@ -172,7 +173,7 @@ function AppShellContent() {
               <Sidebar
                 className={cx(sidebarEntering && "is-entering", sidebarExiting && "is-exiting")}
                 onAnimationEnd={handleSidebarAnimationEnd}
-                onToggleSidebar={toggleSidebar}
+                onToggleSidebar={toggleSidebarFromChrome}
                 sidebarToggleShortcut={sidebarToggleShortcut}
                 sidebarWidth={sidebarWidth}
                 widthMax={sidebarWidthMax}
@@ -195,7 +196,7 @@ function AppShellContent() {
                 <Sidebar
                   className="edge-panel"
                   edgePanel={leftReveal.panelProps}
-                  onToggleSidebar={toggleSidebar}
+                  onToggleSidebar={toggleSidebarFromChrome}
                   sidebarToggleShortcut={sidebarToggleShortcut}
                   sidebarWidth={sidebarWidth}
                   widthMax={sidebarWidthMax}
@@ -219,7 +220,7 @@ function AppShellContent() {
               >
                 {sidebarCollapsed && (
                   <CollapsedTitlebarActions
-                    onToggleSidebar={toggleSidebar}
+                    onToggleSidebar={toggleSidebarFromChrome}
                     onNewTask={() => void runMenuCommand("newTask")}
                     sidebarToggleShortcut={sidebarToggleShortcut}
                   />
@@ -246,7 +247,7 @@ function AppShellContent() {
                   <ConversationTopbar
                     sidebarCollapsed={sidebarCollapsed}
                     workPanelOpen={presentedWorkPanelOpen}
-                    onToggleSidebar={toggleSidebar}
+                    onToggleSidebar={toggleSidebarFromChrome}
                     onNewTask={() => void runMenuCommand("newTask")}
                     onOpenSearch={() => setSearchOpen(true)}
                   />
@@ -260,7 +261,7 @@ function AppShellContent() {
                     {sidebarCollapsed && (
                       <div className="main-titlebar-left no-drag">
                         <CollapsedTitlebarActions
-                          onToggleSidebar={reopenSidebar}
+                          onToggleSidebar={toggleSidebarFromChrome}
                           onNewTask={() => void runMenuCommand("newTask")}
                           sidebarToggleShortcut={sidebarToggleShortcut}
                         />

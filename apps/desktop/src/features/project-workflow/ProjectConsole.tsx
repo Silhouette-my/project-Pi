@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useViewportWidth } from "../../hooks/use-viewport-width";
 import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord, ProjectWorkflowSearchHit } from "@pi-desktop/shared";
 import { Badge, Button, Field, Select, TooltipButton } from "../../components/ui";
@@ -57,7 +58,8 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   // The right-edge pin preference is shared with the chat work panel: one
   // "right panel" choice. Unpinned, the dock auto-hides and reveals from the
   // window edge (ADR auto-hide-side-panels); pinned keeps the docked layout.
-  const rightPinned = useAppStore((state) => isPanelPinned(state.settings, "workPanelPinned"));
+  const viewportWidth = useViewportWidth();
+  const rightPinned = useAppStore((state) => isPanelPinned(state.settings, "workPanelPinned", viewportWidth));
   const edgeDock = useEdgeReveal({ side: "right", enabled: !rightPinned && Boolean(snapshot) });
   const pinnedDockOpen = wide ? dockedOpen : overlayOpen;
   const dockOpen = rightPinned ? pinnedDockOpen : edgeDock.mounted;

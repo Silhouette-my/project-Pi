@@ -94,3 +94,14 @@ outside `.main-pane`, text-entry focus, and `:focus-visible` focus inside.
 - A hit-tested edge element: rejected, it steals the right-edge scrollbar.
 - Default pinned: rejected by the product decision (maximal content width).
 - Syncing pin state across devices: rejected, window size differs per device.
+
+## Amendment: width-adaptive default (2026-10-22)
+
+Absent pin flags now mean **auto**: a panel docks when the window is wide
+enough for it and auto-hides otherwise (sidebar from 960px, right panel from
+1280px, `PANEL_AUTO_DOCK_MIN_WIDTH`). An explicit pin or unpin from a panel
+header stores `true`/`false` and wins over the width. Settings → General →
+Panel layout offers Auto / Docked / Auto-hide per side; Auto clears the
+stored flag. On an unpinned sidebar the visible chrome sidebar button docks
+it again instead of opening a transient overlay, because a retracting overlay
+read as "cannot restore"; Cmd/Ctrl+B keeps the overlay toggle.
