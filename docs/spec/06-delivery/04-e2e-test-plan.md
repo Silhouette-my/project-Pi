@@ -18643,3 +18643,31 @@ host-created files. The full app's file-preview viewer is covered separately.
   `composer-suggestion-state.test.mjs`, `composer-suggestion-relay.test.mjs`,
   and `plugin-composer-suggestion.test.mjs`; the rendered journey remains a
   manual/Electron check when this surface changes.
+
+#### E2E-SHELL-edge-reveal-side-panels
+
+- **Preconditions**: Fresh profile (no `sidebarPinned` / `workPanelPinned`), a
+  window at least 900px wide, one seeded session; a first phase without a
+  session.
+- **Steps:** 1) Start with no session and move the pointer to the right edge.
+  2) Select the session. 3) Move the pointer to the left edge for 30ms and away,
+  then rest there past 80ms. 4) Move away and observe the 300ms hide. 5) Open a
+  sidebar menu, move away, close the menu. 6) Press Cmd/Ctrl+B, move around,
+  press Escape, press the shortcut twice. 7) Repeat the edge reveal on the right
+  edge and with Cmd/Ctrl+J. 8) Click the sidebar pin, reload, then pin the work
+  panel from its header. 9) Unpin both.
+- **Expected**: Panels start hidden with MainPane at full width. No right hot
+  zone or reveal without a session. A 30ms brush reveals nothing; resting past
+  the dwell slides the overlay in at its width without changing MainPane width;
+  it hides about 300ms after leaving, and stays while a menu is open. A shortcut
+  reveal is sticky until Escape or the shortcut. Pinning docks the panel,
+  persists its own flag (the other stays unset) across reload, and the docked
+  columns tile the window with MainPane at 450px or more. Unpinning restores
+  auto-hide and full width.
+- **Specs linked**: `04-ux/01-ui-ia.md`, `04-ux/08-component-spec.md`, ADR
+  auto-hide-side-panels (preserves ADR 0033/0141/0238/0028/0290).
+- **Acceptance**: A (shell layout), Accessibility (labelled regions, focus ring).
+- **Milestone**: Maintenance
+- **Status**: Automated by `scripts/e2e-edge-reveal-side-panels.mjs` (real CDP
+  pointer and keyboard input) plus `edge-reveal.test.mjs`. The navigation and
+  three-column scripts pin both panels at setup.

@@ -471,6 +471,33 @@ export function SettingsPage() {
                 </SettingsRow>
               </SettingsCard>
 
+              <SettingsCard title={t("settings.panelLayout")}>
+                <SettingsRow
+                  title={t("settings.sidebarPinned")}
+                  description={t("settings.sidebarPinnedDesc")}
+                >
+                  <SettingsToggle
+                    checked={settings.sidebarPinned === true}
+                    label={t("settings.sidebarPinned")}
+                    onChange={() => void saveSettings({
+                      sidebarPinned: settings.sidebarPinned !== true,
+                    })}
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  title={t("settings.workPanelPinned")}
+                  description={t("settings.workPanelPinnedDesc")}
+                >
+                  <SettingsToggle
+                    checked={settings.workPanelPinned === true}
+                    label={t("settings.workPanelPinned")}
+                    onChange={() => void saveSettings({
+                      workPanelPinned: settings.workPanelPinned !== true,
+                    })}
+                  />
+                </SettingsRow>
+              </SettingsCard>
+
               <NetworkProxySection settings={settings} saveSettings={saveSettings} />
 
               <StorageSettingsSection />

@@ -44,6 +44,18 @@ destination, chat as the home surface, tools and permissions inline.
   discoverable through Settings → Project archive.
   Collapsible to an icon rail (Cmd/Ctrl+B). Its expanded column is user-resizable
   from 240px to 520px (default 275px); dragging below 160px collapses it.
+  **Auto-hide (default):** unless `AppSettings.sidebarPinned` is true, the
+  sidebar takes no layout width. The pointer resting 80ms in a 6px hot zone on
+  the left window edge (below the 46px titlebar row) slides it in as an overlay
+  at its stored width, with a shadow; it retracts 300ms after the pointer
+  leaves. It stays while a menu, popover, context menu or dialog opened from it
+  is open, a drag or resize is running, text input inside it has focus, or
+  keyboard focus inside it was moved there by the keyboard. Escape hides it and
+  returns focus; Cmd/Ctrl+B reveals or hides it and the revealed overlay stays
+  until Escape, a pointer exit after the pointer entered it, or the shortcut
+  again. The header pin button docks it (the behavior described above) and
+  persists `sidebarPinned`; unpinning returns it to auto-hide. The overlay never
+  changes MainPane width (ADR [auto-hide-side-panels](../../adr/auto-hide-side-panels.md)).
 - **Product identity**: runtime shell copy uses `PI-Desktop`; the home hero and
   sidebar reuse the derived `src/assets/brand/logo-*.png` marks, while composer prompt
   rows have no leading brand icon and session-creation controls use a dedicated
@@ -99,7 +111,16 @@ destination, chat as the home surface, tools and permissions inline.
   `--ds-window-lead-inset` token — the cluster's 76px right edge (from
   `@pi-desktop/shared`) plus a 12px gap — and the main process positions the
   buttons from that same shared geometry.
-- **Work panel**: docked right column (not an overlay) opened by an artifact,
+- **Work panel**: docked right column when pinned (`AppSettings.workPanelPinned`),
+  otherwise an auto-hide overlay revealed from the right window edge with the
+  same dwell, hide delay, hold rules, Escape and `Cmd/Ctrl + J` behavior as the
+  sidebar. It needs an active session: without one there is no hot zone and no
+  reveal. Agent and tool results never open or reveal it; only an explicit user
+  gesture does. The overlay keeps the stored panel width, floats above MainPane
+  (no width budget, no sidebar yield, no preview/maximize; pin the panel for
+  those), and is mounted only while revealed. Its header pin button docks it and
+  persists `workPanelPinned`. The pinned panel is a docked right column (not an
+  overlay) opened by an artifact,
   the viewport-fixed toggle, or `Cmd/Ctrl + J`. File, URL, browser-preview, and
   successful workspace-edit artifacts create their resources atomically. The
   46px content header exposes a tablist and a fixed `+` trigger. Unused

@@ -81,7 +81,7 @@ test("the work panel renders the delegation tab like every other resource", () =
   assert.doesNotMatch(workPanelSource, /subagentPanel\?: SubagentPanelSelection/);
   assert.doesNotMatch(workPanelSource, /!subagentPanel &&/);
   // The shell no longer overrides visibility for a dock-only surface.
-  assert.match(appSource, /const workPanelVisible = workPanelOpen;/);
+  assert.match(appSource, /const workPanelVisible = workPanelOpen && workPanelPinned;/);
   assert.doesNotMatch(appSource, /subagentPanelOpen/);
 });
 

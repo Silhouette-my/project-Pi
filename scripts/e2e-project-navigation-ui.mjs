@@ -134,6 +134,8 @@ try {
   await startApp();
   const setup = await main.evaluate(`globalThis.__PI_DESKTOP_PLAN_UI_PROBE({operation:'liveSetup',workspace:${json(join(root,"apps"))}})`);
   assert.equal(setup.ok,true,json(setup));
+  // The sidebar auto-hides by default; this journey drives the docked tree, so pin it (the hover reveal has its own journey: e2e-edge-reveal-side-panels).
+  await invoke("settingsSet",{...(await invoke("settingsGet")),sidebarPinned:true});
   await page.call("Page.reload");
   await until(() => page.evaluate("!!document.querySelector('.app-shell:not(.is-booting)')"),"renderer reload after Host setup");
   await page.evaluate("document.documentElement.dataset.theme='light'");

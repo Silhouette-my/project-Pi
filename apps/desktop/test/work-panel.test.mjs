@@ -99,7 +99,10 @@ test("work panel code is preloaded on demand behind an accessible dock fallback"
 
 test("a viewport-fixed toggle is the sole pointer collapse control", () => {
   assert.match(appSource, /className="app-work-panel-toggle no-drag"/);
-  assert.match(appSource, /aria-pressed=\{workPanelOpen \|\| presentedWorkPanelOpen\}/);
+  assert.match(
+    appSource,
+    /aria-pressed=\{\s*workPanelPinned\s*\?\s*workPanelOpen \|\| presentedWorkPanelOpen\s*:\s*rightReveal\.open\s*\}/,
+  );
   assert.match(appSource, /togglePresentedWorkPanel/);
   assert.doesNotMatch(appSource, /onCollapse=/);
   // The dock-only subagent branch is gone; the toggle routes through the

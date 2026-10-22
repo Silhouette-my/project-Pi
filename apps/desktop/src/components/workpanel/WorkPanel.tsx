@@ -11,6 +11,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
+import type { UseEdgeRevealResult } from "../../hooks/use-edge-reveal";
 import { useBlockingOverlayActive } from "../../lib/blocking-overlay";
 import {
   workPanelTabReorderScrollDelta,
@@ -38,6 +39,7 @@ import {
   IconFileText,
   IconPanelMaximize,
   IconPanelRestore,
+  IconPin,
   IconPlug,
   IconPlus,
 } from "../icons";
@@ -157,20 +159,24 @@ function ToolIcon({ item, size = 15 }: { item: WorkPanelTool; size?: number }) {
   );
 }
 
+/** Content left visible beside a revealed overlay panel, in CSS pixels. */
+const EDGE_PANEL_CONTENT_MARGIN = 48;
+
 export function WorkPanel(props: Parameters<typeof LocalWorkPanel>[0]) {
   const session = useAppStore((state) => state.sessions.find((item) => item.id === state.activeSessionId));
   const sessionId = useAppStore((state) => state.activeSessionId);
   const width = useAppStore((state) => state.workPanelWidth);
   if (session && isRemoteSession(session)) {
     return <RemoteWorkspace key={session.id} session={session} width={Math.min(width, Math.max(280, (props.containerWidth || 900) - 320))}
-      exiting={props.exiting} onExitAnimationEnd={props.onExitAnimationEnd} />;
+      exiting={props.exiting} onExitAnimationEnd={props.onExitAnimationEnd}
+      edgePanel={props.edgePanel} onClose={props.onCloseOverlay} />;
   }
   if (sessionId?.startsWith("remote:")) return null;
   return <LocalWorkPanel {...props} />;
 }
 
 function LocalWorkPanel({
-  panelBlocked = false,
+  panelBlocked: panelBlockedRequest = false,
   exiting = false,
   onExitAnimationEnd,
   containerWidth = 0,
@@ -178,8 +184,11 @@ function LocalWorkPanel({
   sidebarExiting = false,
   sidebarWidth = 0,
   onAutoCollapseSidebar,
-  maximized = false,
+  maximized: maximizedRequest = false,
   onToggleMaximize,
+  edgePanel,
+  pinned = true,
+  onTogglePin,
 }: {
   /**
    * Hides every native surface in the panel. Both the preview browser and a
@@ -203,8 +212,32 @@ function LocalWorkPanel({
   maximized?: boolean;
   /** Toggles the preview mode from the panel header. */
   onToggleMaximize?: () => void;
+  /**
+   * Present while the panel is an edge-reveal overlay (unpinned): the
+   * `useEdgeReveal` panel props that slide it over the content. An overlay
+   * takes no layout width, so the three-column budget does not apply to it.
+   */
+  edgePanel?: UseEdgeRevealResult["panelProps"];
+  /** Closes an overlay panel (used by the remote workspace's close button). */
+  onCloseOverlay?: () => void;
+  /** Docked permanently; false while it auto-hides. */
+  pinned?: boolean;
+  onTogglePin?: () => void;
 }) {
   const { t } = useTranslation();
+  const overlay = edgePanel !== undefined;
+  // Preview mode needs the dock: MainChat is removed beside it. An overlay
+  // never maximizes; pin the panel first.
+  const maximized = maximizedRequest && !overlay;
+  // The overlay slides in with a transform, and native plugin views read their
+  // bounds from the DOM, so they wait for the slide to settle.
+  const [overlayEntering, setOverlayEntering] = useState(overlay);
+  useEffect(() => {
+    if (!overlay || !overlayEntering) return;
+    const timer = window.setTimeout(() => setOverlayEntering(false), 400);
+    return () => window.clearTimeout(timer);
+  }, [overlay, overlayEntering]);
+  const panelBlocked = panelBlockedRequest || overlayEntering;
   const blockingOverlayActive = useBlockingOverlayActive();
   const rawTabs = useAppStore((s) => s.workPanelTabs);
   const tabs = rawTabs.filter(isKnownWorkPanelTab);
@@ -276,13 +309,30 @@ function LocalWorkPanel({
       preferredWidth: width,
       yieldedWidth,
     });
-  const layout = workPanelLayout({
+  const dockLayout = workPanelLayout({
     containerWidth: budgetWidth,
     sidebarWidth,
     sidebarCollapsed: !sidebarOccupiesBudget,
     requestedPanelWidth,
     maximized,
   });
+  // An overlay is bounded by the window, not by the MainChat floor: it floats
+  // over the content, so neither the floor nor the sidebar yield applies.
+  const overlayMaxWidth = Math.max(
+    WORK_PANEL_COMPACT_MIN_WIDTH,
+    Math.round(budgetWidth) - EDGE_PANEL_CONTENT_MARGIN,
+  );
+  const layout = overlay
+    ? {
+        mainWidth: 0,
+        panelWidth: Math.min(
+          clampWorkPanelWidth(panelDragWidth ?? width),
+          overlayMaxWidth,
+        ),
+        maxPanelWidth: overlayMaxWidth,
+        shouldCollapseSidebar: false,
+      }
+    : dockLayout;
   const renderPanelWidth = layout.panelWidth;
   const panelMinimum = workPanelGestureMinimum(renderPanelWidth);
   const isResizing = panelDragWidth !== null;
@@ -796,15 +846,26 @@ function LocalWorkPanel({
     <aside
       className={cx(
         "work-panel",
+        overlay && "edge-panel",
         maximized && "is-maximized",
         exiting && !exitAnimationReady && "is-exit-pending",
         exitAnimationReady && "is-exiting",
       )}
       style={panelStyle}
+      aria-label={t("panel.title")}
+      {...edgePanel}
       data-testid="work-panel"
       data-resizing={isResizing ? "true" : undefined}
       data-exiting={exiting ? "true" : undefined}
       onAnimationEnd={(event) => {
+        if (
+          overlay &&
+          event.target === event.currentTarget &&
+          event.animationName.startsWith("edge-panel-in")
+        ) {
+          setOverlayEntering(false);
+          return;
+        }
         if (!exitAnimationReady) return;
         if (event.target !== event.currentTarget) return;
         if (!event.animationName.startsWith("work-panel-out")) return;
@@ -929,20 +990,35 @@ function LocalWorkPanel({
               >
                 <IconPlus size={16} />
               </TooltipButton>
-            <TooltipButton
-              type="button"
-              className="work-panel-maximize"
-              tooltip={t(maximized ? "panel.restore" : "panel.maximize")}
-              ariaLabel={t(maximized ? "panel.restore" : "panel.maximize")}
-              aria-pressed={maximized}
-              onClick={() => onToggleMaximize?.()}
-            >
-              {maximized ? (
-                <IconPanelRestore size={15} />
-              ) : (
-                <IconPanelMaximize size={15} />
-              )}
-            </TooltipButton>
+            {onTogglePin ? (
+              <TooltipButton
+                type="button"
+                className="work-panel-pin edge-pin-btn"
+                tooltip={pinned ? t("nav.unpinWorkPanel") : t("nav.pinWorkPanel")}
+                ariaLabel={pinned ? t("nav.unpinWorkPanel") : t("nav.pinWorkPanel")}
+                aria-pressed={pinned}
+                data-nav="pin-work-panel"
+                onClick={onTogglePin}
+              >
+                <IconPin size={15} />
+              </TooltipButton>
+            ) : null}
+            {overlay ? null : (
+              <TooltipButton
+                type="button"
+                className="work-panel-maximize"
+                tooltip={t(maximized ? "panel.restore" : "panel.maximize")}
+                ariaLabel={t(maximized ? "panel.restore" : "panel.maximize")}
+                aria-pressed={maximized}
+                onClick={() => onToggleMaximize?.()}
+              >
+                {maximized ? (
+                  <IconPanelRestore size={15} />
+                ) : (
+                  <IconPanelMaximize size={15} />
+                )}
+              </TooltipButton>
+            )}
           </div>
         </header>
         <div className="work-panel-body">

@@ -548,6 +548,8 @@ export function validateSettingsWrite(settings: AppSettings): AppSettings {
     "sidebarRunningBadge",
     "sidebarRunningRail",
     "sidebarSessionTime",
+    "sidebarPinned",
+    "workPanelPinned",
     "macosWindowTranslucency",
     "keepCommandsExpanded",
   ] as const) {

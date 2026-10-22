@@ -37,6 +37,8 @@ import {
   pluginWorkPanelTab,
 } from "../../lib/work-panel-tabs";
 import { useAppStore } from "../../stores/app-store";
+import { setPanelPinned } from "../../lib/panel-pin";
+import { useSidePanelReveal } from "./useSidePanelReveal";
 import { useSidebarTransition } from "./useSidebarTransition";
 import { useStartupWatchdog } from "./useStartupWatchdog";
 import { useTraySessions } from "./useTraySessions";
@@ -87,10 +89,16 @@ export function useAppShellRuntime() {
       ? (s.sessions.find((session) => session.id === s.activeSessionId)?.projectPath ?? null)
       : null,
   );
-  const workPanelVisible = workPanelOpen;
+  // Pin state and the edge-reveal overlays of both side panels. An unpinned
+  // panel takes no layout width, so everything below that budgets the dock
+  // treats it as collapsed (docs/adr/auto-hide-side-panels.md).
+  const { sidebarPinned, workPanelPinned, leftReveal, rightReveal } =
+    useSidePanelReveal({ ready, page, activeSessionId, workPanelOpen, settings });
+  const workPanelVisible = workPanelOpen && workPanelPinned;
 
   const [searchOpen, setSearchOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarDockCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarCollapsed = sidebarDockCollapsed || !sidebarPinned;
   const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth());
   const { sidebarEntering, sidebarExiting, handleSidebarAnimationEnd } = useSidebarTransition(
     sidebarCollapsed,
@@ -160,16 +168,24 @@ export function useAppShellRuntime() {
     setSidebarWidth(nextWidth);
     saveSidebarWidth(nextWidth);
   }, []);
+  const sidebarPinnedRef = useRef(sidebarPinned);
+  sidebarPinnedRef.current = sidebarPinned;
+  const workPanelPinnedRef = useRef(workPanelPinned);
+  workPanelPinnedRef.current = workPanelPinned;
+  const closeLeftOverlay = leftReveal.closePanel;
   const handleSidebarResizeCollapse = useCallback(() => {
     autoCollapsedSidebarRef.current = false;
-    setSidebarCollapsed(true);
-  }, []);
+    // Dragging an overlay below the threshold retracts it; only a docked
+    // sidebar has a collapsed state of its own.
+    if (!sidebarPinnedRef.current) closeLeftOverlay();
+    else setSidebarCollapsed(true);
+  }, [closeLeftOverlay]);
   // Reopening prefers the right column: the work panel gives up width first so
   // MainChat keeps the width it already had, and only a would-be breach of the
   // 450px floor falls back to the 460px reopen target. The column comes back at
   // the user's preferred width, which a collapsing drag never overwrites. The
   // panel only lends that width: its own preferred width stays stored.
-  const reopenSidebar = useCallback(() => {
+  const reopenDockedSidebar = useCallback(() => {
     if (!sidebarCollapsedRef.current) return;
     const preferredWidth = clampSidebarWidth(sidebarPreferredWidthRef.current);
     if (workPanelOpenRef.current && !workPanelMaximizedRef.current) {
@@ -193,16 +209,51 @@ export function useAppShellRuntime() {
     setSidebarWidth(preferredWidth);
     setSidebarCollapsed(false);
   }, []);
+  // An unpinned sidebar has no dock to reopen: revealing it is the equivalent.
+  const openLeftOverlay = leftReveal.openPanel;
+  const reopenSidebar = useCallback(() => {
+    if (!sidebarPinnedRef.current) openLeftOverlay();
+    else reopenDockedSidebar();
+  }, [openLeftOverlay, reopenDockedSidebar]);
   useTraySessions({ setSearchOpen, reopenSidebar });
 
   // Stable identity: the keydown and native-menu handlers register once and
   // must never capture a stale `sidebarCollapsed`. Every invocation is a user
   // action, so it clears an automatic-collapse record before toggling.
+  const toggleLeftOverlay = leftReveal.toggle;
   const toggleSidebar = useCallback(() => {
     autoCollapsedSidebarRef.current = false;
+    // An unpinned sidebar has no dock: the shortcut shows or hides its overlay.
+    if (!sidebarPinnedRef.current) {
+      toggleLeftOverlay();
+      return;
+    }
     if (sidebarCollapsedRef.current) reopenSidebar();
     else setSidebarCollapsed(true);
-  }, [reopenSidebar]);
+  }, [reopenSidebar, toggleLeftOverlay]);
+
+  // Pinning docks the panel exactly as before (the sidebar reopens through the
+  // same width-lending path); unpinning returns it to auto-hide. Each side
+  // persists its own flag.
+  const closeRightOverlay = rightReveal.closePanel;
+  const toggleSidebarPinned = useCallback(() => {
+    if (sidebarPinnedRef.current) {
+      void setPanelPinned("sidebarPinned", false);
+      return;
+    }
+    closeLeftOverlay();
+    reopenDockedSidebar();
+    void setPanelPinned("sidebarPinned", true);
+  }, [closeLeftOverlay, reopenDockedSidebar]);
+  const toggleWorkPanelPinned = useCallback(() => {
+    if (workPanelPinnedRef.current) {
+      void setPanelPinned("workPanelPinned", false);
+      return;
+    }
+    closeRightOverlay();
+    void setPanelPinned("workPanelPinned", true);
+    useAppStore.getState().openWorkPanel();
+  }, [closeRightOverlay]);
 
   // The layout, not the user, yields the sidebar when the panel would push
   // MainChat under its floor. The record is remembered only until the panel
@@ -276,8 +327,15 @@ export function useAppShellRuntime() {
     setWorkPanelMaximized((current) => !current);
   }, []);
 
+  const toggleRightOverlay = rightReveal.toggle;
   const togglePresentedWorkPanel = useCallback(() => {
     const store = useAppStore.getState();
+    // An unpinned panel is an overlay: the toggle shows or hides it. It stays
+    // unavailable without a session, exactly like the docked toggle.
+    if (!workPanelPinnedRef.current) {
+      if (store.activeSessionId) toggleRightOverlay();
+      return;
+    }
     if (workPanelExitingRef.current) {
       store.openWorkPanel();
       return;
@@ -295,7 +353,7 @@ export function useAppShellRuntime() {
       return;
     }
     store.openWorkPanel();
-  }, []);
+  }, [toggleRightOverlay]);
 
   const finishWorkPanelExit = useCallback((generation: number) => {
     if (generation !== workPanelExitGeneration.current) return;
@@ -329,7 +387,7 @@ export function useAppShellRuntime() {
     const pageHidesWorkPanel =
       page === "settings" || page === "plugins" || page === "scheduled";
     const shouldPresent =
-      ready && !pageHidesWorkPanel && workPanelOpen;
+      ready && !pageHidesWorkPanel && workPanelVisible;
     const request = ++workPanelReservationRequest.current;
 
     if (shouldPresent) {
@@ -365,7 +423,7 @@ export function useAppShellRuntime() {
       isCurrent: () => request === workPanelReservationRequest.current,
       commit: () => setPresentedWorkPanelOpen(shouldPresent),
     });
-  }, [page, ready, workPanelOpen]);
+  }, [page, ready, workPanelVisible]);
 
   // Fallback if animationend is skipped (display:none mid-flight, etc.).
   useEffect(() => {
@@ -911,7 +969,8 @@ export function useAppShellRuntime() {
           case "openWorkPanel": {
             const p = useAppStore.getState().page;
             if (p !== "settings" && p !== "plugins" && p !== "scheduled") {
-              useAppStore.getState().toggleWorkPanel();
+              if (workPanelPinnedRef.current) useAppStore.getState().toggleWorkPanel();
+              else if (useAppStore.getState().activeSessionId) toggleRightOverlay();
             }
             break;
           }
@@ -968,6 +1027,7 @@ export function useAppShellRuntime() {
     projectPath,
     settings?.keybindings,
     toggleSidebar,
+    toggleRightOverlay,
   ]);
 
   useEffect(() => installRendererApi(), []);
@@ -1113,5 +1173,11 @@ export function useAppShellRuntime() {
     startupRetrying,
     sidebarToggleShortcut,
     workPanelToggleTooltip,
+    sidebarPinned,
+    workPanelPinned,
+    leftReveal,
+    rightReveal,
+    toggleSidebarPinned,
+    toggleWorkPanelPinned,
   };
 }
