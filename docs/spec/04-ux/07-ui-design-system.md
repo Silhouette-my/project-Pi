@@ -1525,16 +1525,20 @@ adjacent form inputs; dense surfaces may override that metric locally.
   Project instructions, memory and reload live in the project menu; search expands
   from the header. Reuse the shared UI primitives, Composer plate/toolbar classes,
   project instruction/memory dialogs and semantic theme tokens. Concretely: the
-  identity uses a 28px glyph seat, a `--text-lg` / strong-weight name and the
-  archive's mono path voice; header actions share the conversation top bar's
+  identity uses a 36px glyph seat and the Settings page title (`--text-2xl`,
+  strong weight, tighter tracking) with the archive's mono path voice; header actions share the conversation top bar's
   28px `.ct-icon-btn` seat and tile-backed group; underline tabs are px-3 py-2
-  `--text-sm`, secondary at rest. In-page section headings (overview groups,
-  Structure, session detail sections) are the Project archive section header line
-  (uppercase `--text-2xs`, strong weight, secondary), never a second page title.
+  `--text-sm`, secondary at rest. Tab pages follow the Settings page layout
+  (06-settings-ia): in-page section headings (overview groups, shared context,
+  outputs, Structure and session detail sections) are Settings card headings
+  (`--text-md-plus`, strong weight, sentence case) with their action on the same
+  line, never a second page title; rows below them are separate `--ds-tile` tiles
+  (14px 16px padding, `--radius-md-plus`, 6px apart, `--text-md-plus` medium title,
+  `--text-sm` secondary detail), and card blocks sit 28px apart.
   Structure filters sit inline in one 32px toolbar row with raised pill pickers;
   tree and graph rows use the sidebar row voice (`--text-md`, normal weight,
   `--ds-bg-active` selection); disclosures use the shared chevron rather than the
-  UA triangle; section rhythm stays within 24px and dividers use `border-subtle`.
+  UA triangle; section rhythm stays within 28px and dividers use `border-subtle`.
   Sidebar navigation-tree actions stay hidden until their row or toolbar is
   hovered or keyboard-focused, matching native sidebar rows. Detached conversations
   (the project Agent dock, project side conversations and chat side chats) use

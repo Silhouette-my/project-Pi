@@ -30,6 +30,7 @@ import "./workflow.css";
 import "./project-console-styles.css";
 import "./project-structure-styles.css";
 import "./project-home-styles.css";
+import "./project-settings-look.css";
 
 /** Below this console width the Agent dock overlays the page instead of docking. */
 const DOCKED_AGENT_MIN_WIDTH = 960;
