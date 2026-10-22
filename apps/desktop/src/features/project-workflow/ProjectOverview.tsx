@@ -2,8 +2,10 @@ import { useTranslation } from "react-i18next";
 import type { ProjectWorkflowSnapshot } from "@pi-desktop/shared";
 import { Badge, Button } from "../../components/ui";
 import { IconChevronRight, IconFileText, IconPlus } from "../../components/icons";
+import { useAppStore } from "../../stores/app-store";
 import { projectOverview } from "./project-overview-model";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
+import { workflowOwnerLabel } from "./workflow-display";
 
 type Props = {
   projectId: string;
@@ -16,20 +18,6 @@ type Props = {
   onError: (cause: unknown) => void;
 };
 
-/** Acceptance as discrete conditions, never a percentage (PRODUCT P2). */
-function AcceptanceMeter({ done, total }: { done: number; total: number }) {
-  if (!total) return null;
-  return (
-    <span className="project-acceptance-meter" aria-hidden="true">
-      {total <= 8
-        ? Array.from({ length: total }, (_, index) => (
-            <i key={index} className={index < done ? "is-done" : undefined} />
-          ))
-        : null}
-    </span>
-  );
-}
-
 export function ProjectOverview({
   projectId,
   snapshot,
@@ -41,76 +29,34 @@ export function ProjectOverview({
   onError,
 }: Props) {
   const { t } = useTranslation();
+  const sessions = useAppStore((state) => state.sessions);
   const view = projectOverview(snapshot, projectId);
-  const attention = view.blockers.length + view.decisions.length + view.unknownRuns.length;
-  const stats = [
-    { key: "open", value: view.current.length, label: t("projectStructure.statOpen"), tone: "accent" },
-    { key: "running", value: view.executing, label: t("projectStructure.statRunning"), tone: "" },
-    { key: "attention", value: attention, label: t("projectStructure.statAttention"), tone: attention ? "decision" : "" },
-    { key: "accepted", value: view.completed, label: t("projectStructure.statAccepted"), tone: "" },
-  ];
+  // Workstream blockers stay on their own row in Current work; only items that
+  // are not a workstream row need a separate list, so nothing appears twice.
+  const decisions = view.decisions.length + view.unknownRuns.length;
+  const awaiting = view.blockers.length + view.decisions.length + view.unknownRuns.length;
+  const summary = [
+    t("projectStructure.openWork", { count: view.current.length }),
+    view.executing ? t("projectStructure.executingRuns", { count: view.executing }) : null,
+    awaiting ? t("projectStructure.awaitingCount", { count: awaiting }) : null,
+    t("projectStructure.completedWork", { count: view.completed }),
+  ].filter(Boolean);
   return (
     <section className="workflow-overview project-overview" data-project-overview={projectId}>
       <h2 className="sr-only">{t("projectStructure.currentState")}</h2>
-      <dl className="project-overview-stats">
-        {stats.map((stat) => (
-          <div key={stat.key} className={`project-overview-stat${stat.tone ? ` is-${stat.tone}` : ""}`}>
-            <dt>{stat.label}</dt>
-            <dd>{stat.value}</dd>
-          </div>
-        ))}
-      </dl>
-      {attention ? (
+      <p className="project-overview-summary">{summary.join(" · ")}</p>
+      {decisions ? (
         <section className="project-overview-section" aria-label={t("projectStructure.needsAttention")}>
           <div className="project-section-label">
             <h2>{t("projectStructure.needsAttention")}</h2>
-            <span className="project-section-count">{attention}</span>
+            <span className="project-section-count">{decisions}</span>
           </div>
           <div className="project-overview-cards">
-            {view.blockers.map((work) => (
-              <Button
-                key={work.id}
-                variant="ghost"
-                className="project-overview-card project-attention-item is-blocked"
-                onClick={() => onSelectWorkstream(work.id)}
-              >
-                <span className="project-card-copy">
-                  <span className="project-card-title">
-                    <strong>{work.title}</strong>
-                    <WorkflowStatusBadge status={work.status} />
-                  </span>
-                  <span>{work.blocker?.reason ?? t(`workflow.status.${work.status}`)}</span>
-                  {work.blocker ? (
-                    <small>
-                      {t("workflow.blockerOwner", { owner: work.blocker.owner })} ·{" "}
-                      {t("workflow.resumeWhen", { condition: work.blocker.resumeWhen })}
-                    </small>
-                  ) : null}
-                </span>
-                <IconChevronRight size={14} />
-              </Button>
-            ))}
-            {view.unknownRuns.map((run) => (
-              <Button
-                key={run.id}
-                variant="ghost"
-                className="project-overview-card project-attention-item is-unknown"
-                onClick={() => onSelectWorkstream(run.workstreamId)}
-              >
-                <span className="project-card-copy">
-                  <span className="project-card-title">
-                    <strong>{run.outcome || t("workflowArtifacts.noOutcome")}</strong>
-                    <Badge tone="warning">{t("workflowArtifacts.runStates.unknown")}</Badge>
-                  </span>
-                </span>
-                <IconChevronRight size={14} />
-              </Button>
-            ))}
             {view.decisions.map((decision) => (
               <Button
                 key={decision.id}
                 variant="ghost"
-                className="project-overview-card project-attention-item is-decision"
+                className="project-overview-card project-attention-item"
                 onClick={() => onOpenContext(decision.workstreamId)}
               >
                 <span className="project-card-copy">
@@ -121,6 +67,22 @@ export function ProjectOverview({
                     </Badge>
                   </span>
                   <span>{decision.statement}</span>
+                </span>
+                <IconChevronRight size={14} />
+              </Button>
+            ))}
+            {view.unknownRuns.map((run) => (
+              <Button
+                key={run.id}
+                variant="ghost"
+                className="project-overview-card project-attention-item"
+                onClick={() => onSelectWorkstream(run.workstreamId)}
+              >
+                <span className="project-card-copy">
+                  <span className="project-card-title">
+                    <strong>{run.outcome || t("workflowArtifacts.noOutcome")}</strong>
+                    <Badge tone="warning">{t("workflowArtifacts.runStates.unknown")}</Badge>
+                  </span>
                 </span>
                 <IconChevronRight size={14} />
               </Button>
@@ -141,6 +103,7 @@ export function ProjectOverview({
           <div className="project-overview-cards project-overview-work-list">
             {view.current.map((work) => {
               const done = work.acceptance.filter((item) => item.status === "satisfied").length;
+              const candidate = snapshot.artifacts.find((item) => item.id === work.currentCandidateId);
               return (
                 <Button
                   key={work.id}
@@ -154,23 +117,27 @@ export function ProjectOverview({
                       <strong>{work.title}</strong>
                       <WorkflowStatusBadge status={work.status} />
                     </span>
-                    {work.goal ? <span className="project-card-goal">{work.goal}</span> : null}
-                    {work.nextAction ? (
-                      <span className="project-overview-next">
-                        <IconChevronRight size={12} />
-                        <span>{work.nextAction}</span>
+                    <span className="project-card-meta-line">
+                      {t("projectStructure.ownedBy", {
+                        owner: workflowOwnerLabel(work.owner, sessions, t),
+                      })}
+                      {work.nextAction ? ` · ${t("projectStructure.nextShort", { action: work.nextAction })}` : ""}
+                    </span>
+                    {work.blocker ? (
+                      <span className="project-card-blocker">
+                        {work.blocker.reason} · {t("workflow.resumeWhen", { condition: work.blocker.resumeWhen })}
+                      </span>
+                    ) : null}
+                    {candidate ? (
+                      <span className="project-card-meta-line">
+                        {t("projectStructure.candidateShort", { label: candidate.label })}{" "}
+                        <span className="workflow-mono">{candidate.revision}</span>
                       </span>
                     ) : null}
                   </span>
                   {work.acceptance.length ? (
-                    <span className="project-card-meta">
-                      <AcceptanceMeter done={done} total={work.acceptance.length} />
-                      <small>
-                        {t("projectStructure.acceptanceCount", {
-                          done,
-                          total: work.acceptance.length,
-                        })}
-                      </small>
+                    <span className="project-card-acceptance">
+                      {t("projectStructure.acceptanceShort", { done, total: work.acceptance.length })}
                     </span>
                   ) : null}
                   <IconChevronRight size={14} />
@@ -202,7 +169,7 @@ export function ProjectOverview({
                 <div>
                   <strong>{item.label}</strong>
                   <p>
-                    {item.revision} · {item.environment}
+                    <span className="workflow-mono">{item.revision}</span> · {item.environment}
                   </p>
                 </div>
                 <Button onClick={() => void onOpenArtifact(item.id).catch(onError)}>

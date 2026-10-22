@@ -1502,10 +1502,12 @@ adjacent form inputs; dense surfaces may override that metric locally.
   Workstreams, Shared context and Structure use a quiet underline navigation. The Project Agent occupies a right dock (340px, `--ds-bg-dock`,
   subtle leading divider) that renders the existing session pane and a Composer
   plate, and reaches the full chat surface through the existing Agent entry rather
-  than a second transcript implementation. Overview leads with four real counts,
-  then cards for items needing the user (a 3px semantic inset: error for blocked,
-  purple for decisions, warning for unknown effects), current work cards with
-  status badges and discrete acceptance segments, and recent recorded outputs.
+  than a second transcript implementation. Overview leads with one muted summary
+  line of real counts (no KPI tiles), then pending decisions and unknown effects,
+  then one row per current workstream with its status badge, owner (a readable
+  name, never a raw id), next action, blocker, current candidate revision and an
+  "Acceptance n / m" count, then recent recorded outputs. A workstream appears in
+  exactly one Overview list. Cards carry no coloured edge rails.
   A new project can discuss a goal without first creating a workstream. A work row
   opens its detail beside the workstream list; creation/editing uses the shared modal overlay and existing
   validated form, keeping execution scope and acceptance controls intact.
@@ -1523,12 +1525,17 @@ adjacent form inputs; dense surfaces may override that metric locally.
   `--ds-bg-active` selection); disclosures use the shared chevron rather than the
   UA triangle; section rhythm stays within 24px and dividers use `border-subtle`.
   Sidebar navigation-tree actions stay hidden until their row or toolbar is
-  hovered or keyboard-focused, matching native sidebar rows. Status badges carry a
-  leading dot in the semantic colours (ready/accepted success, executing warning,
-  blocked error, awaiting user purple, others neutral). The project accent
+  hovered or keyboard-focused, matching native sidebar rows. Status badges are plain
+  `Badge` capsules in the semantic colours (ready/accepted success, executing
+  warning, blocked error, awaiting user purple, others neutral). Record times are
+  localized with the exact value in a tooltip; paths and URIs are single-line mono
+  text with the full value in a tooltip. Workstream controls keep the four P4 flows
+  (Start work, Discuss next, Pause to discuss, side conversation) as one labelled
+  row and operational controls (pause/resume, cancel, execution scope) as a quieter
+  row below. The project accent
   (`--workflow-accent`, resolved as `--ds-project-accent` when the project has a
-  colour, else `--ds-theme-accent`, else the neutral `--ds-accent`) marks only the selected tab, list selection, primary
-  actions, acceptance segments and the project glyph. Project drafts are
+  colour, else `--ds-theme-accent`, else the neutral `--ds-accent`) marks only the selected tab, primary actions, keyboard
+  focus and the project glyph; list selection stays the neutral `--ds-bg-active`. Project drafts are
   renderer-memory, keyed by project, retained on navigation/send failure, and
   cleared only after a successful send. Ordinary chat display groups are disjoint:
   Favorites first, then Recent, then remaining folder/Unfiled entries; this changes

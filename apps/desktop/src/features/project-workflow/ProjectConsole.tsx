@@ -21,6 +21,7 @@ import { ProjectStructureView } from "./ProjectStructureView";
 import { ProjectAgentDock } from "./ProjectAgentDock";
 import { WorkflowContext } from "./WorkflowContext";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
+import { workflowOwnerLabel } from "./workflow-display";
 import { useProjectAgentDockState } from "./project-agent-dock-state";
 import "./workflow.css";
 import "./project-console-styles.css";
@@ -36,6 +37,7 @@ const SPLIT_WORK_MIN_WIDTH = 720;
 export function ProjectConsole({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const { snapshot, loading, error, refresh, busy } = useProjectWorkflow();
+  const sessions = useAppStore((state) => state.sessions);
   const [group, setGroup] = useState<ProjectGroupRecord | null>(null);
   const [groupLoaded, setGroupLoaded] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -242,7 +244,6 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
               <Button variant="ghost" aria-current={tab === "overview" ? "page" : undefined} onClick={() => selectTab("overview")}>{t("workflow.overview")}</Button>
               <Button variant="ghost" aria-current={tab === "work" ? "page" : undefined} onClick={() => selectTab("work")}>
                 {t("workflow.workstreams")}
-                {workstreams.length ? <span className="workflow-tab-count">{workstreams.length}</span> : null}
               </Button>
               <Button variant="ghost" aria-current={tab === "context" ? "page" : undefined} onClick={() => selectTab("context")}>{t("workflow.context")}</Button>
               <Button variant="ghost" aria-current={tab === "structure" ? "page" : undefined} onClick={() => selectTab("structure")}>{t("projectStructure.structure")}</Button>
@@ -278,8 +279,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                   <div className="project-section-label">
                     <h2>{t("workflow.workstreams")}</h2>
                     <span className="project-section-count">{workstreams.length}</span>
-                    <TooltipButton className="ct-icon-btn" tooltip={t("workflow.newWorkstream")} ariaLabel={t("workflow.newWorkstream")}
-                      onClick={createWorkstream}><IconPlus size={14} /></TooltipButton>
+                    <Button variant="ghost" onClick={createWorkstream}><IconPlus size={14} />{t("workflow.newWorkstream")}</Button>
                   </div>
                   {workstreams.length ? workstreamRows(workstreams) : (
                     <div className="workflow-empty"><strong>{t("workflow.noCurrentWork")}</strong><p>{t("workflow.startWithAgent")}</p>
@@ -294,7 +294,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                         <div>
                           <h2>{shown.title} <WorkflowStatusBadge status={shown.status} /></h2>
                           <p className="workflow-muted">
-                            {t("workflow.revision", { revision: shown.revision })} · {shown.owner.ref}
+                            {t("projectStructure.ownedBy", { owner: workflowOwnerLabel(shown.owner, sessions, t) })} · {t("workflow.revision", { revision: shown.revision })}
                           </p>
                         </div>
                         <div className="workflow-detail-actions">
@@ -321,10 +321,11 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                           <div>
                             <h3>{t("workflow.currentCandidate")}</h3>
                             <strong>{candidate.label}</strong>
-                            <p className="workflow-muted">{candidate.revision} · {candidate.environment}</p>
+                            <p className="workflow-muted"><span className="workflow-mono">{candidate.revision}</span> · {candidate.environment}</p>
+                            <p className="workflow-path" title={candidate.entryPoint}>{candidate.entryPoint}</p>
                           </div>
-                          <Button onClick={() => void openReference({ kind: "artifact", id: candidate.id }).catch(fail)}>
-                            {candidate.entryPoint}
+                          <Button title={candidate.entryPoint} onClick={() => void openReference({ kind: "artifact", id: candidate.id }).catch(fail)}>
+                            {t("workflow.openArtifact")}
                           </Button>
                         </div>
                       )}

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { WorkflowArtifact, WorkflowWorkstream } from "@pi-desktop/shared";
 import { Badge, Button, Field, Input, Select, Textarea } from "../../components/ui";
 import { IconChevronRight } from "../../components/icons";
+import { formatWorkflowTime } from "./workflow-display";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import { WorkflowRecord, WorkflowReference, type WorkflowSurfaceProps } from "./WorkflowReference";
 import "./context-artifacts-styles.css";
@@ -106,7 +107,7 @@ export function WorkflowArtifacts({
   workstreamId,
   onOpenReference,
 }: WorkflowSurfaceProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const workflow = useProjectWorkflow();
   const snapshot = workflow.snapshot;
   if (!snapshot) return null;
@@ -335,7 +336,7 @@ export function WorkflowArtifacts({
               <dt>{t("workflowArtifacts.authorization")}</dt>
               <dd>{item.authorizationId}</dd>
               <dt>{t("workflowContext.updatedAt")}</dt>
-              <dd>{item.updatedAt}</dd>
+              <dd><time dateTime={item.updatedAt} title={item.updatedAt}>{formatWorkflowTime(item.updatedAt, i18n.language)}</time></dd>
             </dl>
             {item.effects.length ? (
               <ul className="workflow-effects">

@@ -18,10 +18,7 @@ export function ProjectStructureView(props: {
   return (
     <section className="project-structure" data-project-structure-view={view}>
       <div className="project-structure-heading">
-        <div>
-          <h2>{t("projectStructure.structure")}</h2>
-          <p>{t(`projectStructure.descriptions.${view}`)}</p>
-        </div>
+        <p>{t(`projectStructure.descriptions.${view}`)}</p>
         <SegmentedControl
           value={view}
           onChange={setView}

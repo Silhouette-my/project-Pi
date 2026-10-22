@@ -172,6 +172,8 @@ export function FolderDialog({
               />
             </div>
           ) : null}
+          {/* Rename changes the name only; moving has its own entry. */}
+          {mode !== "rename" ? (
           <div>
             <label className="session-rename-dialog-label" htmlFor={`${id}-location`}>
               {t("workflowNav.location")}
@@ -192,6 +194,7 @@ export function FolderDialog({
               ))}
             </select>
           </div>
+          ) : null}
           {mode === "move" ? (
             <div>
               <label className="session-rename-dialog-label" htmlFor={`${id}-position`}>

@@ -109,23 +109,27 @@ export function WorkflowControls({
   };
   return (
     <section className="workflow-controls" aria-label={t("workflow.controls")}>
-      <Field label={t("workflow.executionSession")} hint={t("workflow.executionHint")}>
-        <Select
-          value={selectedExecutor?.id ?? ""}
-          onChange={(event) => setExecutionSessionId(event.target.value)}
-        >
-          <option value="">{t("workflow.chooseExecutionSession")}</option>
-          {executors.map((session) => (
-            <option key={session.id} value={session.id}>
-              {session.title} · {session.modelId}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Button disabled={busy} onClick={() => void onCreateSession()}>
-        {t("workflow.newExecutionSession")}
-      </Button>
-      <div className="workflow-actions">
+      <div className="workflow-control-row">
+        <Field label={t("workflow.executionSession")} hint={t("workflow.executionHint")}>
+          <Select
+            value={selectedExecutor?.id ?? ""}
+            onChange={(event) => setExecutionSessionId(event.target.value)}
+          >
+            <option value="">{t("workflow.chooseExecutionSession")}</option>
+            {executors.map((session) => (
+              <option key={session.id} value={session.id}>
+                {session.title} · {session.modelId}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Button variant="ghost" disabled={busy} onClick={() => void onCreateSession()}>
+          {t("workflow.newExecutionSession")}
+        </Button>
+      </div>
+      {/* The four flows of PRODUCT P4 stay visible and labelled; operational
+          controls follow at a lower visual weight. */}
+      <div className="workflow-actions workflow-primary-actions">
         <Button
           variant="primary"
           disabled={
@@ -156,12 +160,22 @@ export function WorkflowControls({
         >
           {t("workflow.pauseDiscuss")}
         </Button>
+        <Button
+          disabled={busy}
+          aria-expanded={panel === "side"}
+          onClick={() => setPanel(panel === "side" ? null : "side")}
+        >
+          {t("workflow.newSide")}
+        </Button>
+      </div>
+      <div className="workflow-actions workflow-secondary-actions">
         {workstream.status === "paused" ? (
-          <Button disabled={busy} onClick={() => void run({ kind: "resume", ...scope })}>
+          <Button variant="ghost" disabled={busy} onClick={() => void run({ kind: "resume", ...scope })}>
             {t("workflow.resume")}
           </Button>
         ) : (
           <Button
+            variant="ghost"
             disabled={
               busy || workstream.status === "completed" || workstream.status === "cancelled"
             }
@@ -171,16 +185,16 @@ export function WorkflowControls({
           </Button>
         )}
         <Button
+          variant="ghost"
           disabled={busy || workstream.status === "cancelled" || workstream.status === "completed"}
           onClick={() => void run({ kind: "cancel", ...scope })}
         >
           {t("workflow.cancelWork")}
         </Button>
-        <Button disabled={busy} onClick={() => setPanel(panel === "side" ? null : "side")}>
-          {t("workflow.newSide")}
-        </Button>
         <Button
+          variant="ghost"
           disabled={busy}
+          aria-expanded={panel === "authority"}
           onClick={() => setPanel(panel === "authority" ? null : "authority")}
         >
           {t("workflow.authority")}

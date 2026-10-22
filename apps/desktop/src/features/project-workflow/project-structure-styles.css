@@ -132,7 +132,7 @@
 .project-session-node[aria-pressed="true"],
 .project-git-graph .btn[aria-pressed="true"],
 .project-git-working[aria-pressed="true"] {
-  background: color-mix(in oklab, var(--workflow-accent) 12%, transparent);
+  background: var(--ds-bg-active);
 }
 .project-session-badges {
   display: flex;
