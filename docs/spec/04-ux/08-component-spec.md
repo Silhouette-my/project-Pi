@@ -1246,7 +1246,7 @@ entirely inside the plugin's isolated page:
   post-tool hash and
   returns a conflict without overwriting later work.
 - Header tabs: the strip is a `tablist` containing one `tab` for every open
-  Review, file, or plugin view. Clicking a tab activates it; the active tab is
+  Review, file, plugin view, subagent, or side chat. Clicking a tab activates it; the active tab is
   scrolled into view. Its close button and middle-click close it, selecting the
   right neighbor and then the left. ArrowLeft/ArrowRight/Home/End move between
   tabs and Delete/Backspace closes the focused tab. Pressing and moving a tab
@@ -1263,6 +1263,19 @@ entirely inside the plugin's isolated page:
   The "open a project" empty states carry no action button: opening a project
   resets the panel context and hides the panel, so the button would undo the
   surface that offered it (D224).
+- Side-chat tab (`sidechat`, ADR side-chats-on-detached-transcripts): created
+  only by the explicit **Ask in side chat** action on a message, keyed by
+  parent session and anchor message, so asking again reuses it; no agent event
+  opens it (ADR 0033). The tab strip label is `sideChat.title` (repeats gain
+  `#n`). The body is a compact header (side-chat title, a one-line excerpt of
+  the anchored message, **Add to main chat**, **Open as a conversation**) above
+  the shared `DetachedConversation`. Before the first Send there is no session:
+  opening and typing create nothing, and the first Send forks the child without
+  activating it, attaches its detached transcript and sends to it; the tab then
+  refers to the child id. A running or read-only parent disables the first Send
+  with a visible reason. Closing removes only the tab and its draft; the child
+  stays an ordinary session. It lives in the parent's panel context and is not
+  persisted across a restart. An unpinned panel reveals for the explicit click.
 - Resource header: the 46px header shows the scrollable active tab and fixed
   `+` button. A subagent detail uses a back arrow in the header. Arrow keys,
   Home, End, and Escape operate the tablist; creating a launcher page never
@@ -1906,7 +1919,9 @@ Single message render — either user (plaintext) or assistant (markdown streami
 - Hover actions: quiet icon-only action chips under the bubble — Copy on idle
   assistant turns; Fork and Regenerate on completed assistant turns; Edit and
   Delete on user turns. A streaming assistant turn omits its Copy action until
-  the response settles. Assistant rows expose neither Delete nor Edit. Chips
+  the response settles. Completed assistant turns and user messages also offer **Ask in side chat**
+  (`chat.askInSideChat`, beside Fork / Copy) on the visible conversation only.
+  Assistant rows expose neither Delete nor Edit. Chips
   render the glyph
   alone: the label is carried by `aria-label` plus a themed hover/focus
   tooltip 8px above the chip (compact raised shadow, not the composer glow),
@@ -1927,7 +1942,7 @@ Single message render — either user (plaintext) or assistant (markdown streami
   Regenerate / Branch / revision items). Right-clicking empty transcript
   space, a system row, or a permission/outcome card opens a conversation
   menu: Copy conversation, Select conversation text, Scroll to top, Jump to
-  latest. Quote, Annotate, and Open side chat stay retired (ADR 0268). A
+  latest. Quote and Annotate stay retired (ADR 0268), and the menu does not offer side chat (it lives on the action row). A
   streaming or empty assistant turn that would produce no items opens
   nothing. Copy on a speaking-turn menu writes the live selection in that
   turn captured when the menu opened; a collapsed caret, or a selection

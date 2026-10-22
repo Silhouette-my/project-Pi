@@ -1,6 +1,6 @@
 # ADR 0268: Remove quotes, annotations, and side chats
 
-- Status: Accepted
+- Status: Accepted; decision 5 (side chats) superseded by [side-chats-on-detached-transcripts](side-chats-on-detached-transcripts.md)
 - Date: 2026-09-16
 - Deciders: PI-Desktop runtime and desktop UI maintainers
 - Supersedes: ADR message-quotes-and-side-chats, ADR response-annotations, ADR floating-annotation-index
@@ -55,7 +55,11 @@ produces. Copy, edit, fork, and retry cover the rest.
    that already contains the generated block is shown verbatim in the
    transcript, in edit seeds, and in queue previews instead of being reduced
    back to the request.
-5. **Side chats.** Remove side chats as a feature: the first-Send draft
+5. **Side chats.** *(Superseded by ADR side-chats-on-detached-transcripts on
+   2026-10-22: side chats return on the shared detached transcript with none of
+   the machinery listed here. Decisions 1 to 4 and 6 to 7 stand; the retired
+   identifiers in decision 6 stay retired and the new scenario uses
+   `E2E-CHAT-side-chat-detached-panel`.)* Remove side chats as a feature: the first-Send draft
    lifecycle that created the child session, the renderer transcript projection
    (`projectSideChatEvent`), the `sidechat:` work-panel tab type and its
    `SideChatTab`, the registration / release / cascade-cleanup rules, and the

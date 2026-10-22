@@ -597,6 +597,32 @@
 - **Specs:** [live-work-session](../03-runtime/live-work-session.md),
   [live-voice](../03-runtime/live-voice.md).
 
+### E2E-CHAT-side-chat-detached-panel
+
+- **Preconditions:** Isolated real desktop profile with a loopback model fixture,
+  one completed assistant turn; both side panels unpinned (default).
+- **Steps:** Click **Ask in side chat** on the assistant turn. Type a question.
+  Send. Type a draft in the parent composer and click **Add to main chat**. Click
+  **Open as a conversation**. Return to the parent, open a second side chat from
+  the same turn, send, and close its tab. Start a parent turn that stays running,
+  open a side chat and type.
+- **Expected:** The click reveals the auto-hide panel on a draft tab; no session is
+  created by opening or typing. The first Send creates exactly one child without
+  changing the visible conversation, the model request carries the parent prefix,
+  and the reply streams in the panel only. Add to main chat appends a blockquote
+  with the attribution to the parent draft, keeps typed text and sends nothing.
+  Open as a conversation makes the child visible and closes the tab. Closing the
+  second tab keeps its child in the session list and sidebar. While the parent
+  runs, the first Send is disabled with a visible reason and recovers afterwards.
+- **Coverage:** `node scripts/e2e-chat-side-chat.mjs` (real Electron, real Rust
+  Host, loopback model) plus desktop `side-chat.test.mjs`
+  (first-send coordinator, quote formatting, draft append, tab helpers).
+  Regression: `node scripts/e2e-edge-reveal-side-panels.mjs`.
+- **Specs linked:** `04-ux/08-component-spec.md`, `04-ux/09-interaction-patterns.md`,
+  `04-ux/01-ui-ia.md`, ADR side-chats-on-detached-transcripts. The retired
+  `E2E-CHAT-side-chat-*` identifiers (ADR 0268) are not reused.
+- **Acceptance:** C (chat stream), Quality
+
 ### E2E-CHAT-fork-completed-reply-while-running
 
 - **Preconditions:** Isolated real desktop profile, configured model, two turns
@@ -5197,8 +5223,8 @@ window; opening a normal panel afterward must still work.
   text highlights the bubble. Escape and Tab dismiss the menu without
   running an item.
   A link still offers Open in default browser, Open in work panel, and
-  Copy link address. Quote, Annotate, and Open side chat are absent
-  (ADR 0268). The surface is a viewport-fixed body-level layer and does
+  Copy link address. Quote and Annotate are absent
+  (ADR 0268), and the menu offers no side chat. The surface is a viewport-fixed body-level layer and does
   not resize the transcript. During editing, Copy uses the selected draft text
   or the full draft with a collapsed caret; Select message text selects the
   draft. Edit, Delete, and revision actions are absent until editing ends.
