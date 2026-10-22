@@ -421,6 +421,19 @@ export type AppState = {
   } | null;
   /** Open (or activate) the transcript tab of one delegated subagent. */
   openSubagentTab: (delegationId: string, agentName?: string) => void;
+  /**
+   * Open the side-chat draft tab anchored at one message of the visible
+   * conversation. Creates no session; resolves the tab id, or null when the
+   * message cannot anchor one.
+   */
+  openSideChat: (anchorMessageId: string) => string | null;
+  /** First-Send fork: a durable child that is not activated. Resolves its id. */
+  createSideChatChild: (input: {
+    parentSessionId: string;
+    anchorMessageId: string;
+    title: string;
+    tabId: string;
+  }) => Promise<string>;
   /** Abort one session's running turn, visible or not. */
   abortSession: (sessionId: string) => Promise<void>;
   openWorkPanel: () => void;

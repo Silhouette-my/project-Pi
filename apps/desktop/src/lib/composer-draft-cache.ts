@@ -146,6 +146,31 @@ export function writeComposerDraft(
   cache.set(key, next);
 }
 
+/**
+ * Add text to a session's draft without discarding what is already typed.
+ *
+ * The addition lands after the existing text, separated by one blank line, and
+ * the slot's revision moves so a send that is in flight does not clear it.
+ * Returns the whole new snapshot so a mounted Composer can adopt it through the
+ * ordinary prefill path. Nothing here sends.
+ */
+export function appendComposerDraftText(
+  key: string,
+  addition: string,
+): CachedComposerDraft | undefined {
+  if (!addition.trim()) return undefined;
+  const existing = cache.get(key);
+  const base = (existing?.text ?? "").replace(/\s+$/, "");
+  const snapshot: CachedComposerDraft = {
+    ...(existing ?? { fileReferences: [] }),
+    text: base ? `${base}\n\n${addition}` : addition,
+    fileReferences: (existing?.fileReferences ?? []).map((reference) => ({ ...reference })),
+  };
+  markComposerDraftEdited(key);
+  cache.set(key, snapshot);
+  return snapshot;
+}
+
 export function captureComposerDraft(
   key: string,
   text: string,

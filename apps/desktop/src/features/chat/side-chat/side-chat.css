@@ -1,0 +1,40 @@
+/*
+  Chat side chat (ADR side-chats-on-detached-transcripts): a compact header above
+  the shared detached conversation. The conversation fills the remaining height.
+*/
+.side-chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.side-chat-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--ds-border-subtle);
+}
+.side-chat-title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ds-text-primary);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-chat-excerpt {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}

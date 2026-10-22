@@ -1496,6 +1496,18 @@ Project drag/drop follows these patterns:
 - Button appears as soon as upward scrolling releases follow mode
 - Click button: scrolls to bottom, resumes auto-scroll
 - Button disappears when at bottom
+- Ask in side chat (ADR side-chats-on-detached-transcripts): clicking the
+  action on a message opens (or activates) a draft `sidechat` tab in the work
+  panel, revealing an unpinned panel because the click is a user gesture.
+  Typing creates nothing. The first Send forks the child without switching the
+  visible conversation, then the reply streams in the panel; while the parent
+  runs or is read-only the first Send is disabled with a visible reason and
+  recovers when the parent is idle. A fork that succeeded but whose send failed
+  keeps the child for the retry. **Add to main chat** appends the newest side
+  answer to the parent composer draft as a `> ` quote with the "Quoted from"
+  attribution (2000-character cap), keeps typed text and never sends.
+  **Open as a conversation** closes the tab and selects the child. Closing a tab
+  removes only the tab and its draft.
 - A delegation tab uses the same single-body scroll owner as the work panel.
   It renders the delegate's conversation — each `Task` call's prompt as a user
   row followed by the delegate's live thinking, tool, and answer rows — in

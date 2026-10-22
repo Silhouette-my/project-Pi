@@ -474,6 +474,8 @@ export const es = {
     "openFile": "Abrir con aplicación predeterminada",
     "retry": "Regenerar",
     "forkResponse": "Rama de esta respuesta",
+    "quoteSource": "Citado de {{title}}",
+    "askInSideChat": "Preguntar en el chat lateral",
     "editMessage": "Editar y reenviar",
     "cancelEdit": "Cancelar",
     "retryEdit": "Reintentar",
@@ -2077,6 +2079,18 @@ sklm: {
     "alwaysOnTop": "Siempre visible",
     "minimize": "Minimizar",
     "close": "Cerrar el widget"
+  },
+  sideChat: {
+    parentBusy: "La conversación principal sigue respondiendo. Espera a que termine antes de iniciar este chat lateral.",
+    readOnly: "Esta sesión nativa de Pi es de solo lectura en este momento.",
+    title: "Chat lateral",
+    sessionTitle: "Chat lateral: {{title}}",
+    placeholder: "Haga una pregunta de seguimiento sobre esta respuesta",
+    empty: "Pregunte aquí para no cambiar la conversación principal.",
+    addToMain: "Añadir al chat principal",
+    openAsSession: "Abrir como conversación",
+    parentExcerpt: "Sobre: {{excerpt}}",
+    sendFailed: "No se pudo enviar el mensaje del chat lateral.",
   },
   "panel": {
     "title": "Panel de trabajo",

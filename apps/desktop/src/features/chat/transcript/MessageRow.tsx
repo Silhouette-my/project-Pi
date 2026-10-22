@@ -24,6 +24,7 @@ import {
 import { TooltipButton } from "../../../components/ui";
 import { userMessageMenuItems } from "./menu-items";
 import { ActionSlotSide } from "./ActionBarSlots";
+import { SideChatAction } from "../side-chat/SideChatAction";
 import { slotMessage } from "../../../plugins/renderer-slots/slot-message";
 import { SessionMessageOrigin } from "./SessionMessageOrigin";
 import {
@@ -387,6 +388,9 @@ export const MessageRow = memo(function MessageRow({
               </div>
             ) : null}
             {hasAnswer ? <CopyButton text={message.content} label={copyLabel} /> : null}
+            {hasAnswer && isUser && !isSessionMessage ? (
+              <SideChatAction role="user" messageId={message.id} paneSessionId={paneSessionId} />
+            ) : null}
             {editableUserMessage ? (
               <TooltipButton
                 className="copy-btn icon"

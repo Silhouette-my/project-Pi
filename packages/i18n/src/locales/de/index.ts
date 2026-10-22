@@ -474,6 +474,8 @@ export const de = {
     "openFile": "Mit Standardanwendung öffnen",
     "retry": "Neu generieren",
     "forkResponse": "Zweig aus dieser Antwort",
+    "quoteSource": "Zitiert aus {{title}}",
+    "askInSideChat": "Im Seitenchat fragen",
     "editMessage": "Bearbeiten und erneut senden",
     "cancelEdit": "Abbrechen",
     "retryEdit": "Wiederholen",
@@ -2077,6 +2079,18 @@ sklm: {
     "alwaysOnTop": "Immer im Vordergrund",
     "minimize": "Minimieren",
     "close": "Widget schließen"
+  },
+  sideChat: {
+    parentBusy: "Das Hauptgespräch antwortet noch. Warte auf das Ende, bevor du diesen Seitenchat startest.",
+    readOnly: "Diese native Pi-Sitzung ist derzeit schreibgeschützt.",
+    title: "Seitenchat",
+    sessionTitle: "Seitenchat: {{title}}",
+    placeholder: "Stellen Sie eine Rückfrage zu dieser Antwort",
+    empty: "Fragen Sie hier, ohne die Hauptkonversation zu ändern.",
+    addToMain: "Zum Hauptchat hinzufügen",
+    openAsSession: "Als Konversation öffnen",
+    parentExcerpt: "Zu: {{excerpt}}",
+    sendFailed: "Die Nachricht im Seitenchat konnte nicht gesendet werden.",
   },
   "panel": {
     "title": "Arbeitsfenster",

@@ -118,7 +118,9 @@ destination, chat as the home surface, tools and permissions inline.
   reveal. Agent and tool results never open or reveal it; only an explicit user
   gesture does. The overlay keeps the stored panel width, floats above MainPane
   (no width budget, no sidebar yield, no preview/maximize; pin the panel for
-  those), and is mounted only while revealed. Its header pin button docks it and
+  those), and is mounted only while revealed. A side-chat tab opened by the
+  explicit Ask in side chat click reveals it through the same user-gesture
+  rule. Its header pin button docks it and
   persists `workPanelPinned`. The pinned panel is a docked right column (not an
   overlay) opened by an artifact,
   the viewport-fixed toggle, or `Cmd/Ctrl + J`. File, URL, browser-preview, and

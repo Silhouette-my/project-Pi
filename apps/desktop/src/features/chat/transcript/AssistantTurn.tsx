@@ -54,6 +54,7 @@ import {
 import { AssistantTurnParts } from "./AssistantTurnParts";
 import { TurnProcess } from "./TurnProcess";
 import { ActionSlotSide } from "./ActionBarSlots";
+import { SideChatAction } from "../side-chat/SideChatAction";
 import { EntryExtraStack } from "./EntryExtraStack";
 import { slotMessage } from "../../../plugins/renderer-slots/slot-message";
 
@@ -432,6 +433,7 @@ export const AssistantTurn = memo(function AssistantTurn({
             >
               <IconBranch size={13} />
             </TooltipButton> : null}
+            <SideChatAction role="assistant" messageId={actionMessage.id} paneSessionId={paneSessionId} />
             {canEditMessages ? <TooltipButton
               className="copy-btn icon"
               tooltip={t("chat.retry")}

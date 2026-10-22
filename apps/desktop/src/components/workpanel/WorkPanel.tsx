@@ -34,6 +34,7 @@ import { TooltipButton } from "../ui";
 import type { IconProps } from "../icons";
 import {
   IconBot,
+  IconChat,
   IconClose,
   IconDiff,
   IconFileText,
@@ -47,6 +48,7 @@ import { ReviewTab } from "./ReviewTab";
 import { FilesTab } from "./FilesTab";
 import { PluginViewTab } from "./PluginViewTab";
 import { SubagentTranscriptTab } from "./SubagentTranscriptTab";
+import { SideChatTab } from "../../features/chat/side-chat/SideChatTab";
 import {
   MAIN_PANE_MIN_WIDTH,
   WORK_PANEL_COMPACT_MIN_WIDTH,
@@ -64,6 +66,7 @@ const TAB_ICONS = {
   file: IconFileText,
   plugin: IconPlug,
   subagent: IconBot,
+  sidechat: IconChat,
 } as const;
 
 type WorkPanelResizeState = {
@@ -118,6 +121,7 @@ function tabLabel(
   }
   if (tab.kind === "new") return t("panel.new.title");
   if (tab.kind === "subagent") return tab.label ?? t("panel.tabs.subagent");
+  if (tab.kind === "sidechat") return t("sideChat.title");
   if (tab.kind !== "file") return t(`panel.tabs.${tab.kind}`);
   const path = tab.resource ?? "";
   return path.split("/").filter(Boolean).pop() || t("panel.tabs.file");
@@ -261,7 +265,9 @@ function LocalWorkPanel({
   // Subagent tabs may share an agent name; repeats gain a 1-based `#n`
   // suffix in strip order so the row stays unambiguous. The base label
   // already falls back to panel.tabs.subagent when no name was captured.
-  const subagentTabsInOrder = tabs.filter((tab) => tab.kind === "subagent");
+  const subagentTabsInOrder = tabs.filter(
+    (tab) => tab.kind === "subagent" || tab.kind === "sidechat",
+  );
   const subagentDisplayLabels = subagentTabDisplayLabels(
     subagentTabsInOrder.map((tab) => tabLabel(tab, t, pluginViews)),
   );
@@ -909,8 +915,8 @@ function LocalWorkPanel({
               >
                 {tabs.map((tab) => {
                   const label =
-                    tab.kind === "subagent"
-                      ? (subagentLabelById.get(tab.id) ?? t("panel.tabs.subagent"))
+                    tab.kind === "subagent" || tab.kind === "sidechat"
+                      ? (subagentLabelById.get(tab.id) ?? tabLabel(tab, t, pluginViews))
                       : tabLabel(tab, t, pluginViews);
                   const selected = tab.id === activeTabId;
                   const Icon =
@@ -947,7 +953,7 @@ function LocalWorkPanel({
                         aria-grabbed={draggingTabId === tab.id}
                         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
                         className="work-panel-tab-button"
-                        title={tab.kind === "subagent" ? label : tab.resource ?? label}
+                        title={tab.kind === "subagent" || tab.kind === "sidechat" ? tab.label ?? label : tab.resource ?? label}
                         onPointerDown={(event) => beginTabReorder(event, tab.id)}
                         onDragStart={(event) => event.preventDefault()}
                         onClick={() => activateTab(tab.id)}
@@ -1031,6 +1037,17 @@ function LocalWorkPanel({
               aria-labelledby={`work-panel-tab-${activeTab.id}`}
             >
               <SubagentTranscriptTab delegationId={activeTab.resource ?? ""} />
+            </div>
+          )}
+          {activeTab?.kind === "sidechat" && (
+            <div
+              key={activeTab.id}
+              id={`work-panel-surface-${activeTab.id}`}
+              className="work-panel-tabpane"
+              role="tabpanel"
+              aria-labelledby={`work-panel-tab-${activeTab.id}`}
+            >
+              <SideChatTab tab={activeTab} />
             </div>
           )}
           {activeTab?.kind === "review" && (
