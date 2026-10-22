@@ -32,6 +32,31 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Return mode: a small label and the shared segmented control on one row. */
+.side-chat-return {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 2px;
+}
+.side-chat-return-label {
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm);
+}
+.settings-segment-item.side-chat-return-mode {
+  padding: 3px 10px;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.side-chat-return-hint {
+  margin: 0;
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm);
+}
+.side-chat-return-hint.is-error {
+  color: var(--ds-error);
+}
 .side-chat-actions {
   display: flex;
   flex-wrap: wrap;

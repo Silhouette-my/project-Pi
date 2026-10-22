@@ -602,21 +602,28 @@
 - **Preconditions:** Isolated real desktop profile with a loopback model fixture,
   one completed assistant turn; both side panels unpinned (default).
 - **Steps:** Click **Ask in side chat** on the assistant turn. Type a question.
-  Send. Type a draft in the parent composer and click **Add to main chat**. Click
+  Send. Check the return mode defaults to None with the return action disabled.
+  Type a draft in the parent composer, choose **Summary** and click **Return to
+  main thread**, then choose **Everything** and click it again. Click
   **Open as a conversation**. Return to the parent, open a second side chat from
   the same turn, send, and close its tab. Start a parent turn that stays running,
   open a side chat and type.
 - **Expected:** The click reveals the auto-hide panel on a draft tab; no session is
   created by opening or typing. The first Send creates exactly one child without
   changing the visible conversation, the model request carries the parent prefix,
-  and the reply streams in the panel only. Add to main chat appends a blockquote
-  with the attribution to the parent draft, keeps typed text and sends nothing.
+  and the reply streams in the panel only. The return action is disabled in None. Summary sends a
+  summary prompt to the side chat only (progress shown, a second click blocked),
+  then appends the summary as a labelled blockquote with the attribution to the
+  parent draft; Everything appends the quoted exchanges after the anchor with role
+  labels and without the parent prefix. Typed text is kept and nothing is sent to
+  the parent.
   Open as a conversation makes the child visible and closes the tab. Closing the
   second tab keeps its child in the session list and sidebar. While the parent
   runs, the first Send is disabled with a visible reason and recovers afterwards.
 - **Coverage:** `node scripts/e2e-chat-side-chat.mjs` (real Electron, real Rust
   Host, loopback model) plus desktop `side-chat.test.mjs`
-  (first-send coordinator, quote formatting, draft append, tab helpers).
+  (first-send coordinator, summary and transcript quotes and caps, summary state
+  machine, return gate, draft append, tab helpers).
   Regression: `node scripts/e2e-edge-reveal-side-panels.mjs`.
 - **Specs linked:** `04-ux/08-component-spec.md`, `04-ux/09-interaction-patterns.md`,
   `04-ux/01-ui-ia.md`, ADR side-chats-on-detached-transcripts. The retired

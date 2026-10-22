@@ -62,18 +62,38 @@ project side conversations use it today.
    without its anchor is not a known tab. The tab is part of the parent's panel
    context and is not persisted across a restart; the durable child is. The
    tab's header shows the side-chat title, a one-line excerpt of the anchored
-   message, **Add to main chat** and **Open as a conversation**.
+   message, the **Return to main thread** mode control and action, and **Open as a
+   conversation**.
 5. **Auto-hide panels.** An unpinned right panel opened by the explicit click
    reveals through the existing gesture rule of `useSidePanelReveal` (the click is
    a pointer gesture within its 400ms window); no change to that hook is needed.
    The reveal is a command reveal, so it stays while the user types.
-6. **Add to main chat.** Copies the side chat's newest assistant answer into the
-   parent session's composer draft as a Markdown blockquote with the attribution
-   line `chat.quoteSource`, capped at 2000 characters. It appends to the
-   per-session draft (D301) through `appendComposerDraftText` in
-   `lib/composer-draft-cache.ts` and hands the new snapshot to a mounted Composer
-   through the existing prefill path. It keeps what the user already typed and
-   never sends.
+6. **Return to main thread (amended 2026-10-22).** Each side chat has a return
+   mode, a renderer-only setting (side chats are renderer-owned forks) that can
+   change at any time: **None** (`none`, the default), **Summary** (`summary`)
+   or **Everything** (`full`). It lives in `side-chat-slice` keyed by the tab id,
+   is never persisted and is dropped with the tab. One action, `sideChat.returnToMain`,
+   replaces the former **Add to main chat**; it is disabled with a visible reason
+   while the mode is None, before a child exists, while the side chat is
+   running, and when it has no exchange yet.
+   - **Summary** sends a visible prompt in the side chat itself (`sideChat.summaryPrompt`,
+     asking for points and decisions, not a transcript), waits for that turn
+     (`runningSessions[child]` goes true, then false; 120 s timeout, failures shown
+     in the header), then quotes the newest assistant answer with a `Summary`
+     label and the `chat.quoteSource` attribution, capped at 4000 characters. The
+     button shows progress and ignores a second click while the turn runs.
+   - **Everything** quotes every user and assistant text exchange after the fork
+     anchor, in order, with role labels (tool rows are skipped), capped at 12000
+     characters. The newest exchanges are kept and a visible note says how many
+     earlier ones were omitted. The fork copies the parent prefix with remapped
+     message ids, so the prefix length is recorded before the first prompt.
+   - Both modes only append to the parent's per-session draft (D301) through
+     `appendComposerDraftText` and hand the snapshot to a mounted Composer through
+     the existing prefill path. They keep what the user typed and never send; the
+     user reviews the draft first.
+   - **Why None is the default:** PRODUCT P6 gives Ask no automatic effective-context
+     write-back. Returning context is an explicit, per-side-chat opt-in, and even
+     then it lands only in an unsent draft.
 7. **Open as a conversation** closes the tab and selects the child through the
    normal `selectSession` path.
 8. **Closing the tab** removes only the tab and its unsent draft. A created child

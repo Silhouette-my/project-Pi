@@ -3,6 +3,8 @@ import { api } from "../../lib/api";
 import { sessionAllows } from "../../lib/remote-session-safety";
 import {
   anchorExcerptLine,
+  DEFAULT_SIDE_CHAT_RETURN_MODE,
+  type SideChatReturnState,
 } from "../../features/chat/side-chat/side-chat-core";
 import {
   patchWorkPanelTabState,
@@ -16,8 +18,8 @@ import { currentWorkPanelContext } from "./work-panel-slice";
 /**
  * Chat side chats (ADR side-chats-on-detached-transcripts).
  *
- * The slice owns only the two state transitions that need the store: opening a
- * draft tab, and creating the child session on first Send. It keeps no
+ * The slice owns the state transitions that need the store: opening a draft
+ * tab, creating the child session on first Send, and the per-tab return state. It keeps no
  * transcript: the child is read as a detached transcript like every other
  * conversation shown outside the chat surface.
  */
@@ -27,9 +29,36 @@ export function createSideChatSlice({
   commitForkedSession,
 }: StoreAccess & Pick<SessionSliceDependencies, "commitForkedSession">): Pick<
   AppState,
-  "openSideChat" | "createSideChatChild"
+  | "openSideChat"
+  | "createSideChatChild"
+  | "setSideChatReturnMode"
+  | "patchSideChatReturn"
+  | "pruneSideChatReturn"
 > {
+  const patchReturn = (tabId: string, patch: Partial<SideChatReturnState>) =>
+    set((state) => {
+      const current = state.sideChatReturn[tabId] ?? {
+        mode: DEFAULT_SIDE_CHAT_RETURN_MODE,
+        status: "idle" as const,
+      };
+      return { sideChatReturn: { ...state.sideChatReturn, [tabId]: { ...current, ...patch } } };
+    });
   return {
+    // The return mode is renderer-only (side chats are renderer-owned forks):
+    // it can change at any time, is never persisted and is dropped with the tab.
+    setSideChatReturnMode: (tabId, mode) => patchReturn(tabId, { mode, error: undefined }),
+    patchSideChatReturn: patchReturn,
+    pruneSideChatReturn: (live) =>
+      set((state) => {
+        const keys = Object.keys(state.sideChatReturn);
+        if (keys.every((key) => live.has(key))) return {};
+        return {
+          sideChatReturn: Object.fromEntries(
+            keys.filter((key) => live.has(key)).map((key) => [key, state.sideChatReturn[key]]),
+          ),
+        };
+      }),
+
     openSideChat: (anchorMessageId) => {
       const state = get();
       const parentSessionId = state.activeSessionId;
