@@ -37,9 +37,15 @@
 .detached-conversation-composer {
   display: flex;
   flex-direction: column;
+  /* .composer-shell is width: 100%; with side margins that overflows the dock. */
+  width: auto;
   margin: 0 10px 10px;
 }
-.detached-conversation-composer .composer-input.field-textarea {
+.detached-conversation-composer .detached-conversation-input.field-textarea::placeholder {
+  color: var(--ds-text-faint);
+  opacity: 1;
+}
+.detached-conversation-composer .detached-conversation-input.field-textarea {
   min-height: 2lh;
   max-height: 7lh;
   overflow-y: auto;
@@ -50,8 +56,9 @@
   box-shadow: none;
   font-size: var(--text-base);
   line-height: var(--leading-body);
+  resize: none;
 }
-.detached-conversation-composer .composer-input.field-textarea:focus {
+.detached-conversation-composer .detached-conversation-input.field-textarea:focus {
   background: transparent;
   box-shadow: none;
 }

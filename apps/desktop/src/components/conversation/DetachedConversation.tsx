@@ -120,7 +120,7 @@ export function DetachedConversation({
         }}
       >
         <Textarea
-          className="composer-input"
+          className="detached-conversation-input"
           aria-label={inputLabel}
           placeholder={placeholder}
           rows={2}
@@ -213,6 +213,13 @@ function DetachedModelPicker({
       else onPendingChange({ ...pending, ...configuration });
     },
   });
+  // Detached surfaces can mount before any chat page has loaded the provider
+  // catalog (e.g. the project console); load it once so the picker resolves.
+  const providersLoaded = useAppStore((state) => state.providers.length > 0);
+  const refreshProviders = useAppStore((state) => state.refreshProviders);
+  useEffect(() => {
+    if (!providersLoaded) void refreshProviders().catch(() => {});
+  }, [providersLoaded, refreshProviders]);
   return (
     <ComposerModelPicker
       t={t}
