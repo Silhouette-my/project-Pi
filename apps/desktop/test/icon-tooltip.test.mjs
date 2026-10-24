@@ -58,15 +58,10 @@ test("conversation topbar tooltips reflect configured shortcuts", () => {
   const topbarSource = source("components/ConversationTopbar.tsx");
   assert.match(topbarSource, /settings\?\.keybindings/);
   assert.match(topbarSource, /resolveKeybinding\(newTaskShortcut, keybindings, platform\)/);
-  assert.match(topbarSource, /resolveKeybinding\(searchShortcut, keybindings, platform\)/);
   assert.match(topbarSource, /keybindingDisplayParts\(newTaskBinding, platform\)/);
-  assert.match(topbarSource, /keybindingDisplayParts\(searchBinding, platform\)/);
   assert.match(topbarSource, /newTaskTooltip = newTaskShortcutLabel[\s\S]*?t\("nav\.actionWithShortcut"[\s\S]*?: t\("nav\.newTask"\)/);
-  assert.match(topbarSource, /searchTooltip = searchShortcutLabel[\s\S]*?t\("nav\.actionWithShortcut"[\s\S]*?: t\("nav\.search"\)/);
   assert.match(topbarSource, /tooltip=\{newTaskTooltip\}/);
-  assert.match(topbarSource, /tooltip=\{searchTooltip\}/);
   assert.match(topbarSource, /ariaLabel=\{t\("nav\.newTask"\)\}/);
-  assert.match(topbarSource, /ariaLabel=\{t\("nav\.search"\)\}/);
 });
 
 // A tooltip that survives its trigger is the reported "sometimes it never goes

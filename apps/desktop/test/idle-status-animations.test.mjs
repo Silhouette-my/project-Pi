@@ -27,10 +27,11 @@ function declarationBlock(selector) {
 }
 
 function containedRule(scope, selector) {
-  const start = scope.indexOf(`${selector} {`);
-  if (start < 0) return null;
-  const end = scope.indexOf("}", start);
-  return scope.slice(start, end + 1);
+  // The selector may sit in a grouped list (`a,\n  b {`), so find the rule
+  // whose selector list contains it.
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`(?:^|[}\\s])((?:[^{}]*,\\s*)?${escaped}(?:\\s*,[^{}]*)?\\s*\\{[^}]*\\})`).exec(scope);
+  return match ? match[1] : null;
 }
 
 /** Every top-level `@media (prefers-reduced-motion: reduce)` block, by brace. */
@@ -59,9 +60,9 @@ function reducedMotionBlocks() {
 // running (a session waiting on permission, plan mode left on, a backend
 // warning banner), so they kept animating on an idle window.
 const IDLE_INDICATORS = [
-  ".thread-item-status.running::before",
+  ".thread-item-status.running",
   ".sidebar-session-hover-card-session-link-status::before",
-  ".thread-item-status.permission::before",
+  ".thread-item-status.permission",
   '.composer-mode-chip[data-planning="true"] svg',
   ".backend-banner.warn .backend-dot",
 ];
