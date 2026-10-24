@@ -115,7 +115,7 @@ const submitForm = async selector => page.evaluate(`(() => { const form=document
 const agentTabSelector = () => `.work-panel [data-project-agent-dock="${projectId}"]`;
 const openAgentDock = async () => page.evaluate(`(() => { if(document.querySelector(${json(agentTabSelector())})) return true; const toggle=document.querySelector('[data-project-agent-dock-toggle]'); if(toggle && !toggle.disabled) toggle.click(); return false })()`);
 const selectControl = async (selector, value) => page.evaluate(`(() => { const input=document.querySelector(${json(selector)}); if(!input) return false; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(input,${json(value)}); input.dispatchEvent(new Event('change',{bubbles:true})); return input.value===${json(value)} })()`);
-const openContextTab = async () => clickText("共享上下文", ".workflow-tabs button");
+const openContextTab = async () => clickText("上下文", ".workflow-tabs button");
 const capture = async name => { const shot = await page.call("Page.captureScreenshot", { format: "png" }); await writeFile(join(output, name), Buffer.from(shot.data, "base64")); };
 try {
   const seed = new Host(hostBinary, data, { env: { HOME: home }, quiet: true });

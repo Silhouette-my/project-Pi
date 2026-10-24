@@ -173,7 +173,7 @@ export function SessionStructureView({
               </>
             ) : null}
             {!visible.length ? (
-              <p className="workflow-muted">{t("projectStructure.noMatchingSessions")}</p>
+              <p className="project-empty-line">{t("projectStructure.noMatchingSessions")}</p>
             ) : null}
           </nav>
           {selected ? (
@@ -221,30 +221,34 @@ export function SessionStructureView({
                         : "workflow.sideOnly",
                     )}
                   </dd>
-                  <dt>{t("workflow.selection")}</dt>
-                  <dd>{selected.link.readContext.selection || t("workflowContext.unspecified")}</dd>
-                  <dt>{t("workflowContext.resources")}</dt>
-                  <dd>
-                    {selected.link.readContext.resourceIds
-                      .map((id) => snapshot.resources.find((item) => item.id === id)?.label ?? id)
-                      .join(", ") || t("workflowContext.unspecified")}
-                  </dd>
-                  <dt>{t("workflow.includeDecisions")}</dt>
-                  <dd>
-                    {t(
-                      selected.link.readContext.includeDecisions
-                        ? "projectStructure.included"
-                        : "projectStructure.excluded",
-                    )}
-                  </dd>
-                  <dt>{t("workflow.includeArtifacts")}</dt>
-                  <dd>
-                    {t(
-                      selected.link.readContext.includeArtifacts
-                        ? "projectStructure.included"
-                        : "projectStructure.excluded",
-                    )}
-                  </dd>
+                  {selected.link.readContext.selection ? (
+                    <>
+                      <dt>{t("workflow.selection")}</dt>
+                      <dd>{selected.link.readContext.selection}</dd>
+                    </>
+                  ) : null}
+                  {selected.link.readContext.resourceIds.length ? (
+                    <>
+                      <dt>{t("workflowContext.resources")}</dt>
+                      <dd>
+                        {selected.link.readContext.resourceIds
+                          .map((id) => snapshot.resources.find((item) => item.id === id)?.label ?? id)
+                          .join(", ")}
+                      </dd>
+                    </>
+                  ) : null}
+                  {selected.link.readContext.includeDecisions ? (
+                    <>
+                      <dt>{t("workflow.includeDecisions")}</dt>
+                      <dd>{t("projectStructure.included")}</dd>
+                    </>
+                  ) : null}
+                  {selected.link.readContext.includeArtifacts ? (
+                    <>
+                      <dt>{t("workflow.includeArtifacts")}</dt>
+                      <dd>{t("projectStructure.included")}</dd>
+                    </>
+                  ) : null}
                 </dl>
               ) : null}
               {selected.workstreams.length ? (
@@ -297,9 +301,7 @@ export function SessionStructureView({
           ) : null}
         </div>
       ) : (
-        <div className="workflow-empty">
-          <strong>{t("projectStructure.noSessions")}</strong>
-        </div>
+        <p className="project-empty-line">{t("projectStructure.noSessions")}</p>
       )}
     </section>
   );

@@ -1508,24 +1508,27 @@ adjacent form inputs; dense surfaces may override that metric locally.
 
 - **Project Console**: a compact project identity/header sits below the existing
   46px native titlebar safe area. Window controls remain Electron-owned. Overview,
-  Workstreams, Shared context and Structure use a quiet underline navigation. The Project Agent is a tab of the right work panel (its tab strip, pin and
+  Structure, Context and Workstreams (in that order) use a quiet underline navigation. The Project Agent is a tab of the right work panel (its tab strip, pin and
   resize controls; unpinned it is the panel's `.edge-panel` overlay) that renders
   the existing session pane and a Composer plate, and reaches the full chat
   surface through the existing Agent entry rather than a second transcript
   implementation. Send to conversation and Bring in a conversation are modal
   dialogs in the Folder/Rename dialog family. Overview leads with one muted summary
-  line of real counts (no KPI tiles), then pending decisions and unknown effects,
-  then one row per current workstream with its status badge, owner (a readable
+  line of real counts (no KPI tiles), then "Needs attention" (pending decisions, plus workstreams awaiting the user or with an unknown effect; its second line is the next step or resume condition, never the badge text),
+  then one row per remaining current workstream with its status badge, owner (a readable
   name, never a raw id), next action, blocker, current candidate revision and an
   "Acceptance n / m" count, then recent recorded outputs. A workstream appears in
-  exactly one Overview list. Cards carry no coloured edge rails.
+  exactly one Overview list. Cards carry no coloured edge rails. Badges mark exceptions only
+  (no "effective" badge on references; only "superseded"); empty states are one short muted line;
+  explanatory notes live in tooltips, e.g. the history limit on the dashed graph
+  boundary edge and the merge-commit comparison note on the parents label.
   A new project can discuss a goal without first creating a workstream. A work row
   opens its detail beside the workstream list; creation/editing uses the shared modal overlay and existing
   validated form, keeping execution scope and acceptance controls intact.
   Project instructions, memory and reload live in the project menu; search expands
   from the header. Reuse the shared UI primitives, Composer plate/toolbar classes,
   project instruction/memory dialogs and semantic theme tokens. Concretely: the
-  identity uses a 36px glyph seat and the Settings page title (`--text-2xl`,
+  identity uses a 36px neutral glyph seat (outlined cube icon) and the Settings page title (`--text-2xl`,
   strong weight, tighter tracking) with the archive's mono path voice; header actions share the conversation top bar's
   28px `.ct-icon-btn` seat and tile-backed group; underline tabs are px-3 py-2
   `--text-sm`, secondary at rest. Tab pages follow the Settings page layout
@@ -1552,10 +1555,10 @@ adjacent form inputs; dense surfaces may override that metric locally.
   text with the full value in a tooltip. Workstream controls keep the four P4 flows
   (Start work, Discuss next, Pause to discuss, side conversation) as one labelled
   row and operational controls (pause/resume, cancel, execution scope) as a quieter
-  row below. The project accent
-  (`--workflow-accent`, resolved as `--ds-project-accent` when the project has a
-  colour, else `--ds-theme-accent`, else the neutral `--ds-accent`) marks only the selected tab, primary actions, keyboard
-  focus and the project glyph; list selection stays the neutral `--ds-bg-active`. Project drafts are
+  row below. Project pages carry no per-project accent (the stored colour field is kept for
+  compatibility but no longer read or written by the UI); the global theme accent
+  (`--ds-theme-accent`) marks the selected tab, primary actions and keyboard
+  focus; list selection stays the neutral `--ds-bg-active`. Action buttons share one 30px height. Project drafts are
   renderer-memory, keyed by project, retained on navigation/send failure, and
   cleared only after a successful send. Ordinary chat display groups are disjoint:
   Favorites first, then Recent, then remaining folder/Unfiled entries; this changes

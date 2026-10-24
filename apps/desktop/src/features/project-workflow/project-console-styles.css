@@ -2,14 +2,14 @@
 .workflow-project-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .workflow-project-identity > h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
 /* Compact identity (07 §Destination pages): glyph seat matches .projects-glyph, the path uses the archive path voice. */
-.workflow-project-mark { width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius-xs); background: color-mix(in oklab, var(--workflow-accent) 14%, transparent); color: var(--workflow-accent); display: grid; place-items: center; }
+.workflow-project-mark { width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--radius-xs); background: var(--ds-tile); color: var(--ds-text-secondary); display: grid; place-items: center; }
 .workflow-header-actions { flex-shrink: 0; }
 /* Quiet underline navigation (07 §11.5): px-3 py-2 text-sm, secondary at rest. */
 .workflow-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--ds-border-subtle); flex-wrap: wrap; margin: 0 -12px; }
 .workflow-tabs > .btn { position: relative; min-height: 32px; padding: 8px 12px; border-radius: var(--radius-xs) var(--radius-xs) 0 0; font-size: var(--text-sm); color: var(--ds-text-secondary); background: transparent; }
 .workflow-tabs > .btn:hover { color: var(--ds-text-primary); background: transparent; }
 .workflow-tabs > .btn[aria-current="page"] { color: var(--ds-text-primary); font-weight: var(--font-weight-medium); }
-.workflow-tabs > .btn[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--workflow-accent); border-radius: var(--radius-full); }
+.workflow-tabs > .btn[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--ds-theme-accent); border-radius: var(--radius-full); }
 /* Content band follows the 760px chat band; section rhythm stays within 16–24px (07 §13). */
 .workflow-content { width: 100%; max-width: 760px; margin: 0 auto; padding-top: 16px; }
 .workflow-content > .workflow-section-heading { margin-bottom: 12px; }

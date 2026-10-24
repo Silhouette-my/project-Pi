@@ -97,7 +97,7 @@ export function GitStructureView({ projectId, switcher }: { projectId: string; s
                 onClick={() => setSelection("")}
               >
                 <strong>{t("projectStructure.workingChanges")}</strong>
-                <Badge>{repo.changes.files.length}</Badge>
+                <Badge>{t("projectStructure.fileCount", { count: repo.changes.files.length })}</Badge>
               </Button>
               {graph.nodes.length ? (
                 <div
@@ -115,7 +115,9 @@ export function GitStructureView({ projectId, switcher }: { projectId: string; s
                           key={`${node.commit.oid}-${parent.oid}`}
                           className={parent.row === undefined ? "is-boundary" : ""}
                           d={`M ${node.column * 18 + 12} ${node.row * 58 + 29} C ${node.column * 18 + 12} ${node.row * 58 + 55}, ${(parent.column ?? node.column) * 18 + 12} ${(parent.row ?? node.row + 0.65) * 58}, ${(parent.column ?? node.column) * 18 + 12} ${(parent.row ?? node.row + 0.65) * 58 + 29}`}
-                        />
+                        >
+                          {parent.row === undefined ? <title>{t("projectStructure.historyLimited")}</title> : null}
+                        </path>
                       )),
                     )}
                     {graph.nodes.map((node) => (
@@ -152,9 +154,6 @@ export function GitStructureView({ projectId, switcher }: { projectId: string; s
               ) : (
                 <p>{t("projectStructure.noCommits")}</p>
               )}
-              {repo.truncated ? (
-                <p className="workflow-muted">{t("projectStructure.historyLimited")}</p>
-              ) : null}
               {repo.refs.length ? (
                 <details className="project-git-refs">
                   <summary><IconChevronRight size={12} className="project-disclosure-icon" />{t("projectStructure.references", { count: repo.refs.length })}</summary>
@@ -175,13 +174,12 @@ export function GitStructureView({ projectId, switcher }: { projectId: string; s
                   <br />
                   <code title={commit.oid}>{commit.oid.slice(0, 7)}</code>
                   <br />
-                  {t("projectStructure.parents")}:{" "}
+                  <span title={commit.parents.length > 1 ? t("projectStructure.mergeBase") : undefined}>
+                    {t("projectStructure.parents")}:
+                  </span>{" "}
                   {commit.parents.map((oid) => oid.slice(0, 10)).join(", ") ||
                     t("projectStructure.rootCommit")}
                 </p>
-              ) : null}
-              {commit && commit.parents.length > 1 ? (
-                <p className="workflow-muted">{t("projectStructure.mergeBase")}</p>
               ) : null}
               {!diff ? <p role="status">{t("workflow.loading")}</p> : <ProjectDiff diff={diff} />}
             </section>

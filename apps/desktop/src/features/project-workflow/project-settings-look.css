@@ -33,6 +33,7 @@
 
 /* Card headings (.settings-card-heading): sentence case, primary ink. */
 .workflow-page .project-section-label h2,
+.workflow-page .project-section-label h3,
 .workflow-page .workflow-record-heading h3,
 .workflow-page .workflow-context-artifacts > h3,
 .workflow-page .workflow-candidate-summary h3,
@@ -164,4 +165,110 @@
   .workflow-page .workflow-header h1 {
     font-size: var(--text-xl);
   }
+}
+
+/* Action buttons share one height across the project pages (prototype: 30px). */
+.project-section-label > .btn,
+.workflow-detail-actions .btn,
+.workflow-actions .btn,
+.workflow-record-actions .btn,
+.workflow-heading-action.btn,
+.project-overview-output > .btn,
+.workflow-candidate-summary > .btn,
+.workflow-control-row .btn,
+.workflow-secondary-actions .btn,
+.workflow-section-heading > .btn {
+  height: 30px;
+  min-height: 0;
+  padding: 0 12px;
+  font-size: var(--text-md);
+}
+.workflow-record-heading > .workflow-heading-action {
+  margin-left: auto;
+}
+
+/* Empty states are one short muted line in a tile. */
+.project-empty-line {
+  padding: 18px 16px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+  color: var(--ds-text-muted);
+  font-size: var(--text-md);
+}
+
+/* Workstream detail blocks: card heading, then tiles. */
+.workflow-detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.workflow-acceptance {
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+}
+.workflow-acceptance li {
+  align-items: center;
+}
+.workflow-check {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--ds-border-default);
+  color: var(--ds-on-theme-accent);
+}
+.workflow-check.is-satisfied {
+  border-color: var(--ds-success);
+  background: var(--ds-success);
+}
+.workflow-check.is-reopened {
+  border-color: var(--ds-warning);
+}
+.workflow-side-row.btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  text-align: left;
+  white-space: normal;
+}
+.workflow-side-row > svg {
+  flex-shrink: 0;
+  color: var(--ds-text-muted);
+}
+.workflow-side-row > svg:last-child {
+  margin-left: auto;
+}
+.workflow-side-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.workflow-side-copy small {
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+}
+.workflow-record-kind {
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+}
+.workflow-record-heading > strong {
+  margin-right: 0;
+}
+.workflow-artifacts-subhead {
+  margin: 14px 0 0;
+  font-size: var(--text-md-plus);
+  font-weight: var(--font-weight-strong);
+}
+
+.project-section-label > .btn {
+  white-space: nowrap;
 }

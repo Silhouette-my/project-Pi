@@ -184,3 +184,20 @@ test("architecture match needs a complete trusted repository read", () => {
   assert.equal(architectureRevisionState(artifact, { ...repo, head: "def" }), "stale");
   assert.equal(architectureRevisionState({}, repo), "unknown");
 });
+test("a workstream lists in exactly one Overview list", () => {
+  const snapshot = empty();
+  snapshot.workstreams = [
+    work("waiting", { status: "awaiting_user" }),
+    work("unknown", { order: 1 }),
+    work("plain", { order: 2 }),
+  ];
+  snapshot.runs = [
+    { projectId: "p", id: "r", workstreamId: "unknown", state: "unknown", effects: [] },
+  ];
+  const view = projectOverview(snapshot, "p");
+  const attention = view.attentionWork.map((item) => item.work.id);
+  const active = view.activeWork.map((item) => item.id);
+  assert.deepEqual(attention, ["waiting", "unknown"]);
+  assert.deepEqual(active, ["plain"]);
+  assert.equal(attention.filter((id) => active.includes(id)).length, 0);
+});
