@@ -355,8 +355,8 @@ export const zhTW = {
     emptyTitleTemporary: "臨時聊點什麼？",
     placeholder: "讓 PI-Desktop 幫你做任何事",
     placeholderHome: "隨便問問",
-    placeholderHint: "輸入 / 使用命令 · @ 引用檔案",
-    placeholderHomeHint: "輸入 / 使用命令 · @ 引用檔案",
+    placeholderHint: "輸入 / 使用命令 · @ 引用檔案或對話",
+    placeholderHomeHint: "輸入 / 使用命令 · @ 引用檔案或對話",
     placeholderShortcut: "Shift+Enter 換行 · 點擊發送提交",
     suggestionHint: "Tab 接受 · Esc 忽略",
     addFiles: "新增檔案等內容",
@@ -2985,6 +2985,16 @@ sklm: {
     quotedFrom: "引用自 {{title}}",
     noAnswer: "此對話還沒有可引用的回答。",
     insertAgentDraft: "插入 Agent 草稿"
+  },
+  mention: {
+    groupProject: "目前專案",
+    groupRecent: "最近",
+    groupOther: "其他專案",
+    groupFiles: "檔案",
+    empty: "無符合的對話",
+    sideOf: "側聊 · {{title}}",
+    menu: "引用對話",
+    tooltip: "引用對話：{{title}}"
   }
 } satisfies EnglishCatalog;
 

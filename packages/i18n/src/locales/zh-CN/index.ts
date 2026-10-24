@@ -355,8 +355,8 @@ export const zhCN = {
     emptyTitleTemporary: "临时聊点什么？",
     placeholder: "让 PI-Desktop 帮你做任何事",
     placeholderHome: "随便问问",
-    placeholderHint: "输入 / 使用命令 · @ 引用文件",
-    placeholderHomeHint: "输入 / 使用命令 · @ 引用文件",
+    placeholderHint: "输入 / 使用命令 · @ 引用文件或对话",
+    placeholderHomeHint: "输入 / 使用命令 · @ 引用文件或对话",
     placeholderShortcut: "Shift+Enter 换行 · 点击发送提交",
     suggestionHint: "Tab 接受 · Esc 忽略",
     addFiles: "添加文件",
@@ -3035,6 +3035,16 @@ sklm: {
     quotedFrom: "引用自 {{title}}",
     noAnswer: "该对话还没有可引用的回答。",
     insertAgentDraft: "插入 Agent 草稿"
+  },
+  mention: {
+    groupProject: "当前项目",
+    groupRecent: "最近",
+    groupOther: "其他项目",
+    groupFiles: "文件",
+    empty: "无匹配对话",
+    sideOf: "侧聊 · {{title}}",
+    menu: "引用对话",
+    tooltip: "引用对话：{{title}}"
   }
 } satisfies EnglishCatalog;
 

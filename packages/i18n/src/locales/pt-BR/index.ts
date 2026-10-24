@@ -352,8 +352,8 @@ export const ptBR = {
     emptyTitleTemporary: "O que você gostaria de explorar temporariamente?",
     placeholder: "Peça ajuda ao PI-Desktop para qualquer tarefa",
     placeholderHome: "Pergunte qualquer coisa",
-    placeholderHint: "Digite / para comandos · @ para arquivos",
-    placeholderHomeHint: "Digite / para comandos · @ para arquivos",
+    placeholderHint: "Digite / para comandos · @ para arquivos ou conversas",
+    placeholderHomeHint: "Digite / para comandos · @ para arquivos ou conversas",
     placeholderShortcut: "Shift+Enter para inserir uma quebra de linha · Use Enviar para enviar",
     suggestionHint: "Tab aceitar · Esc descartar",
     addFiles: "Adicionar arquivos",
@@ -2929,6 +2929,16 @@ export const ptBR = {
     quotedFrom: "Citado de {{title}}",
     noAnswer: "Esta conversa ainda não tem uma resposta para citar.",
     insertAgentDraft: "Inserir no rascunho do agente"
+  },
+  mention: {
+    groupProject: "Projeto atual",
+    groupRecent: "Recentes",
+    groupOther: "Outros projetos",
+    groupFiles: "Arquivos",
+    empty: "Nenhuma conversa correspondente",
+    sideOf: "Chat lateral · {{title}}",
+    menu: "Mencionar uma conversa",
+    tooltip: "Conversa mencionada: {{title}}"
   }
 } satisfies EnglishCatalog;
 

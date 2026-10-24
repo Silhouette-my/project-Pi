@@ -40,7 +40,6 @@ import {
   IconAudio,
   IconBot,
   IconBranch,
-  IconChat,
   IconCheck,
   IconChevronRight,
   IconCircleAlert,
@@ -487,7 +486,7 @@ function SessionChip({ sessionId, fallbackName, ...position }: {
     (state) => state.sessions.find((session) => session.id === sessionId)?.title,
   );
   const name = (liveTitle ?? "").trim() || fallbackName;
-  const label = `${t("chat.sessionReference")} · ${name}`;
+  const label = `@${name}`;
   const open = () => void selectSession(sessionId).catch(() => undefined);
   // This chip carries a conversation title, so it can be wider than whatever
   // space a line has left. Chromium never fragments a `<button>` across lines:
@@ -503,7 +502,8 @@ function SessionChip({ sessionId, fallbackName, ...position }: {
       {...position}
       data-action="open-session-reference"
       data-session-id={sessionId}
-      title={t("chat.sessionReferenceOpen", { title: name })}
+      data-mention=""
+      title={t("mention.tooltip", { title: name })}
       aria-label={label}
       onClick={open}
       onKeyDown={(event) => {
@@ -512,9 +512,6 @@ function SessionChip({ sessionId, fallbackName, ...position }: {
         open();
       }}
     >
-      <span className="composer-chip-icon" aria-hidden>
-        <IconChat size={13} />
-      </span>
       <span className="composer-chip-name">{label}</span>
     </span>
   );

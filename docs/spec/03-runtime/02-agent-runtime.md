@@ -141,8 +141,10 @@ transcript-read API. The core runs no title completion of its own.
    bound for a vision model is read into memory; larger images use streamed
    hashing/copying and the existing safe path fallback
    A `pi-desktop://session/<id>` link in the draft is resolved in the same step
-   into a bounded excerpt attachment: the same project only, the current
-   conversation dropped before any read, and the runtime quotes it to the model
+   into a bounded excerpt attachment: any local conversation (the Composer's
+   `@` list offers other projects' conversations under their project; ADR
+   conversation-mention), the current conversation dropped before any read, and
+   the runtime quotes it to the model
    as one `<session_reference name="…" session="…">` block ahead of the user's
    own words
 7. snapshot the effective shell ID and dialect for the turn

@@ -27,6 +27,8 @@ import { slotRegistry } from "../../../../plugins/renderer-slots/registry";
 import { useAppStore } from "../../../../stores/app-store";
 import { createFileReference, isImageFilePath, nextChipToken } from "../editor";
 import type { ComposerFileReference } from "../model";
+import { flattenMentionGroups, type MentionRow } from "../../mention/mention-core";
+import { useMentionGroups } from "../../mention/useMentionGroups";
 import { placePluginMark } from "../plugins/plugin-marks";
 import {
   askPluginTrigger,
@@ -43,7 +45,13 @@ export type PluginCompletionItem = {
   row: PluginTriggerRow;
 };
 
-export type CompletionItem = AutocompleteItem | PluginCompletionItem;
+/** A conversation the `@` list offers; accepting it places a mention chip. */
+export type ConversationCompletionItem = {
+  kind: "conversation";
+  row: MentionRow;
+};
+
+export type CompletionItem = AutocompleteItem | PluginCompletionItem | ConversationCompletionItem;
 
 export type CompletionController = {
   open: boolean;
@@ -142,9 +150,28 @@ export function useComposerCompletions({
   }, [entry, dismissed, answer, requestKey, plugins]);
 
   const hostItems = host.open ? host.items : NO_ITEMS;
+  // `@` offers conversations first (ADR conversation-mention), then files.
+  const mentionOpen = host.open && host.mode === "file";
+  const activeSessionId = useAppStore((state) => state.activeSessionId);
+  const currentProjectPath = useAppStore(
+    (state) =>
+      state.sessions.find((session) => session.id === state.activeSessionId)?.projectPath ??
+      state.workspace?.path,
+  );
+  const mentionGroups = useMentionGroups({
+    enabled: mentionOpen,
+    query: host.query,
+    currentSessionId: activeSessionId,
+    currentProjectPath,
+  });
+  const conversationItems = useMemo<ConversationCompletionItem[]>(
+    () => flattenMentionGroups(mentionGroups).map((row) => ({ kind: "conversation", row })),
+    [mentionGroups],
+  );
+  const conversationCount = conversationItems.length;
   const items = useMemo<CompletionItem[]>(
-    () => [...hostItems, ...pluginItems],
-    [hostItems, pluginItems],
+    () => [...conversationItems, ...hostItems, ...pluginItems],
+    [conversationItems, hostItems, pluginItems],
   );
 
   // A new query restarts keyboard navigation at the top hit.
@@ -173,6 +200,23 @@ export function useComposerCompletions({
   };
 
   const acceptCompletion = (index: number) => {
+    if (index < conversationCount) {
+      const row = conversationItems[index]?.row;
+      const removed = host.removeTrigger();
+      if (!row || !removed) return;
+      invalidateComposerTransforms();
+      const token = nextChipToken();
+      applyEditorDraft(
+        removed.value.slice(0, removed.cursor) + token + removed.value.slice(removed.cursor),
+        [
+          ...fileReferencesRef.current,
+          createFileReference(row.id, row.title, referenceSessionId, { kind: "session", token }),
+        ],
+        removed.cursor + token.length,
+      );
+      return;
+    }
+    index -= conversationCount;
     if (index >= hostItems.length) {
       const item = pluginItems[index - hostItems.length];
       if (!item || !match) return;

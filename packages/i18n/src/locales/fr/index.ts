@@ -353,8 +353,8 @@ export const fr = {
     "emptyTitleTemporary": "Qu'aimeriez-vous explorer temporairement ?",
     "placeholder": "Demandez à PI-Desktop de vous aider pour tout",
     "placeholderHome": "Demandez n'importe quoi",
-    "placeholderHint": "Tapez / pour les commandes · @ pour les fichiers",
-    "placeholderHomeHint": "Tapez / pour les commandes · @ pour les fichiers",
+    "placeholderHint": "Tapez / pour les commandes · @ pour les fichiers ou conversations",
+    "placeholderHomeHint": "Tapez / pour les commandes · @ pour les fichiers ou conversations",
     "placeholderShortcut": "Maj+Entrée pour une nouvelle ligne · Utilisez Envoyer pour soumettre",
     "suggestionHint": "Tab accepter · Échap ignorer",
     "addFiles": "Ajoutez des fichiers et plus encore",
@@ -2959,6 +2959,16 @@ sklm: {
     quotedFrom: "Cité depuis {{title}}",
     noAnswer: "Cette conversation n'a pas encore de réponse à citer.",
     insertAgentDraft: "Insérer dans le brouillon de l'agent"
+  },
+  mention: {
+    groupProject: "Projet actuel",
+    groupRecent: "Récent",
+    groupOther: "Autres projets",
+    groupFiles: "Fichiers",
+    empty: "Aucune conversation correspondante",
+    sideOf: "Discussion annexe · {{title}}",
+    menu: "Mentionner une conversation",
+    tooltip: "Conversation mentionnée : {{title}}"
   }
 } satisfies EnglishCatalog;
 

@@ -434,10 +434,6 @@ export function registerAgentIpc({
       host,
       logger,
       sessionId: req.sessionId,
-      projectPath:
-        typeof session.projectPath === "string" && session.projectPath.trim()
-          ? session.projectPath.trim()
-          : undefined,
       content: req.content,
     });
     const modelContent = appendPromptFallbackPaths(

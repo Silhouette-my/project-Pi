@@ -345,7 +345,7 @@ test("a pasted session link becomes an inline chip with the link as its text", (
     composer,
     /createFileReference\(span\.id, sessionChipName\(span\.id\), ownerSessionId, \{\s*kind: "session",\s*token,/,
   );
-  assert.match(composer, /return `\$\{t\("chat\.sessionReference"\)\} · \$\{title \|\| id\.slice\(0, 8\)\}`;/);
+  assert.match(composer, /return title \|\| id\.slice\(0, 8\);/);
   // The chip opens its conversation, and its token serializes back to the link.
   assert.match(composer, /if \(reference\.kind === "session"\) return "session";/);
   assert.match(composer, /chip\.dataset\.action = editableText[\s\S]*?"open-session-reference"/);

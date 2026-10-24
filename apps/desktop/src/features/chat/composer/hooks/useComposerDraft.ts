@@ -286,6 +286,8 @@ export function useComposerDraft({
       (token) => expandTextReferenceRef.current(token),
       (token) => openImageReferenceRef.current(token),
       (token) => openSessionReferenceRef.current(token),
+      (reference) =>
+        reference.kind === "session" ? t("mention.tooltip", { title: reference.name }) : undefined,
     );
     editorValueRef.current = nextValue;
   };

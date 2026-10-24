@@ -314,8 +314,15 @@ export function useComposerAutocomplete({
     [trigger, items, value],
   );
 
+  /** The draft with the open trigger token cut out, for rows that become chips. */
+  const removeTrigger = useCallback(
+    () => (trigger ? applyCompletion(value, trigger, "") : null),
+    [trigger, value],
+  );
+
   return {
     open,
+    removeTrigger,
     mode: open && trigger ? trigger.mode : null,
     query: open && trigger ? trigger.query : "",
     items: open ? items : [],
