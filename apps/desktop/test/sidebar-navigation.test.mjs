@@ -46,16 +46,21 @@ test("sidebar brand returns to the chat home", () => {
   assert.match(brandButton, /t\("app\.shellName"\)/);
 });
 
-test("sidebar header retains non-mac branding and collapse without a search control", () => {
+test("sidebar header keeps non-mac branding and orders search, new chat, pin, collapse", () => {
   const header = sidebarSource.match(
-    /<div className="sidebar-header">[\s\S]*?<\/div>\s*<\/div>/,
+    /<div className="sidebar-header">[\s\S]*?<\/div>\s*<\/div>\s*\n\s*<div className="sidebar-body/,
   )?.[0] ?? "";
 
   assert.match(header, /className="brand no-drag"/);
   assert.match(header, /className="sidebar-header-actions no-drag"/);
-  assert.doesNotMatch(header, /IconSearch/);
-  assert.match(header, /<IconSidebar/);
-  assert.match(header, /data-nav="toggle-sidebar"/);
+  const order = ["search", "new-task", "pin-sidebar", "toggle-sidebar"].map((nav) => header.indexOf(`data-nav="${nav}"`));
+  assert.ok(order.every((index) => index > 0), "every header action exists");
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "search, new chat, pin, collapse in that order");
+  assert.match(header, /onClick=\{onOpenSearch\}/);
+  assert.match(header, /openSectionMenu\("category"/);
+  assert.match(globalStyles, /\.sidebar \.sidebar-header\s*\{[^}]*border-bottom:\s*1px solid var\(--ds-border-subtle\)/s);
+  assert.match(appSource, /onOpenSearch=\{\(\) => setSearchOpen\(true\)\}/);
+  assert.match(appSource, /onNewTask=\{\(\) => void runMenuCommand\("newTask"\)\}/);
   assert.doesNotMatch(appSource, /IconChevronLeft|IconChevronRight/);
 });
 
@@ -150,15 +155,13 @@ test("sidebar project and session lists stay coordinated with the global type sc
   );
 });
 
-test("pinned project rows replace the folder glyph with a filled star", () => {
-  assert.match(
-    sidebarSource,
-    /entry\.meta\.pinned \? \([\s\S]*?<IconStar\s+size=\{13\}\s+fill="currentColor"[\s\S]*?className="sidebar-project-pin"[\s\S]*?\) : \([\s\S]*?<IconFolder size=\{13\} aria-hidden \/>/,
-  );
-  assert.match(
-    globalStyles,
-    /\.sidebar-project-pin\s*\{[^}]*flex:\s*0 0 auto;[^}]*color:\s*var\(--ds-accent\);/s,
-  );
+test("project rows are a cube mark plus name; pinned projects rank first without a star", () => {
+  assert.match(sidebarSource, /<IconCube size=\{15\} \/>/);
+  assert.doesNotMatch(sidebarSource, /sidebar-project-pin|IconStar/);
+  assert.doesNotMatch(sidebarSource, /project-color|ProjectColorDot|projectAccentStyle|setProjectColor/);
+  assert.match(sidebarSource, /pinned: entry\.meta\.pinned/);
+  assert.match(sidebarSource, /data-action="open-project-home"/);
+  assert.doesNotMatch(sidebarSource, /workflow\.projectHome"\)\}<\/span>/);
 });
 
 test("sidebar section toolbars open create actions from context menus", () => {
@@ -190,10 +193,10 @@ test("sidebar floating menus stay anchored to triggers and pointer positions", (
   assert.match(sidebarSource, /placeMenuAtPoint\(event\.clientX, event\.clientY\)/);
   /* One panel owns every menu, so exactly one surface is ref'd per open. */
   assert.equal((sidebarSource.match(/ref=\{floatingMenuRef\}/g) ?? []).length, 0);
-  assert.equal((sidebarSource.match(/menuRef=\{floatingMenuRef\}/g) ?? []).length, 4);
+  assert.equal((sidebarSource.match(/menuRef=\{floatingMenuRef\}/g) ?? []).length, 5);
   assert.match(sidebarSource, /new ResizeObserver\(reposition\)/);
   assert.match(sidebarSource, /const position = \{ top: menuPosition\.top, left: menuPosition\.left \}/);
-  assert.equal((sidebarSource.match(/position=\{position\}/g) ?? []).length, 4);
+  assert.equal((sidebarSource.match(/position=\{position\}/g) ?? []).length, 5);
 });
 
 /*
@@ -288,13 +291,19 @@ test("sidebar action icons stay quiet until their toolbar or row is hovered", ()
 test("project rows expose folder actions and full-path hover", () => {
   assert.match(sidebarSource, /id: "open-project-folder"/);
   assert.match(sidebarSource, /api\.openProjectFolder\(entry\.path\)/);
-  assert.doesNotMatch(sidebarSource, /data-action="edit-project-instructions"/);
-  assert.doesNotMatch(sidebarSource, /<ProjectInstructionsDialog/);
+  // The project menu leads with folder, chat, instructions, memory and rename.
+  const projectMenu = sidebarSource.slice(sidebarSource.indexOf('id: "new-project-folder"'));
+  const menuIds = ["new-project-folder", "new-project-chat", "project-instructions", "project-memory", "edit-project", "open-project-folder"]
+    .map((id) => projectMenu.indexOf(`id: "${id}"`));
+  assert.ok(menuIds.every((index) => index >= 0), "project menu items exist");
+  assert.deepEqual([...menuIds].sort((a, b) => a - b), menuIds, "project menu keeps the approved order");
+  assert.match(sidebarSource, /<ProjectInstructionsDialog/);
+  assert.match(sidebarSource, /<ProjectMemoryDialog/);
   assert.doesNotMatch(sidebarSource, /data-action="open-session-folder"/);
   assert.doesNotMatch(sidebarSource, /api\.openSessionFolder\(/);
   assert.match(
     sidebarSource,
-    /className="sidebar-session-group-title project-toggle"[\s\S]*?tooltip=\{entry\.displayPath \?\? entry\.path\}[\s\S]*?tooltipDelayMs=\{500\}[\s\S]*?aria-describedby=\{`\$\{projectId\}-path-description`\}/,
+    /className="sidebar-project-name project-toggle"[\s\S]*?tooltip=\{entry\.displayPath \?\? entry\.path\}[\s\S]*?tooltipDelayMs=\{500\}[\s\S]*?aria-describedby=\{`\$\{projectId\}-path-description`\}/,
   );
   assert.match(sidebarSource, /<TooltipButton/);
   assert.match(globalStyles, /\.ui-tooltip-path\s*\{[^}]*width:\s*max-content/);
@@ -315,8 +324,8 @@ test("sidebar row menus omit project reassignment and switching actions", () => 
 });
 
 test("session title buttons use hover cards without native title tooltips", () => {
-  const sessionMainStart = sidebarSource.indexOf('className="thread-item-main"');
-  const sessionMainEnd = sidebarSource.indexOf(">\n          {sessionPinned", sessionMainStart);
+  const sessionMainStart = sidebarSource.indexOf('className={cx("thread-item-main"');
+  const sessionMainEnd = sidebarSource.indexOf(">\n          <span className=\"thread-item-title\"", sessionMainStart);
   const sessionMain = sessionMainStart >= 0 && sessionMainEnd >= 0
     ? sidebarSource.slice(sessionMainStart, sessionMainEnd)
     : "";

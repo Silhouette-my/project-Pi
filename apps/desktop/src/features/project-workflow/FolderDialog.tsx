@@ -10,6 +10,10 @@ export type FolderDialogChoice = { id: string; label: string };
 
 type Props = {
   mode: "create" | "rename" | "move";
+  /** A category dialog edits a name only: no location, no folder wording. */
+  entity?: "folder" | "category";
+  /** Hide the "top level" choice when every destination is a category or folder. */
+  hideTopLevel?: boolean;
   /** Heading for a move; create and rename use fixed copy. */
   title?: string;
   initialName?: string;
@@ -31,6 +35,8 @@ const FOCUSABLE = "input:not([disabled]), select:not([disabled]), button:not([di
  */
 export function FolderDialog({
   mode,
+  entity = "folder",
+  hideTopLevel = false,
   title,
   initialName = "",
   initialParentId = "",
@@ -54,8 +60,12 @@ export function FolderDialog({
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const named = mode !== "move";
-  const heading =
-    mode === "create"
+  const category = entity === "category";
+  const heading = category
+    ? mode === "create"
+      ? t("workflowNav.newCategory")
+      : t("workflowNav.renameCategoryTitle")
+    : mode === "create"
       ? t("workflowNav.newFolder")
       : mode === "rename"
         ? t("workflowNav.renameFolderTitle")
@@ -134,7 +144,7 @@ export function FolderDialog({
         <div className="session-rename-dialog-head">
           <div className="session-rename-dialog-heading">
             <h2 id={`${id}-title`} className="session-rename-dialog-title">
-              <IconFolder size={16} aria-hidden />
+              {category ? null : <IconFolder size={16} aria-hidden />}
               {heading}
             </h2>
             <p id={`${id}-description`} className="session-rename-dialog-description">
@@ -156,7 +166,7 @@ export function FolderDialog({
           {named ? (
             <div>
               <label className="session-rename-dialog-label" htmlFor={`${id}-name`}>
-                {t("workflowNav.folderName")}
+                {category ? t("workflowNav.categoryName") : t("workflowNav.folderName")}
               </label>
               <input
                 className="field-input"
@@ -173,7 +183,7 @@ export function FolderDialog({
             </div>
           ) : null}
           {/* Rename changes the name only; moving has its own entry. */}
-          {mode !== "rename" ? (
+          {mode !== "rename" && !category ? (
           <div>
             <label className="session-rename-dialog-label" htmlFor={`${id}-location`}>
               {t("workflowNav.location")}
@@ -186,7 +196,7 @@ export function FolderDialog({
               disabled={saving}
               onChange={(event) => setParentId(event.target.value)}
             >
-              <option value="">{t("workflowNav.topLevel")}</option>
+              {hideTopLevel ? null : <option value="">{t("workflowNav.topLevel")}</option>}
               {choices.map((choice) => (
                 <option key={choice.id} value={choice.id}>
                   {choice.label}

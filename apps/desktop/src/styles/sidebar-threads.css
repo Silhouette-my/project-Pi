@@ -527,3 +527,113 @@
     animation: none;
   }
 }
+
+/* ============================================================
+   Session rows, native sidebar style: no left icon, the title starts at the
+   row padding, and the right slot holds the status dot, which the hover "..."
+   replaces in the same place. The dot is centred vertically and its right
+   inset equals its top/bottom gap ((row height - dot) / 2 = 13px).
+   ============================================================ */
+.sidebar .thread-item {
+  min-height: var(--sidebar-row-height, 32px);
+  gap: 0;
+  padding: 0;
+  border-radius: var(--radius-xs);
+  overflow: visible;
+}
+
+.sidebar .thread-item-main {
+  min-height: var(--sidebar-row-height, 32px);
+  gap: var(--sidebar-row-gap, 6px);
+  padding: 0 0 0 var(--sidebar-row-pad, 8px);
+}
+
+.sidebar .thread-item-main.has-kids {
+  flex: 0 1 auto;
+}
+
+.sidebar .thread-item-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sidebar .thread-item-title {
+  flex: 0 1 auto;
+  font-size: var(--text-md-plus);
+}
+
+.sidebar .thread-item-main:not(.has-kids) .thread-item-title {
+  flex: 1 1 auto;
+}
+
+.sidebar .thread-item-meta {
+  display: grid;
+  min-width: var(--sidebar-action-size, 22px);
+  height: var(--sidebar-action-size, 22px);
+  margin-right: 5px;
+  place-items: center;
+}
+
+.sidebar .thread-item-meta > * {
+  grid-area: 1 / 1;
+}
+
+.sidebar .thread-item .thread-item-more {
+  width: var(--sidebar-action-size, 22px);
+  height: var(--sidebar-action-size, 22px);
+  border-radius: var(--radius-xs);
+}
+
+.sidebar .thread-item:hover .thread-item-status,
+.sidebar .thread-item:focus-within .thread-item-status,
+.sidebar .thread-item.is-menu-open .thread-item-status {
+  display: none;
+}
+
+/* A conversation at a category's top level aligns its title with the text of
+   the folder and project rows (after the icon), not with the icon. */
+.sidebar .sidebar-category-body > .workflow-tree-node > .workflow-tree-row.is-session .thread-item-main {
+  padding-left: calc(var(--sidebar-row-pad, 8px) + var(--sidebar-icon-slot, 16px) + var(--sidebar-row-gap, 6px));
+}
+
+/* Branches and child conversations: chevron after the title, guide lines. */
+.sidebar .thread-item-kids {
+  position: relative;
+  margin-left: var(--sidebar-row-pad, 8px);
+}
+
+.sidebar .thread-item-kid {
+  position: relative;
+  padding-left: 12px;
+}
+
+.sidebar .thread-item-kid::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 16px;
+  border-bottom: 1px solid var(--ds-border-strong);
+  border-bottom-left-radius: 5px;
+  border-left: 1px solid var(--ds-border-strong);
+  content: "";
+}
+
+.sidebar .thread-item-kid:not(:last-child)::after {
+  position: absolute;
+  top: 16px;
+  bottom: 0;
+  left: 0;
+  border-left: 1px solid var(--ds-border-strong);
+  content: "";
+}
+
+.sidebar .sidebar-category-scroll {
+  padding-top: 4px;
+  gap: 0;
+}
+
+/* The sidebar header rule separates the toolbar from the list. */
+.sidebar .sidebar-header {
+  border-bottom: 1px solid var(--ds-border-subtle);
+}

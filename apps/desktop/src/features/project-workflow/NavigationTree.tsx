@@ -1,23 +1,32 @@
 import { useState, type DragEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { WorkflowFolder } from "@pi-desktop/shared";
+import { WORKFLOW_CHATS_CATEGORY, WORKFLOW_PROJECTS_CATEGORY, type WorkflowFolder } from "@pi-desktop/shared";
 import { Button, TooltipButton } from "../../components/ui";
-import { IconChevronDown, IconFolder, IconMore, IconPencil, IconTrash, IconArrowUpDown } from "../../components/icons";
-import { useArmedDelete } from "../../hooks/use-armed-delete";
-import { sidebarMenuAction, type SidebarMenuPanelContent } from "../../lib/sidebar-menu";
-import { FolderDialog, type FolderDialogValues } from "./FolderDialog";
 import {
-  closeFolderDialog,
-  openFolderDialog,
-  sameTreeContext,
-  useFolderDialogRequest,
-} from "./folder-dialog-store";
+  IconChevronDown,
+  IconClock,
+  IconFolder,
+  IconFolderOpen,
+  IconMore,
+  IconNewFolder,
+  IconNewProject,
+  IconNewSession,
+  IconPencil,
+  IconTrash,
+} from "../../components/icons";
+import { setSidebarGroupCollapsed, useSidebarCollapsedGroups } from "../../lib/sidebar-category-state";
+import { sidebarMenuAction, type SidebarMenuPanelContent } from "../../lib/sidebar-menu";
+import { openFolderDialog } from "./folder-dialog-store";
+import { NavigationTreeDialog } from "./NavigationTreeDialog";
+import { recentOrder } from "./navigation-category-model";
 import { useRowMenu } from "./useRowMenu";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import {
+  categoryRoot,
   dropPosition,
+  folderCategory,
   folderDescendants,
-  folderPath,
+  rootCategoryId,
   treeFolders,
   treePlacement,
   treeSiblings,
@@ -28,42 +37,52 @@ import {
 import "./navigation-styles.css";
 
 const MIME = "application/x-pi-navigation-tree";
+const RECENT_GROUP = "recent";
+
+export type NavigationCategory = { id: string; name: string; builtin: boolean };
 type Props = {
   context: TreeContext;
   entries: TreeEntry[];
   renderEntry: (entry: TreeEntry) => ReactNode;
   label: string;
-  /** Render the section header row (label plus New folder and extra actions). */
-  toolbar?: boolean;
-  toolbarActions?: ReactNode;
-  shortcuts?: { label: string; ids: string[] }[];
-  hiddenRootIds?: string[];
-  renderFolderActions?: (folder: WorkflowFolder) => ReactNode;
+  /** Category mode: the sidebar's sections. Absent for a project's own tree. */
+  categories?: NavigationCategory[];
+  /** New conversation inside a folder or at a category's top level. */
+  onNewChat?: (where: { folderId?: string; categoryId?: string }) => void;
+  newChatDisabled?: boolean;
+  /** Add-project flow, offered on the Projects category header. */
+  onNewProject?: () => void;
 };
-/** The Host owns placement; local state only describes the current gesture. */
+
+/**
+ * One tree for a whole navigation space. In category mode it renders every
+ * category (header, folders, projects, conversations mixed freely); inside a
+ * project it renders that project's folders and conversations. The Host owns
+ * placement; local state only describes the current drag gesture.
+ */
 export function NavigationTree({
   context,
   entries: leaves,
   renderEntry,
   label,
-  toolbar = true,
-  toolbarActions,
-  shortcuts = [],
-  hiddenRootIds = [],
-  renderFolderActions,
+  categories,
+  onNewChat,
+  newChatDisabled,
+  onNewProject,
 }: Props) {
   const { t } = useTranslation();
   const workflow = useProjectWorkflow();
   const snapshot = workflow.snapshot;
-  const request = useFolderDialogRequest();
-  const { armed, setArmed } = useArmedDelete();
+  const collapsedGroups = useSidebarCollapsedGroups();
   const [dragging, setDragging] = useState<TreeEntry | null>(null);
   const [drop, setDrop] = useState<{ key: string; position: DropPosition } | null>(null);
   const folders = snapshot ? treeFolders(snapshot, context) : [];
+  const parentOf = (folder: WorkflowFolder) =>
+    folder.parentId ?? (categories ? categoryRoot(folderCategory(folder)) : undefined);
+
   const folderMenu = useRowMenu((id): SidebarMenuPanelContent | null => {
     const folder = folders.find((item) => item.id === id);
     if (!folder) return null;
-    const confirming = armed === folder.id;
     return {
       label: t("workflowNav.folderActions"),
       items: [
@@ -77,67 +96,86 @@ export function NavigationTree({
           },
         }),
         sidebarMenuAction({
-          id: "move-folder",
-          label: t("workflowNav.moveTo"),
-          icon: <IconArrowUpDown size={14} />,
+          id: "new-subfolder",
+          label: t("workflowNav.newFolder"),
+          icon: <IconNewFolder size={14} />,
           onSelect: () => {
             folderMenu.close(false);
-            openFolderDialog({
-              mode: "move",
-              context,
-              targets: [{ kind: "folder", id: folder.id }],
-            });
+            openFolderDialog({ mode: "create", context, parentId: folder.id });
           },
         }),
+        // Never deletes conversations: children move up one level.
         sidebarMenuAction({
           id: "remove-folder",
-          label: confirming ? t("workflowNav.removeFolderConfirm") : t("workflowNav.removeFolder"),
+          label: t("workflowNav.removeFolder"),
           icon: <IconTrash size={14} />,
-          danger: true,
-          armed: confirming,
           disabled: workflow.busy,
-          separatorBefore: true,
           onSelect: () => {
-            if (!confirming) {
-              setArmed(folder.id);
-              return;
-            }
-            setArmed(null);
             folderMenu.close(false);
             void workflow.mutate({ kind: "folder.remove", folderId: folder.id });
           },
         }),
       ],
-      notes: confirming ? [{ id: "remove-hint", text: t("workflowNav.removeHint") }] : undefined,
+    };
+  });
+  const categoryMenu = useRowMenu((id): SidebarMenuPanelContent | null => {
+    const category = categories?.find((item) => item.id === id && !item.builtin);
+    if (!category) return null;
+    return {
+      label: t("workflowNav.categoryActions"),
+      items: [
+        sidebarMenuAction({
+          id: "rename-category",
+          label: t("workflowNav.renameCategory"),
+          icon: <IconPencil size={14} />,
+          onSelect: () => {
+            categoryMenu.close(false);
+            openFolderDialog({ mode: "category-rename", context, categoryId: category.id });
+          },
+        }),
+        // No confirmation: contents fall back to the built-in categories.
+        sidebarMenuAction({
+          id: "delete-category",
+          label: t("workflowNav.deleteCategory"),
+          icon: <IconTrash size={14} />,
+          disabled: workflow.busy,
+          onSelect: () => {
+            categoryMenu.close(false);
+            void workflow.mutate({ kind: "category.remove", categoryId: category.id });
+          },
+        }),
+      ],
     };
   });
   if (!snapshot) return <>{leaves.map(renderEntry)}</>;
+
   const entries: TreeEntry[] = [
     ...leaves,
     ...folders.map((folder) => ({
       kind: "folder" as const,
       id: folder.id,
       label: folder.name,
-      parentId: folder.parentId,
+      parentId: parentOf(folder),
       order: folder.order,
     })),
   ];
   const key = (entry: TreeEntry) => `${entry.kind}:${entry.id}`;
-  const forbidden = (id?: string) => (id ? folderDescendants(folders, id) : new Set<string>());
-  const choices = (id?: string) =>
-    folders
-      .filter((folder) => !forbidden(id).has(folder.id))
-      .map((folder) => ({ id: folder.id, label: folderPath(folders, folder) }));
-  const toggle = (id: string) =>
+  const toggleFolder = (id: string) =>
     workflow.mutate({
       kind: "navigation.expand",
       expandedIds: snapshot.expandedIds.includes(id)
         ? snapshot.expandedIds.filter((item) => item !== id)
         : [...snapshot.expandedIds, id],
     });
+
   /** Resolves false only when the Host rejected the move; a no-op counts as done. */
-  async function move(source: TreeEntry, target?: TreeEntry, position: DropPosition = "after") {
-    const placement = treePlacement(entries, source, target, position);
+  async function move(
+    source: TreeEntry,
+    target?: TreeEntry,
+    position: DropPosition = "after",
+    rootId?: string,
+  ) {
+    const placement = treePlacement(entries, source, target, position, rootId);
     if (!placement) return true;
     const siblings = treeSiblings(entries, placement.folderId).filter(
       (entry) => key(entry) !== key(source),
@@ -148,14 +186,23 @@ export function NavigationTree({
         : siblings.length;
     siblings.splice(index, 0, source);
     const siblingOrder = siblings.map(({ kind, id }) => ({ kind, id }));
+    const category = rootCategoryId(placement.folderId);
     const result = await workflow.mutate({
       kind: "tree.move",
       target: { kind: source.kind, id: source.id },
-      ...context,
-      ...placement,
+      scope: context.scope,
+      projectId: context.projectId,
+      folderId: category ? undefined : placement.folderId,
+      categoryId: category,
+      order: placement.order,
       siblingOrder,
     });
-    if (result && placement.folderId && !result.snapshot.expandedIds.includes(placement.folderId)) {
+    if (
+      result &&
+      placement.folderId &&
+      !category &&
+      !result.snapshot.expandedIds.includes(placement.folderId)
+    ) {
       await workflow.mutate({
         kind: "navigation.expand",
         expandedIds: [...result.snapshot.expandedIds, placement.folderId],
@@ -163,7 +210,7 @@ export function NavigationTree({
     }
     return !!result;
   }
-  function over(event: DragEvent, entry?: TreeEntry) {
+  function over(event: DragEvent, entry?: TreeEntry, rootId?: string, dropKey?: string) {
     if (!dragging || !event.dataTransfer.types.includes(MIME)) return;
     event.preventDefault();
     event.stopPropagation();
@@ -171,76 +218,83 @@ export function NavigationTree({
     const position = entry
       ? dropPosition(entry.kind, (event.clientY - rect.top) / rect.height)
       : "inside";
-    const placement = treePlacement(entries, dragging, entry, entry ? position : "after");
+    const placement = treePlacement(entries, dragging, entry, entry ? position : "after", rootId);
     event.dataTransfer.dropEffect = placement ? "move" : "none";
-    setDrop(placement ? { key: entry ? key(entry) : "root", position } : null);
+    setDrop(placement ? { key: dropKey ?? (entry ? key(entry) : "root"), position } : null);
   }
-  const dialogRequest = request && sameTreeContext(request.context, context) ? request : null;
-  const editing =
-    dialogRequest?.mode === "rename"
-      ? folders.find((folder) => folder.id === dialogRequest.folderId)
-      : undefined;
-  const moving =
-    dialogRequest?.mode === "move"
-      ? dialogRequest.targets.flatMap((target) => {
-          const found = entries.find((entry) => entry.kind === target.kind && entry.id === target.id);
-          return found ? [found] : [];
-        })
-      : [];
-  async function submitDialog(values: FolderDialogValues) {
-    if (!dialogRequest) return false;
-    if (dialogRequest.mode === "move") {
-      const destination = values.parentId
-        ? entries.find((entry) => entry.kind === "folder" && entry.id === values.parentId)
-        : undefined;
-      // Moving to the start in reverse keeps the selected chats in their order.
-      for (const source of values.first ? [...moving].reverse() : moving) {
-        const first = values.first
-          ? treeSiblings(entries, values.parentId || undefined).find(
-              (entry) => key(entry) !== key(source) && (entry.rank ?? 0) === (source.rank ?? 0),
-            )
-          : undefined;
-        const ok = values.first
-          ? await move(source, first, "before")
-          : await move(source, destination, destination ? "inside" : "after");
-        if (!ok) return false;
-      }
-      return true;
-    }
-    if (!values.name) return false;
-    const folder: WorkflowFolder = {
-      ...editing,
-      id: editing?.id ?? crypto.randomUUID(),
-      name: values.name,
-      parentId: values.parentId || undefined,
-      order:
-        editing?.order ??
-        Math.max(-1, ...treeSiblings(entries, values.parentId || undefined).map((entry) => entry.order)) + 1,
-      ...context,
-    };
-    return !!(await workflow.mutate({ kind: editing ? "folder.update" : "folder.create", folder }));
+  function dropOn(event: DragEvent, entry?: TreeEntry, rootId?: string, dropKey?: string) {
+    if (!dragging || !event.dataTransfer.types.includes(MIME)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const expected = dropKey ?? (entry ? key(entry) : "root");
+    const position = drop?.key === expected ? drop.position : "after";
+    void move(dragging, entry, entry ? position : "after", rootId);
+    setDragging(null);
+    setDrop(null);
   }
-  function row(entry: TreeEntry): ReactNode {
+
+  const actionButton = (
+    tooltip: string,
+    icon: ReactNode,
+    onClick: () => void,
+    extra?: { disabled?: boolean; action?: string },
+  ) => (
+    <TooltipButton
+      type="button"
+      className="sidebar-row-action"
+      data-action={extra?.action}
+      tooltip={tooltip}
+      ariaLabel={tooltip}
+      disabled={extra?.disabled}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      {icon}
+    </TooltipButton>
+  );
+  const moreButton = (
+    tooltip: string,
+    action: string,
+    menu: { openId?: string; open: (id: string, anchor: HTMLElement | null) => void; close: () => void },
+    id: string,
+  ) => (
+    <TooltipButton
+      type="button"
+      className="sidebar-row-action thread-item-more"
+      data-action={action}
+      tooltip={tooltip}
+      ariaLabel={tooltip}
+      aria-haspopup="menu"
+      aria-expanded={menu.openId === id}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (menu.openId === id) menu.close();
+        else menu.open(id, event.currentTarget);
+      }}
+    >
+      <IconMore size={14} />
+    </TooltipButton>
+  );
+
+  function row(entry: TreeEntry, nested: boolean, asRoot?: string): ReactNode {
     const folder =
-      entry.kind === "folder" ? folders.find((folder) => folder.id === entry.id)! : undefined;
-    const open = snapshot!.expandedIds.includes(entry.id);
-    const count = folder
-      ? (() => {
-          const inside = folderDescendants(folders, folder.id);
-          return entries.filter(
-            (item) => item.kind !== "folder" && item.parentId && inside.has(item.parentId),
-          ).length;
-        })()
-      : 0;
+      entry.kind === "folder" ? folders.find((item) => item.id === entry.id) : undefined;
+    const open = folder ? snapshot!.expandedIds.includes(folder.id) : false;
+    // Only a category's own folders and projects are shaded blocks; inside a
+    // project the folders sit flat in the project's block.
+    const block = !!categories && !nested && (folder ? open : entry.kind === "project" && !!entry.open);
+    const nestedEntries = folder && open ? treeSiblings(entries, folder.id) : [];
     return (
       <div
         key={key(entry)}
-        className={`workflow-tree-node${dragging && key(dragging) === key(entry) ? " is-dragging" : ""}`}
+        className={`workflow-tree-node${block ? " is-block" : ""}${dragging && key(dragging) === key(entry) ? " is-dragging" : ""}`}
         data-workflow-tree-node={key(entry)}
         data-workflow-folder={folder?.id}
       >
         <div
-          className={`workflow-tree-row${folder ? " is-folder" : ""}${drop?.key === key(entry) ? ` is-drop-${drop.position}` : ""}${folder && folderMenu.openId === folder.id ? " is-menu-open" : ""}`}
+          className={`workflow-tree-row${folder ? " is-folder" : ""}${entry.kind === "session" ? " is-session" : ""}${drop?.key === key(entry) ? ` is-drop-${drop.position}` : ""}${folder && folderMenu.openId === folder.id ? " is-menu-open" : ""}`}
           draggable={!workflow.busy}
           onContextMenu={(event) => {
             if (!folder) return;
@@ -267,62 +321,38 @@ export function NavigationTree({
             setDragging(null);
             setDrop(null);
           }}
-          onDragOver={(event) => over(event, entry)}
-          onDrop={(event) => {
-            if (!dragging || !event.dataTransfer.types.includes(MIME)) return;
-            event.preventDefault();
-            event.stopPropagation();
-            const position = drop?.key === key(entry) ? drop.position : "after";
-            void move(dragging, entry, position);
-            setDragging(null);
-            setDrop(null);
-          }}
+          onDragOver={(event) => (asRoot ? over(event, undefined, asRoot, key(entry)) : over(event, entry))}
+          onDrop={(event) => (asRoot ? dropOn(event, undefined, asRoot, key(entry)) : dropOn(event, entry))}
         >
-          <div className="workflow-tree-content">
-            {folder ? (
+          {folder ? (
+            <>
               <Button
                 variant="ghost"
-                className="workflow-navigation-label"
+                className="workflow-navigation-label workflow-tree-folder"
                 aria-expanded={open}
-                onClick={() => void toggle(folder.id)}
+                onClick={() => void toggleFolder(folder.id)}
               >
-                <IconChevronDown size={12} className={open ? "" : "workflow-navigation-folded"} />
-                <IconFolder size={13} />
+                {open ? <IconFolderOpen size={16} /> : <IconFolder size={16} />}
                 <span>{folder.name}</span>
               </Button>
-            ) : (
-              renderEntry(entry)
-            )}
-          </div>
-          {folder ? (
-            <div className="workflow-tree-meta">
-              {!open && count > 0 ? <span className="workflow-tree-count">{count}</span> : null}
               <div className="workflow-tree-actions">
-                {renderFolderActions?.(folder)}
-                <TooltipButton
-                  type="button"
-                  className="thread-item-more"
-                  data-action="folder-menu"
-                  tooltip={t("workflowNav.folderActions")}
-                  ariaLabel={t("workflowNav.folderActions")}
-                  aria-haspopup="menu"
-                  aria-expanded={folderMenu.openId === folder.id}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (folderMenu.openId === folder.id) folderMenu.close();
-                    else folderMenu.open(folder.id, event.currentTarget);
-                  }}
-                >
-                  <IconMore size={14} />
-                </TooltipButton>
+                {onNewChat
+                  ? actionButton(t("workflowNav.newChat"), <IconNewSession size={13} />, () =>
+                      onNewChat({ folderId: folder.id }), { disabled: newChatDisabled || workflow.busy })
+                  : null}
+                {actionButton(t("workflowNav.newFolder"), <IconNewFolder size={13} />, () =>
+                  openFolderDialog({ mode: "create", context, parentId: folder.id }))}
+                {moreButton(t("workflowNav.folderActions"), "folder-menu", folderMenu, folder.id)}
               </div>
-            </div>
-          ) : null}
+            </>
+          ) : (
+            <div className="workflow-tree-content">{renderEntry(entry)}</div>
+          )}
         </div>
         {folder && open ? (
-          <div className="workflow-navigation-children">
-            {treeSiblings(entries, folder.id).map(row)}
-            {treeSiblings(entries, folder.id).length === 0 ? (
+          <div className="workflow-tree-children">
+            {nestedEntries.map((child) => row(child, true))}
+            {nestedEntries.length === 0 ? (
               <div className="workflow-tree-empty">{t("workflowNav.emptyFolder")}</div>
             ) : null}
           </div>
@@ -330,6 +360,122 @@ export function NavigationTree({
       </div>
     );
   }
+
+  function categoryBlock(category: NavigationCategory) {
+    const groupId = `category:${category.id}`;
+    const open = !collapsedGroups.has(groupId);
+    const rootKey = categoryRoot(category.id);
+    const root = treeSiblings(entries, rootKey);
+    const isChats = category.id === WORKFLOW_CHATS_CATEGORY;
+    const isProjects = category.id === WORKFLOW_PROJECTS_CATEGORY;
+    const top = isChats ? root.filter((entry) => entry.kind !== "session") : root;
+    const recent = isChats ? recentOrder(root.filter((entry) => entry.kind === "session")) : [];
+    const recentOpen = !collapsedGroups.has(RECENT_GROUP);
+    const toggleLabel = open ? t("workflowNav.collapse") : t("workflowNav.expand");
+    return (
+      <section
+        key={category.id}
+        className="sidebar-category"
+        data-sidebar-category={category.id}
+        aria-label={category.name}
+      >
+        <div
+          className={`sidebar-category-header${drop?.key === groupId ? " is-drop-inside" : ""}${categoryMenu.openId === category.id ? " is-menu-open" : ""}`}
+          onClick={() => setSidebarGroupCollapsed(groupId, open)}
+          onContextMenu={(event) => {
+            if (category.builtin) return;
+            event.preventDefault();
+            event.stopPropagation();
+            categoryMenu.open(category.id, null, { x: event.clientX, y: event.clientY });
+          }}
+          onDragOver={(event) => over(event, undefined, rootKey, groupId)}
+          onDrop={(event) => dropOn(event, undefined, rootKey, groupId)}
+        >
+          <span className="sidebar-category-title">{category.name}</span>
+          <button
+            type="button"
+            className="sidebar-category-chevron"
+            aria-expanded={open}
+            aria-label={toggleLabel}
+            title={toggleLabel}
+            onClick={(event) => {
+              event.stopPropagation();
+              setSidebarGroupCollapsed(groupId, open);
+            }}
+          >
+            <IconChevronDown size={11} className={open ? "" : "workflow-navigation-folded"} />
+          </button>
+          <span className="sidebar-category-spacer" />
+          <div className="sidebar-category-actions">
+            {isProjects
+              ? onNewProject
+                ? actionButton(t("nav.newProject"), <IconNewProject size={14} />, onNewProject, {
+                    action: "new-project",
+                  })
+                : null
+              : (
+                <>
+                  {onNewChat
+                    ? actionButton(t("workflowNav.newChat"), <IconNewSession size={14} />, () =>
+                        onNewChat({ categoryId: category.id }), {
+                        disabled: newChatDisabled || workflow.busy,
+                        action: "category-new-chat",
+                      })
+                    : null}
+                  {actionButton(t("workflowNav.newFolder"), <IconNewFolder size={14} />, () =>
+                    openFolderDialog({ mode: "create", context, parentId: rootKey }), {
+                    action: "category-new-folder",
+                  })}
+                </>
+              )}
+            {category.builtin
+              ? null
+              : moreButton(t("workflowNav.categoryActions"), "category-menu", categoryMenu, category.id)}
+          </div>
+        </div>
+        {open ? (
+          <div className="sidebar-category-body">
+            {top.map((entry) => row(entry, false))}
+            {isChats ? (
+              <>
+                <div
+                  className={`workflow-tree-row is-recent-row${drop?.key === RECENT_GROUP ? " is-drop-inside" : ""}`}
+                  onClick={() => setSidebarGroupCollapsed(RECENT_GROUP, recentOpen)}
+                  onDragOver={(event) => over(event, undefined, rootKey, RECENT_GROUP)}
+                  onDrop={(event) => dropOn(event, undefined, rootKey, RECENT_GROUP)}
+                >
+                  <Button
+                    variant="ghost"
+                    className="workflow-navigation-label workflow-tree-folder"
+                    aria-expanded={recentOpen}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSidebarGroupCollapsed(RECENT_GROUP, recentOpen);
+                    }}
+                  >
+                    <IconClock size={16} />
+                    <span>{t("workflowNav.recent")}</span>
+                  </Button>
+                </div>
+                {recentOpen ? (
+                  <div className="workflow-tree-children">
+                    {recent.map((entry) => row(entry, true, rootKey))}
+                    {recent.length === 0 ? (
+                      <div className="workflow-tree-empty">{t("workflowNav.noChats")}</div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+            {!isChats && top.length === 0 ? (
+              <div className="workflow-tree-empty">{t("workflowNav.emptyCategory")}</div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <section
       className="workflow-navigation-tree"
@@ -337,91 +483,37 @@ export function NavigationTree({
       data-workflow-tree={context.scope}
       data-project-id={context.projectId}
     >
-      {toolbar ? (
-        <div className="workflow-tree-toolbar">
-          <span>{label}</span>
-          <div className="sidebar-toolbar-actions">
-            {toolbarActions}
-            <TooltipButton
-              className="sidebar-toolbar-button"
-              tooltip={t("workflowNav.newFolder")}
-              ariaLabel={t("workflowNav.newFolder")}
-              onClick={() => openFolderDialog({ mode: "create", context })}
-            >
-              <IconFolder size={13} />
-            </TooltipButton>
-          </div>
-        </div>
-      ) : null}
-      {workflow.error && !dialogRequest ? (
+      {workflow.error ? (
         <p role="alert" className="workflow-navigation-error">
           {workflow.error}
         </p>
       ) : null}
-      {dialogRequest && (dialogRequest.mode !== "rename" || editing) && (dialogRequest.mode !== "move" || moving.length) ? (
-        <FolderDialog
-          key={`${dialogRequest.mode}:${dialogRequest.mode === "rename" ? dialogRequest.folderId : ""}`}
-          mode={dialogRequest.mode}
-          title={
-            moving.length === 1
-              ? t("workflowNav.moveItem", { title: moving[0].label })
-              : t("workflowNav.moveSelected", { count: moving.length })
-          }
-          initialName={editing?.name}
-          initialParentId={
-            dialogRequest.mode === "create"
-              ? (dialogRequest.parentId ?? "")
-              : dialogRequest.mode === "rename"
-                ? (editing?.parentId ?? "")
-                : moving.length === 1
-                  ? (moving[0].parentId ?? "")
-                  : ""
-          }
-          choices={choices(
-            dialogRequest.mode === "rename"
-              ? editing?.id
-              : moving.length === 1 && moving[0].kind === "folder"
-                ? moving[0].id
-                : undefined,
-          )}
-          busy={workflow.busy}
-          error={workflow.error}
-          onClose={closeFolderDialog}
-          onSubmit={submitDialog}
-        />
-      ) : null}
+      <NavigationTreeDialog
+        context={context}
+        entries={entries}
+        folders={folders}
+        categories={categories}
+        move={move}
+      />
       {folderMenu.menu}
-      {shortcuts
-        .filter((group) => group.ids.length)
-        .map((group) => (
-          <section key={group.label}>
-            <div className="workflow-navigation-subheading">{group.label}</div>
-            {group.ids
-              .map((id) => entries.find((entry) => entry.kind === "session" && entry.id === id))
-              .filter((entry): entry is TreeEntry => !!entry)
-              .map(row)}
-          </section>
-        ))}
-      <div
-        className={`workflow-tree-root-target${drop?.key === "root" ? " is-drop-inside" : ""}`}
-        onDragOver={(event) => over(event)}
-        onDrop={(event) => {
-          if (!dragging || !event.dataTransfer.types.includes(MIME)) return;
-          event.preventDefault();
-          event.stopPropagation();
-          void move(dragging);
-          setDragging(null);
-          setDrop(null);
-        }}
-        aria-label={t("workflowNav.topLevel")}
-      >
-        {treeSiblings(entries)
-          .filter((entry) => entry.kind === "folder" || !hiddenRootIds.includes(entry.id))
-          .map(row)}
-        <div className="workflow-tree-root-hint">
-          {dragging ? t("workflowNav.dropAtRoot") : null}
+      {categoryMenu.menu}
+      {categories ? (
+        categories.map(categoryBlock)
+      ) : (
+        <div
+          className={`workflow-tree-root-target${drop?.key === "root" ? " is-drop-inside" : ""}`}
+          onDragOver={(event) => over(event)}
+          onDrop={(event) => dropOn(event)}
+          aria-label={t("workflowNav.topLevel")}
+        >
+          {treeSiblings(entries).map((entry) => row(entry, false))}
+          <div className="workflow-tree-root-hint">
+            {dragging ? t("workflowNav.dropAtRoot") : null}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }
+
+export { folderDescendants };

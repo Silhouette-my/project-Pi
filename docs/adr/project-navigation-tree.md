@@ -37,3 +37,33 @@ Project pin/archive filtering remains owned by Sidebar.
 
 Git trees, Archify architecture and session relationship trees belong to a later
 project overview iteration. This change adds no empty panels for them.
+
+## Amendment: categories (mixed scopes)
+
+Sidebar organization is now a list of **categories**. The built-in `chats` and
+`projects` categories are virtual; user-defined categories live in the
+snapshot's optional `categories` collection (`id`, `name`, `order`) and are
+managed by `category.create`, `category.update` and `category.remove`. Existing
+snapshots load unchanged (`categories` defaults to empty; absent `categoryId`
+derives from folder scope, or from the default for rows).
+
+- `chats` and `projects` scope are one **category space**. A category may hold
+  folders, standalone conversations and projects in one shared order space.
+  The Host no longer rejects sessions in project categories or projects in
+  chat-scope folders. `project` scope stays a separate per-project tree, and a
+  project's own sessions still cannot be filed in a category.
+- Optional `categoryId` is added to folders, `navigation` rows, `projectNavigation`
+  rows, `tree.move` and `navigation.move`. A folder's category must equal its
+  parent's; `tree.move` restamps a moved folder and its descendants, and an
+  entry placed in a folder derives its category from it. `folder.update` cannot
+  change a category. Removing a root folder keeps its children in the same
+  category.
+- `category.remove` deletes no data: folders and conversations move to the
+  built-in `chats`, projects to `projects` (a project inside a folder travels with
+  that folder).
+- Persisted `ProjectMeta.color` and the shared accent presets stay in storage but
+  the UI no longer reads or writes a per-project colour; the global theme accent
+  remains.
+- Interaction changes: folder menus are Rename, New folder, Remove folder (no
+  confirmation, never deletes chats); folders move by drag; Favorites left the
+  UI (the field is kept); the Project Agent no longer has a sidebar icon.

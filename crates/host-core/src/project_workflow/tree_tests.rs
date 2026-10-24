@@ -133,3 +133,125 @@ fn tree_preserves_explicit_project_membership_without_a_workspace() {
     let state = snapshot(&f.db, &json!({})).unwrap();
     assert_eq!(state["navigation"][0]["folderId"], "project-folder");
 }
+
+fn standalone(f: &Fixture, title: &str) -> String {
+    crate::sessions::create_session(&f.db, Some(title.into()), None, None, None, None)
+        .unwrap()
+        .id
+}
+
+#[test]
+fn categories_mix_projects_and_conversations_and_fall_back_when_removed() {
+    let f = Fixture::new();
+    let chat = standalone(&f, "Reading list");
+    f.execute(
+        "category.create",
+        json!({"category":{"id":"k","name":"Reading","order":0}}),
+    );
+    let duplicate = f.command(
+        "category.create",
+        json!({"category":{"id":"k","name":"Again","order":1}}),
+    );
+    assert_eq!(mutate(&f.db, &duplicate).unwrap_err().code, "CONFLICT");
+    f.execute(
+        "folder.create",
+        json!({"folder":{"id":"kf","name":"Papers","scope":"chats","categoryId":"k","order":0}}),
+    );
+    // A project and a standalone conversation share the custom category root.
+    f.execute("tree.move", json!({"target":{"kind":"project","id":f.project},"scope":"chats","categoryId":"k","order":1}));
+    f.execute(
+        "tree.move",
+        json!({"target":{"kind":"session","id":chat},"scope":"chats","categoryId":"k","order":2}),
+    );
+    // ...and a folder of that category holds both.
+    f.execute(
+        "tree.move",
+        json!({"target":{"kind":"session","id":chat},"scope":"chats","folderId":"kf","order":0}),
+    );
+    let state = snapshot(&f.db, &json!({})).unwrap();
+    assert_eq!(state["projectNavigation"][0]["categoryId"], "k");
+    assert!(state["navigation"][0].get("categoryId").is_none());
+    assert_eq!(state["navigation"][0]["folderId"], "kf");
+    // The Projects built-in accepts conversations too (scope projects).
+    f.execute("tree.move", json!({"target":{"kind":"session","id":chat},"scope":"projects","categoryId":"projects","order":0}));
+    let state = snapshot(&f.db, &json!({})).unwrap();
+    assert_eq!(state["navigation"][0]["categoryId"], "projects");
+    assert!(state["navigation"][0].get("folderId").is_none());
+    // A destination folder from another category is rejected.
+    let wrong = f.command("tree.move", json!({"target":{"kind":"session","id":chat},"scope":"chats","folderId":"kf","categoryId":"chats","order":0}));
+    assert_eq!(mutate(&f.db, &wrong).unwrap_err().code, "INVALID_ARGUMENT");
+    let unknown = f.command("tree.move", json!({"target":{"kind":"session","id":chat},"scope":"chats","categoryId":"missing","order":0}));
+    assert_eq!(mutate(&f.db, &unknown).unwrap_err().code, "NOT_FOUND");
+    f.execute(
+        "tree.move",
+        json!({"target":{"kind":"session","id":chat},"scope":"chats","categoryId":"k","order":3}),
+    );
+    let removed = f.execute("category.remove", json!({"categoryId":"k"}));
+    assert_eq!(removed["categories"].as_array().unwrap().len(), 0);
+    assert_eq!(removed["folders"][0]["categoryId"], "chats");
+    assert_eq!(removed["navigation"][0]["categoryId"], "chats");
+    assert_eq!(removed["projectNavigation"][0]["categoryId"], "projects");
+    assert_eq!(removed["navigation"][0]["sessionId"], chat);
+}
+
+#[test]
+fn category_moves_carry_nested_folders_and_removal_keeps_root_category() {
+    let f = Fixture::new();
+    f.execute(
+        "category.create",
+        json!({"category":{"id":"k","name":"K","order":0}}),
+    );
+    f.execute(
+        "folder.create",
+        json!({"folder":{"id":"a","name":"A","scope":"chats","order":0}}),
+    );
+    f.execute(
+        "folder.create",
+        json!({"folder":{"id":"b","name":"B","scope":"chats","parentId":"a","order":0}}),
+    );
+    f.execute(
+        "tree.move",
+        json!({"target":{"kind":"folder","id":"a"},"scope":"chats","categoryId":"k","order":0}),
+    );
+    let state = snapshot(&f.db, &json!({})).unwrap();
+    assert_eq!(state["folders"][0]["categoryId"], "k");
+    assert_eq!(state["folders"][1]["categoryId"], "k");
+    // Renaming through folder.update cannot silently change the category.
+    let sneaky = f.command(
+        "folder.update",
+        json!({"folder":{"id":"a","name":"A","scope":"chats","categoryId":"chats","order":0}}),
+    );
+    assert_eq!(mutate(&f.db, &sneaky).unwrap_err().code, "INVALID_ARGUMENT");
+    // Removing a root folder keeps its children in the same category.
+    let chat = standalone(&f, "Inside");
+    f.execute(
+        "tree.move",
+        json!({"target":{"kind":"session","id":chat},"scope":"chats","folderId":"a","order":0}),
+    );
+    let state = f.execute("folder.remove", json!({"folderId":"a"}));
+    assert_eq!(state["navigation"][0]["categoryId"], "k");
+    assert!(state["navigation"][0].get("folderId").is_none());
+    assert!(state["folders"][0].get("parentId").is_none());
+    assert_eq!(state["folders"][0]["categoryId"], "k");
+}
+
+#[test]
+fn legacy_trees_without_categories_load_and_keep_their_placement() {
+    let f = Fixture::new();
+    let chat = standalone(&f, "Legacy");
+    f.execute(
+        "folder.create",
+        json!({"folder":{"id":"old","name":"Old projects","scope":"projects","order":0}}),
+    );
+    f.execute("tree.move", json!({"target":{"kind":"project","id":f.project},"scope":"projects","folderId":"old","order":0}));
+    // Older snapshots have no categories collection; it loads as empty.
+    assert_eq!(
+        snapshot(&f.db, &json!({})).unwrap()["categories"],
+        json!([])
+    );
+    // A legacy project folder now also holds a conversation.
+    f.execute("tree.move", json!({"target":{"kind":"session","id":chat},"scope":"projects","folderId":"old","order":1}));
+    let state = snapshot(&f.db, &json!({})).unwrap();
+    assert_eq!(state["navigation"][0]["folderId"], "old");
+    assert_eq!(state["projectNavigation"][0]["folderId"], "old");
+}

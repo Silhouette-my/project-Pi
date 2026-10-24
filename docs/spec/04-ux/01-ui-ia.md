@@ -29,11 +29,14 @@ destination, chat as the home surface, tools and permissions inline.
 +------------------+--------------------------------+------------------+
 ```
 
-- **Sidebar**: primary navigation has parallel **Chats** and **Projects** areas.
-  Chats organizes ordinary conversations in shallow, navigation-only folders;
-  unfiled chats remain accessible in Recent. Projects contains retained project
-  groups and their workstreams, not a flat permanent session list. Chat folders
-  never grant permissions or share model context. The WorkBuddy-inspired footer
+- **Sidebar**: primary navigation is a list of **categories**: the built-in
+  Chats and Projects plus user-defined ones. A category mixes navigation-only
+  folders (any nesting depth, rendered with one indent level), standalone
+  conversations and projects. Unfiled chats of the built-in Chats category sit
+  in its Recent group; user-defined categories have no Recent group and show
+  their conversations at the category's top level. Projects contains retained
+  project groups and their workstreams, not a flat permanent session list.
+  Folders never grant permissions or share model context. The WorkBuddy-inspired footer
   keeps compact Settings,
   Extensions, Scheduled (clock), and notification icon actions. Each retained
   project is a
@@ -63,8 +66,10 @@ destination, chat as the home surface, tools and permissions inline.
   Windows/Linux, the expanded sidebar begins with a keyboard-accessible Home
   brand and Collapse sidebar at the right; activating the
   brand returns the main pane to chat. The macOS expanded sidebar omits the
-  logo/title brand and places only Collapse sidebar at the right of
-  the traffic-light row. `Codex` remains only an external import source or a
+  logo/title brand. After the traffic lights (macOS) or the brand, the top bar
+  holds Search (opens the global search dialog), New chat, Pin and Collapse
+  sidebar, with a divider below. While the sidebar is hidden the titlebar shows
+  Expand sidebar and New chat; a docked sidebar has no second New chat icon. `Codex` remains only an external import source or a
   design-reference term.
 - **Main pane**: exactly one destination at a time; destinations replace the
   pane (they are pages, not modals). Once Settings or Extensions is selected,
@@ -231,29 +236,40 @@ destination, chat as the home surface, tools and permissions inline.
 
 ### 3.2 Sidebar projects and Chat folders
 
-- **Sections**: the compact `Chats` area precedes `Projects` and owns ordinary
-  conversation creation, shallow folders and the existing sort/archive-view
-  menu. A global new Chat is unfiled; one created inside a folder inherits that
-  folder. Folder create, rename and move, and chat move (including moving a
-  multi-selection from its batch menu), affect navigation only; removing a
-  folder does not delete its chats. There is no separate organize mode:
-  rows reorder by drag, and each folder or chat row's hover `...` menu holds
-  Rename, Move to..., Remove folder, Move to folder... and Add to/Remove from
-  Favorites. New folder and Rename/Move open one dialog modeled on session
-  rename (name, Location, Cancel plus Create/Save/Move). The Chats heading holds
-  New folder beside New chat; project and project-category folders are created
-  from the project overflow/right-click menu (New folder, workflow projects only)
-  and the Projects section menu. Folder rows align with the Recent subheading,
-  show a muted count when collapsed, and indent their children one step. Recent is a derived access and
-  activity view, not storage ownership; favorites are references. Its toolbar
-  places sorting before new-chat creation. Folder and chat order, user titles,
-  expansion state and transcript reading position remain stable across
-  navigation. Both areas keep quiet
-  glyph actions and also accept a right-click create menu on the heading or empty
-  list chrome so section creation stays discoverable
-  without extra chrome. Its list shows at most five compact rows (146px) before
-  scrolling internally, so standalone work stays visible without displacing
-  project navigation. The following `Projects` area exposes the
+- **Categories**: the built-in `Chats` and `Projects` precede user-defined
+  categories (right-click the top bar's New chat, then New category; a custom
+  header's `...` menu has Rename and Delete category, which deletes without
+  confirmation and moves its contents to the matching built-in: conversations
+  and folders to Chats, projects to Projects). A header shows its title, then
+  a collapse chevron, and right-aligned hover actions: New chat and New folder
+  (Chats and custom), New project (Projects, the existing add-project flow).
+  Everything inside a category is inset 8px from the header, so the tile and
+  header text share one left edge and the icon sits 8px further in.
+- **Folders**: no chevron; a folder or open-folder icon. Nesting is unlimited and
+  rendered with one indent level: contents of any folder or project sit one step
+  right of its row. An expanded folder or project is a shaded block. Hover
+  actions are New chat, New folder and `...` (Rename, New folder, Remove folder;
+  removing never deletes chats, children move up one level). Folders move by
+  drag only; dialogs create and rename them. Navigation never changes a
+  conversation's workspace, context or permissions.
+- **Projects**: an outline cube, then the name. The cube opens project home (an
+  active tile, no full-row highlight); the name toggles expansion; there is no
+  Project home row. The `...` menu leads with New folder, New chat, Project
+  instructions, Memory and Rename, then keeps the existing pin, archive, open
+  folder, copy, Git and danger actions. Per-project colour is removed from the
+  UI; the persisted field is kept and ignored.
+- **Conversations**: no left icon. A status dot sits in the right slot,
+  vertically centred with its right inset equal to its top/bottom gap
+  (running accent, needs-permission purple, failed red; completed and unread
+  show nothing); the hover `...` takes the same slot. Menu order: Rename task,
+  Pin, Move to folder..., Create branch, Archive, Git, Copy, Danger zone. Branches
+  and child conversations nest under their parent with a chevron after the
+  title and guide lines. Pinned conversations rank first among their siblings.
+- Folder create/rename and chat move (including a multi-selection) use one
+  dialog (name, Location, Cancel plus Create/Save/Move). Recent is a derived
+  access and activity view, not storage ownership. Folder and chat order, user
+  titles, expansion state and transcript reading position remain stable across
+  navigation. The following `Projects` area exposes the
   folder-picker action; retained project groups use the remaining height and
   scroll independently.
 - **Identity**: each project group is keyed by a host-owned logical group id;

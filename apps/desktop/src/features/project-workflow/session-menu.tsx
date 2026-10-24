@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord, SessionSummary } from "@pi-desktop/shared";
-import { IconArrowUpDown, IconStar } from "../../components/icons";
+import { IconArrowUpDown } from "../../components/icons";
 import { sidebarMenuAction, type SidebarMenuActionItem } from "../../lib/sidebar-menu";
 import { openFolderDialog } from "./folder-dialog-store";
 import { workflowContextProjectId } from "./navigation-model";
@@ -41,28 +41,6 @@ export function useWorkflowSessionMenu(groups: ProjectGroupRecord[]) {
           },
         }),
       ];
-      if (context.scope === "chats") {
-        const record = snapshot.navigation.find((item) => item.sessionId === session.id) ?? {
-          sessionId: session.id,
-          order: 0,
-          favorite: false,
-        };
-        items.push(
-          sidebarMenuAction({
-            id: "toggle-session-favorite",
-            label: record.favorite ? t("workflowNav.removeFavorite") : t("workflowNav.addFavorite"),
-            icon: <IconStar size={14} />,
-            disabled: workflow.busy,
-            onSelect: () => {
-              onDone();
-              void workflow.mutate({
-                kind: "navigation.update",
-                navigation: { ...record, favorite: !record.favorite },
-              });
-            },
-          }),
-        );
-      }
       return items;
     },
     [contextOf, snapshot, t, workflow],

@@ -1,111 +1,210 @@
-.workflow-navigation {
-  flex-shrink: 0;
+/*
+  Sidebar navigation tree: categories, folders, projects and the rows inside
+  them. One indent level only: the contents of a folder or project sit one step
+  right of its row however deeply folders nest, and an expanded folder or
+  project is a shaded block. Items inside a category are inset 8px from the
+  category header (--sidebar-category-inset).
+*/
+.sidebar {
+  --sidebar-category-inset: 8px;
+  --sidebar-row-height: 32px;
+  --sidebar-row-pad: 8px;
+  --sidebar-icon-slot: 16px;
+  --sidebar-row-gap: 6px;
+  --sidebar-indent: 16px;
+  --sidebar-action-size: 22px;
 }
-.workflow-navigation-chat {
+
+.workflow-navigation { flex-shrink: 0; min-width: 0; }
+.workflow-navigation-chat { display: flex; align-items: center; min-width: 0; }
+.workflow-navigation-session { flex: 1; min-width: 0; }
+.workflow-navigation-folded { transform: rotate(-90deg); }
+.workflow-navigation-error { color: var(--ds-error); padding: 6px 10px; overflow-wrap: anywhere; }
+.workflow-navigation-tree { min-width: 0; }
+
+/* ---- category header ---- */
+.sidebar .sidebar-category + .sidebar-category { margin-top: 12px; }
+.sidebar .sidebar-category-header {
   display: flex;
   align-items: center;
-  gap: 3px;
-  min-width: 0;
-}
-.workflow-navigation-label.btn {
-  flex: 1;
-  justify-content: flex-start;
-  text-align: left;
-  min-width: 0;
-  gap: 5px;
-}
-.workflow-navigation-label span,
-.workflow-navigation-project span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.workflow-navigation-session {
-  flex: 1;
-  min-width: 0;
-}
-.workflow-navigation-children {
-  padding-left: 12px;
-}
-.workflow-navigation-folded {
-  transform: rotate(-90deg);
-}
-.workflow-navigation-subheading {
-  padding: 8px 6px 2px;
+  gap: 2px;
+  min-height: 30px;
+  padding: 0 4px 0 var(--sidebar-row-pad);
+  border-radius: var(--radius-xs);
   color: var(--ds-text-muted);
   font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  user-select: none;
 }
-.workflow-navigation-project {
+.sidebar .sidebar-category-header:hover,
+.sidebar .sidebar-category-header:focus-within,
+.sidebar .sidebar-category-header.is-menu-open { color: var(--ds-text-secondary); }
+.sidebar .sidebar-category-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar .sidebar-category-chevron,
+.sidebar .sidebar-chevron-button {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-2xs);
+  color: var(--ds-text-muted);
+}
+.sidebar .sidebar-category-chevron { margin-left: 2px; color: inherit; }
+.sidebar .sidebar-category-chevron:hover,
+.sidebar .sidebar-chevron-button:hover { background: var(--ds-bg-active); }
+.sidebar .sidebar-category-spacer { flex: 1; }
+.sidebar .sidebar-category-actions { display: flex; align-items: center; gap: 2px; opacity: 0; }
+.sidebar .sidebar-category-header:hover .sidebar-category-actions,
+.sidebar .sidebar-category-header:focus-within .sidebar-category-actions,
+.sidebar .sidebar-category-header.is-menu-open .sidebar-category-actions { opacity: 1; }
+.sidebar .sidebar-category-header.is-drop-inside { outline: 1px dashed var(--ds-accent); outline-offset: -1px; }
+.sidebar .sidebar-category-body { margin-left: var(--sidebar-category-inset); min-width: 0; }
+
+/* ---- rows ---- */
+.sidebar .workflow-tree-row {
+  position: relative;
   display: flex;
-  width: 100%;
-  justify-content: flex-start;
-  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  border-radius: var(--radius-xs);
 }
-.workflow-navigation-status,
-.workflow-navigation-relation {
+.sidebar .workflow-tree-row.is-folder,
+.sidebar .workflow-tree-row.is-recent-row {
+  min-height: var(--sidebar-row-height);
+  padding-right: 4px;
+  color: var(--ds-text-secondary);
+}
+.sidebar .workflow-tree-row.is-folder:hover,
+.sidebar .workflow-tree-row.is-folder.is-menu-open,
+.sidebar .workflow-tree-row.is-recent-row:hover { background: var(--ds-bg-hover); }
+.sidebar .workflow-tree-row .workflow-tree-folder.btn {
+  flex: 1;
+  min-width: 0;
+  height: var(--sidebar-row-height);
+  min-height: var(--sidebar-row-height);
+  justify-content: flex-start;
+  gap: var(--sidebar-row-gap);
+  padding: 0 var(--sidebar-row-pad);
+  background: transparent;
+  color: inherit;
+  font-size: var(--text-md-plus);
+  font-weight: inherit;
+  line-height: var(--leading-row);
+  text-align: left;
+}
+.sidebar .workflow-tree-folder svg { flex: 0 0 auto; color: var(--ds-text-muted); }
+.sidebar .workflow-tree-folder span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar .workflow-tree-content { min-width: 0; flex: 1; }
+.sidebar .workflow-tree-content > .project-group { margin: 0; }
+.sidebar .workflow-tree-node.is-dragging > .workflow-tree-row { opacity: 0.5; }
+
+/* Row actions: quiet until the row is hovered, focused or its menu is open. */
+.sidebar .workflow-tree-actions { display: none; align-items: center; gap: 0; margin-left: auto; flex: 0 0 auto; }
+.sidebar .workflow-tree-row:hover > .workflow-tree-actions,
+.sidebar .workflow-tree-row:focus-within > .workflow-tree-actions,
+.sidebar .workflow-tree-row.is-menu-open > .workflow-tree-actions,
+.sidebar .sidebar-project-row:hover > .workflow-tree-actions,
+.sidebar .sidebar-project-row:focus-within > .workflow-tree-actions,
+.sidebar .sidebar-project-row.is-menu-open > .workflow-tree-actions { display: flex; }
+.sidebar .sidebar-row-action {
+  display: inline-grid;
+  width: var(--sidebar-action-size);
+  height: var(--sidebar-action-size);
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-xs);
+  color: var(--ds-text-secondary);
+  opacity: 1;
+  pointer-events: auto;
+}
+.sidebar .sidebar-row-action:hover:not(:disabled),
+.sidebar .sidebar-row-action[aria-expanded="true"] { background: var(--ds-bg-hover); color: var(--ds-text-primary); }
+.sidebar .sidebar-row-action:disabled { opacity: 0.4; }
+.sidebar .sidebar-category-actions .sidebar-row-action:hover:not(:disabled) { background: var(--ds-bg-active); }
+
+/* ---- indentation: ONE step, however deep the folders ---- */
+.sidebar .workflow-tree-children { padding-left: var(--sidebar-indent); min-width: 0; }
+.sidebar .workflow-tree-children .workflow-tree-children,
+.sidebar .sidebar-project-body .workflow-tree-children { padding-left: 0; }
+.sidebar .sidebar-project-body { padding-left: var(--sidebar-indent); min-width: 0; }
+.sidebar .workflow-tree-empty {
+  padding: 6px var(--sidebar-row-pad);
+  color: var(--ds-text-faint);
   font-size: var(--text-sm);
+}
+
+/* An expanded folder or project is one shaded block. */
+.sidebar .workflow-tree-node.is-block {
+  margin: 2px 0;
+  padding: 2px 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--ds-text-primary) 4%, transparent);
+}
+.sidebar .workflow-tree-node.is-block .thread-item.active { background: var(--ds-bg-active); }
+
+/* ---- drop feedback ---- */
+.sidebar .workflow-tree-row.is-drop-before::before,
+.sidebar .workflow-tree-row.is-drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 3px;
+  right: 3px;
+  height: 2px;
+  background: var(--ds-accent);
+  pointer-events: none;
+}
+.sidebar .workflow-tree-row.is-drop-before::before { top: 0; }
+.sidebar .workflow-tree-row.is-drop-after::after { bottom: 0; }
+.sidebar .workflow-tree-row.is-drop-inside,
+.sidebar .workflow-tree-root-target.is-drop-inside { outline: 1px solid var(--ds-accent); background: var(--ds-bg-active); }
+.sidebar .workflow-tree-root-hint { min-height: 8px; color: var(--ds-text-muted); font-size: var(--text-sm); padding: 0 6px; }
+
+/* ---- projects ---- */
+.sidebar .sidebar-project-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sidebar-row-gap);
+  min-height: var(--sidebar-row-height);
+  padding: 0 var(--sidebar-row-pad);
+  border-radius: var(--radius-xs);
+  color: var(--ds-text-secondary);
+  font-size: var(--text-md-plus);
+  line-height: var(--leading-row);
+  cursor: pointer;
+}
+.sidebar .sidebar-project-row:hover,
+.sidebar .sidebar-project-row.is-menu-open { background: var(--ds-bg-hover); }
+.sidebar .sidebar-project-row:hover .sidebar-project-cube:not(.is-active):not(.is-static) { color: var(--ds-text-primary); }
+.sidebar .sidebar-project-cube {
+  display: inline-grid;
+  width: var(--sidebar-action-size);
+  height: var(--sidebar-action-size);
+  margin: 0 -3px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-xs);
   color: var(--ds-text-muted);
 }
-.workflow-navigation-side {
-  margin-left: 12px;
+.sidebar button.sidebar-project-cube:hover,
+.sidebar .sidebar-project-cube.is-active { background: var(--ds-bg-active); color: var(--ds-text-primary); }
+.sidebar .sidebar-project-name {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  text-align: left;
 }
-.workflow-navigation-relation {
-  padding-left: 8px;
-}
-.workflow-navigation-error {
-  color: var(--ds-error);
-  padding: 6px 10px;
-  overflow-wrap: anywhere;
-}
-.workflow-navigation-project-entry { display: flex; align-items: center; gap: 2px; }
-.workflow-navigation-project-entry .workflow-navigation-label { width: 100%; min-height: 28px; gap: 5px; font-size: var(--text-md); line-height: var(--leading-row); color: var(--ds-text-secondary); padding: 5px 6px 5px 20px; }
-.workflow-navigation-project-entry .workflow-navigation-label[aria-current="page"] { color: var(--ds-text-primary); background: var(--ds-bg-active); }
+.sidebar .sidebar-project-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar .sidebar-project-row .workflow-tree-actions { margin-right: -3px; }
 
-.workflow-navigation-project-entry > .workflow-navigation-label { flex: 1; width: auto; }
-.workflow-navigation-tree { min-width: 0; }
-.workflow-tree-toolbar { display: flex; justify-content: space-between; align-items: center; min-height: 22px; padding: 0 5px; color: var(--ds-text-muted); font-size: var(--text-sm); }
-.workflow-tree-row { position: relative; display: flex; align-items: flex-start; min-width: 0; border-radius: var(--radius-sm); }
-.workflow-tree-content { min-width: 0; flex: 1; }
-.workflow-tree-content > .project-group { margin: 0; }
-.workflow-tree-row.is-drop-before::before, .workflow-tree-row.is-drop-after::after { content: ""; position: absolute; z-index: 2; left: 3px; right: 3px; height: 2px; background: var(--ds-accent); pointer-events: none; }
-.workflow-tree-row.is-drop-before::before { top: 0; }
-.workflow-tree-row.is-drop-after::after { bottom: 0; }
-.workflow-tree-row.is-drop-inside, .workflow-tree-root-target.is-drop-inside { outline: 1px solid var(--ds-accent); background: var(--ds-bg-active); }
-.workflow-tree-node.is-dragging > .workflow-tree-row { opacity: .5; }
-.workflow-tree-empty { padding: 5px 10px; color: var(--ds-text-muted); font-size: var(--text-sm); }
-.workflow-tree-root-hint { min-height: 8px; color: var(--ds-text-muted); font-size: var(--text-sm); padding: 0 6px; }
-
-/* Folder rows share the sidebar row rhythm: 28px, chevron + icon + name, the
-   chevron nudged 3px past the "Recent" subheading's text start. Children indent
-   one step through .workflow-navigation-children. */
-.workflow-tree-row.is-folder { align-items: center; min-height: 28px; transition: background var(--motion-duration-fast) var(--motion-ease-out); }
-.workflow-tree-row.is-folder:hover, .workflow-tree-row.is-folder.is-menu-open { background: var(--ds-bg-hover); }
-.workflow-tree-content > .workflow-navigation-label.btn { min-height: 28px; padding: 5px 6px 5px 9px; font-size: var(--text-md); line-height: var(--leading-row); color: var(--ds-text-secondary); background: transparent; }
-.workflow-tree-row.is-folder:hover .workflow-navigation-label.btn, .workflow-tree-row.is-folder.is-menu-open .workflow-navigation-label.btn { color: var(--ds-text-primary); }
-/* The collapsed count and the row actions share one slot, like a session's
-   last-reply date and its "..." control. */
-.workflow-tree-meta { display: grid; flex: 0 0 auto; align-items: center; justify-items: end; padding-right: 2px; }
-.workflow-tree-meta > * { grid-area: 1 / 1; }
-.workflow-tree-count { padding-right: 6px; color: var(--ds-text-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; transition: opacity var(--motion-duration-fast) var(--motion-ease-out); }
-.workflow-tree-actions { display: flex; align-items: center; gap: 1px; }
-.workflow-tree-row:hover .workflow-tree-count,
-.workflow-tree-row:focus-within .workflow-tree-count,
-.workflow-tree-row.is-menu-open .workflow-tree-count { opacity: 0; visibility: hidden; }
-
-/* Row and toolbar actions follow the native sidebar contract: quiet at rest and
-   revealed by hover or keyboard focus on their owning row (09 §sidebar rows). */
-.workflow-tree-toolbar:hover .sidebar-toolbar-button,
-.workflow-tree-toolbar:focus-within .sidebar-toolbar-button,
-.workflow-tree-row:hover .workflow-tree-actions .sidebar-toolbar-button,
-.workflow-tree-row:focus-within .workflow-tree-actions .sidebar-toolbar-button,
-.workflow-tree-row.is-menu-open .workflow-tree-actions .sidebar-toolbar-button,
-.workflow-navigation-project-entry:hover > .workflow-agent-entry,
-.workflow-navigation-project-entry:focus-within > .workflow-agent-entry,
-.sidebar-session-group-header:hover .workflow-agent-entry,
-.sidebar-session-group-header:focus-within .workflow-agent-entry { opacity: 1; }
-.workflow-tree-row:hover .workflow-tree-actions .thread-item-more,
-.workflow-tree-row:focus-within .workflow-tree-actions .thread-item-more { opacity: 1; pointer-events: auto; }
-.workflow-agent-entry { flex-shrink: 0; }
+/* ---- folder dialog ---- */
 .workflow-folder-dialog-form { display: grid; gap: 14px; }
 .workflow-folder-dialog-select { width: 100%; }
 .workflow-folder-dialog-error { padding: 0; }

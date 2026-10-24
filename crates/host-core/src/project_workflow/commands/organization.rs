@@ -12,10 +12,20 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                 return Err(Error::missing("folder not found"));
             }
             navigation_tree::validate_scope(db, folder)?;
+            if let Some(category) = folder.get("categoryId") {
+                navigation_tree::check_category(value, category)?;
+            }
             navigation_tree::validate_parent(value, folder)?;
             if let Ok(i) = existing {
                 if !navigation_tree::same_scope(&value["folders"][i], folder) {
                     return Err(Error::invalid("folder scope is immutable"));
+                }
+                // Category changes go through tree.move so descendants follow.
+                if navigation_tree::scope(folder) != "project"
+                    && navigation_tree::folder_category(&value["folders"][i])
+                        != navigation_tree::folder_category(folder)
+                {
+                    return Err(Error::invalid("folder category changes through tree.move"));
                 }
             }
             match existing {
@@ -28,6 +38,7 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             let id = &command["folderId"];
             let i = index(value, "folders", id)?;
             let parent = value["folders"][i].get("parentId").cloned();
+            let removed = value["folders"][i].clone();
             rows_mut(value, "folders").remove(i);
             // Promote direct children without deleting their navigation or execution identity.
             for row in rows_mut(value, "folders") {
@@ -50,6 +61,11 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                             Some(parent) => row["folderId"] = parent.clone(),
                             None => {
                                 row.as_object_mut().unwrap().remove("folderId");
+                                // A root entry keeps the category its folder was in.
+                                if navigation_tree::scope(&removed) != "project" {
+                                    row["categoryId"] =
+                                        json!(navigation_tree::folder_category(&removed));
+                                }
                             }
                         }
                     }
@@ -58,9 +74,60 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             rows_mut(value, "expandedIds").retain(|expanded| expanded != id);
             Ok(())
         }
+        "category.create" | "category.update" => {
+            let category = &command["category"];
+            let id = category["id"].as_str().unwrap();
+            if id == navigation_tree::CHATS || id == navigation_tree::PROJECTS {
+                return Err(Error::invalid("built-in categories cannot be edited"));
+            }
+            let existing = rows(value, "categories")
+                .iter()
+                .position(|row| row["id"] == category["id"]);
+            match (command["kind"].as_str().unwrap(), existing) {
+                ("category.create", Some(_)) => Err(Error::conflict("category already exists")),
+                ("category.update", None) => Err(Error::missing("category not found")),
+                (_, Some(i)) => {
+                    value["categories"][i] = category.clone();
+                    Ok(())
+                }
+                (_, None) => {
+                    rows_mut(value, "categories").push(category.clone());
+                    Ok(())
+                }
+            }
+        }
+        // Contents fall back to the matching built-in category: folders and
+        // conversations to Chats, projects to Projects. Nothing is deleted.
+        "category.remove" => {
+            let id = &command["categoryId"];
+            let i = index(value, "categories", id)?;
+            rows_mut(value, "categories").remove(i);
+            for row in rows_mut(value, "folders") {
+                if navigation_tree::scope(row) != "project"
+                    && navigation_tree::folder_category(row) == id.as_str().unwrap()
+                {
+                    row["categoryId"] = json!(navigation_tree::CHATS);
+                }
+            }
+            for row in rows_mut(value, "navigation") {
+                if row.get("categoryId") == Some(id) {
+                    row["categoryId"] = json!(navigation_tree::CHATS);
+                }
+            }
+            for row in rows_mut(value, "projectNavigation") {
+                if row.get("categoryId") == Some(id) {
+                    row["categoryId"] = json!(navigation_tree::PROJECTS);
+                }
+            }
+            rows_mut(value, "expandedIds").retain(|expanded| expanded != id);
+            Ok(())
+        }
         "navigation.move" => {
             if let Some(id) = command.get("folderId") {
                 find(value, "folders", id)?;
+            }
+            if let Some(id) = command.get("categoryId") {
+                navigation_tree::check_category(value, id)?;
             }
             for session in rows(command, "sessionIds") {
                 check_session(db, session)?;
@@ -77,12 +144,24 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                     order
                 });
                 match command.get("folderId") {
-                    Some(id) => value["navigation"][i]["folderId"] = id.clone(),
-                    None => {
+                    Some(id) => {
+                        value["navigation"][i]["folderId"] = id.clone();
                         value["navigation"][i]
                             .as_object_mut()
                             .unwrap()
-                            .remove("folderId");
+                            .remove("categoryId");
+                    }
+                    None => {
+                        let row = value["navigation"][i].as_object_mut().unwrap();
+                        row.remove("folderId");
+                        match command.get("categoryId") {
+                            Some(category) => {
+                                row.insert("categoryId".into(), category.clone());
+                            }
+                            None => {
+                                row.remove("categoryId");
+                            }
+                        }
                     }
                 }
             }
@@ -93,6 +172,9 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             check_session(db, &row["sessionId"])?;
             if let Some(id) = row.get("folderId") {
                 find(value, "folders", id)?;
+            }
+            if let Some(id) = row.get("categoryId") {
+                navigation_tree::check_category(value, id)?;
             }
             navigation_tree::validate_destination(
                 db,

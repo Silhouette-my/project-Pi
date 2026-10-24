@@ -32,7 +32,7 @@ equate the consumer Chat provider with the existing Agent/Plan operating state.
 ### P1. Chat organization and project navigation
 
 Chats and Projects are parallel navigation areas. Ordinary Chat folders support
-create, rename, shallow nesting, move/bulk move and explicit non-destructive folder
+create, rename, unlimited nesting (one indent level), move/bulk move and explicit non-destructive folder
 removal. A global new Chat is unfiled; new Chat within a folder inherits that
 folder. Existing chats remain accessible and continuable.
 

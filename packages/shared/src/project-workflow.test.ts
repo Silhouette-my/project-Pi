@@ -16,6 +16,21 @@ describe("project workflow boundary", () => {
     expect(isProjectWorkflowUserCommand({ ...move, scope: "workspace" })).toBe(false);
     expect(isProjectWorkflowUserCommand({ ...move, target: { kind: "workspace", id: "s" } })).toBe(false);
   });
+  it("accepts user categories and category placement as additive fields", () => {
+    const base = emptyProjectWorkflowSnapshot();
+    const snapshot = { ...base, categories: [{ id: "k1", name: "Reading", order: 0 }],
+      folders: [{ id: "f", name: "Papers", categoryId: "k1", order: 0 }],
+      navigation: [{ sessionId: "s", categoryId: "k1", order: 1, favorite: false }],
+      projectNavigation: [{ projectId: "p", categoryId: "k1", order: 2 }] };
+    expect(Value.Check(ProjectWorkflowSnapshotSchema, snapshot)).toBe(true);
+    for (const body of [
+      { kind: "category.create", category: { id: "k2", name: "Archive", order: 1 } },
+      { kind: "category.update", category: { id: "k1", name: "Renamed", order: 0 } },
+      { kind: "category.remove", categoryId: "k1" },
+      { kind: "tree.move", target: { kind: "project", id: "p" }, scope: "chats", categoryId: "k1", order: 0 },
+    ]) expect(isProjectWorkflowUserCommand({ commandId: "c", expectedRevision: 0, ...body })).toBe(true);
+    expect(isProjectWorkflowUserCommand({ commandId: "c", expectedRevision: 0, kind: "category.remove" })).toBe(false);
+  });
   it("starts at revision zero and validates representative records", () => {
     expect(emptyProjectWorkflowSnapshot().revision).toBe(0);
     expect(Value.Check(ProjectWorkflowSnapshotSchema, projectWorkflowFixture())).toBe(true);
