@@ -30,7 +30,7 @@ const storeSource = await readStoreSource();
 const globalStyles = await loadStyles();
 test("only the visible tab viewport excludes native window dragging", () => {
   assert.match(panelSource, /className="work-panel-tab-strip-wrap"/);
-  assert.match(panelSource, /className="work-panel-tab-strip no-drag"/);
+  assert.match(panelSource, /"work-panel-tab-strip no-drag"/);
   assert.doesNotMatch(panelSource, /work-panel-tab no-drag/);
   assert.doesNotMatch(panelSource, /work-panel-tab-strip-wrap no-drag/);
   assert.match(globalStyles, /\.work-panel-tab-strip \{[^}]*width:\s*max-content;[^}]*flex:\s*0 1 auto;/s);
@@ -268,7 +268,7 @@ test("work panel uses the fixed-window internal dock", () => {
 
 test("work panel header exposes a scrollable tab strip and direct new-page action", () => {
   const headerIndex = panelSource.indexOf('className="work-panel-header"');
-  const stripIndex = panelSource.indexOf('className="work-panel-tab-strip no-drag"');
+  const stripIndex = panelSource.indexOf('"work-panel-tab-strip no-drag"');
   const actionsIndex = panelSource.indexOf('className="work-panel-actions no-drag"');
   const bodyIndex = panelSource.indexOf('<div className="work-panel-body">');
 
@@ -322,11 +322,15 @@ test("work panel header exposes a scrollable tab strip and direct new-page actio
   assert.doesNotMatch(panelSource, /onContextMenu|work-panel-context-menu/);
   assert.doesNotMatch(globalStyles, /work-panel-new-menu|work-panel-menu-item|work-panel-open-dot/);
   assert.match(globalStyles, /\.work-panel-tab-strip \{[^}]*overflow-x:\s*auto;/s);
-  assert.match(globalStyles, /\.work-panel-tab-strip \{[^}]*gap:\s*6px;/s);
+  // Tabs are Chrome-like: a tight gap, and widths from the strip layout (an
+  // inline width), shrinking to their icon instead of holding a minimum.
+  assert.match(globalStyles, /\.work-panel-tab-strip \{[^}]*gap:\s*2px;/s);
   assert.match(
     globalStyles,
-    /\.work-panel-tab \{[^}]*min-width:\s*92px;[^}]*flex:\s*0 0 auto;/s,
+    /\.work-panel-tab \{[^}]*min-width:\s*0;[^}]*flex:\s*0 0 auto;/s,
   );
+  assert.match(panelSource, /tabStripLayout\(/);
+  assert.match(panelSource, /work-panel-tab-plus/);
   assert.doesNotMatch(globalStyles, /\.work-panel-actions \{[^}]*margin-left:\s*auto;/s);
   assert.doesNotMatch(
     globalStyles,

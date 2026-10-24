@@ -1,19 +1,31 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord } from "@pi-desktop/shared";
-import { Button } from "../../components/ui";
 import { DetachedConversation } from "../../components/conversation/DetachedConversation";
 import { applyPendingConfiguration } from "../../components/conversation/pending-configuration";
+import { FloatingReturnBar } from "../../components/workpanel/FloatingReturnBar";
 import { useAppStore } from "../../stores/app-store";
 import type { SessionConfigurationInput } from "../../stores/app-state";
 import { normalizeProjectPath } from "../../lib/sidebar-session-groups";
-import { ProjectAgentButton } from "../project-workflow/ProjectAgentButton";
 import { useProjectAgentDraft } from "../project-workflow/project-agent-draft";
 import { useProjectWorkflow } from "../project-workflow/useProjectWorkflow";
 import { useWorkflowProjectGroups } from "../project-workflow/WorkflowNavigation";
-import { BringInDialog } from "./BringInDialog";
-import { SendToConversationDialog } from "./SendToConversationDialog";
 import { listConversationTargets } from "./project-panel-text";
+import {
+  agentHasAnswer,
+  returnAgentToTarget,
+  setAgentReturnMode,
+  setAgentReturnTarget,
+  useAgentReturnState,
+  useLastProjectConversation,
+} from "./project-agent-return";
+import {
+  AGENT_RETURN_MODES,
+  agentReturnBlockReason,
+  agentReturnPillLabel,
+  resolveReturnTarget,
+} from "./project-return-core";
+import { useSessionMessages } from "./use-session-messages";
 import "./project-panel.css";
 
 /**
@@ -35,8 +47,10 @@ export function projectPathPredicate(group: ProjectGroupRecord | undefined) {
  * first send creates the session through the same `agent.open` action the
  * toolbar entry uses.
  *
- * The Agent has no tools: handing a thread something, or reading a thread, is
- * done here by the user through the two dialogs, never by the Agent.
+ * The Agent has no tools: handing its discussion to a thread is done by the
+ * user through the floating return control (a quote into the target's draft,
+ * never a send); reading a thread into the Agent is an @-mention in the
+ * composer.
  */
 export function ProjectAgentTab({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
@@ -47,25 +61,42 @@ export function ProjectAgentTab({ projectId }: { projectId: string }) {
   const agentSessionId = snapshot?.projectAgents?.find((agent) => agent.projectId === projectId)
     ?.sessionId;
   const [draft, setDraft] = useProjectAgentDraft(projectId);
-  const [dialog, setDialog] = useState<"send" | "bring" | null>(null);
   const inProject = useMemo(() => projectPathPredicate(group), [group]);
   const untitled = t("projectPanel.untitled");
   const targets = useMemo(
     () => listConversationTargets({ snapshot, projectId, sessions, inProject, untitled }),
     [inProject, projectId, sessions, snapshot, untitled],
   );
+  const returnState = useAgentReturnState(projectId);
+  const lastConversationId = useLastProjectConversation(projectId);
+  const target = resolveReturnTarget(targets, returnState.targetId, lastConversationId);
+  const messages = useSessionMessages(agentSessionId);
+  const running = useAppStore((state) =>
+    agentSessionId ? state.runningSessions[agentSessionId] === true : false,
+  );
+  const mode = returnState.mode;
+  const blocked = agentReturnBlockReason({
+    hasTarget: Boolean(target),
+    running,
+    hasAnswer: agentHasAnswer(messages),
+  });
+  const modeLabel = t(`workPanel.return.modes.${mode}`);
+  const pill = agentReturnPillLabel(modeLabel, mode, target?.title, {
+    pill: (value) => t("workPanel.return.pill", { mode: value }),
+    pillTarget: (value, title) => t("workPanel.return.pillTarget", { mode: value, target: title }),
+  });
 
   async function sendToAgent(text: string, configuration?: SessionConfigurationInput) {
-    let target = agentSessionId;
-    if (!target) {
-      target = (await action({ kind: "agent.open", projectId }))?.sessionId;
-      if (!target) throw new Error(t("workflow.agentOpenFailed"));
+    let sessionId = agentSessionId;
+    if (!sessionId) {
+      sessionId = (await action({ kind: "agent.open", projectId }))?.sessionId;
+      if (!sessionId) throw new Error(t("workflow.agentOpenFailed"));
       await useAppStore.getState().refreshSessions();
     }
-    await applyPendingConfiguration(target, configuration);
+    await applyPendingConfiguration(sessionId, configuration);
     // The transcript view is a convenience; a failed read must not block the send.
-    await useAppStore.getState().attachSessionTranscript(target).catch(() => {});
-    const accepted = await useAppStore.getState().sendPrompt(text, { text, fileReferences: [] }, target);
+    await useAppStore.getState().attachSessionTranscript(sessionId).catch(() => {});
+    const accepted = await useAppStore.getState().sendPrompt(text, { text, fileReferences: [] }, sessionId);
     if (!accepted) throw new Error(t("workflow.agentSendFailed"));
   }
 
@@ -75,18 +106,6 @@ export function ProjectAgentTab({ projectId }: { projectId: string }) {
       aria-label={t("workflow.agentTitle")}
       data-project-agent-dock={projectId}
     >
-      <div className="project-panel-context">
-        <span className="project-panel-context-text">{t("workflow.agentDiscussionHint")}</span>
-        <ProjectAgentButton projectId={projectId} className="ct-icon-btn" />
-      </div>
-      <div className="project-panel-actions">
-        <Button variant="ghost" size="sm" onClick={() => setDialog("send")} data-project-send-open>
-          {t("projectPanel.sendOpen")}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setDialog("bring")} data-project-bring-open>
-          {t("projectPanel.bringOpen")}
-        </Button>
-      </div>
       <DetachedConversation
         key={projectId}
         sessionId={agentSessionId}
@@ -101,21 +120,57 @@ export function ProjectAgentTab({ projectId }: { projectId: string }) {
         // `agent.open` needs the loaded snapshot's revision; until then a send could only fail.
         disabledReason={snapshot ? undefined : t("workflow.loading")}
         formProps={{ "data-workflow": "project-intent" }}
+        floating={
+          <FloatingReturnBar
+            workflow="project-agent"
+            label={pill}
+            menuLabel={t("workPanel.return.menuLabel")}
+            sections={[
+              {
+                id: "mode",
+                heading: t("workPanel.return.modeHeading"),
+                options: AGENT_RETURN_MODES.map((value) => ({
+                  id: value,
+                  label: t(`workPanel.return.modes.${value}`),
+                  checked: value === mode,
+                })),
+                onSelect: (value) => setAgentReturnMode(projectId, value as typeof mode),
+              },
+              {
+                id: "target",
+                heading: t("workPanel.return.targetHeading"),
+                options: targets.map((item) => ({
+                  id: item.sessionId,
+                  label: item.title,
+                  checked: item.sessionId === target?.sessionId,
+                })),
+                onSelect: (value) => setAgentReturnTarget(projectId, value),
+              },
+            ]}
+            actionLabel={t("workPanel.return.action")}
+            showAction={mode !== "none"}
+            actionDisabled={Boolean(blocked) || returnState.status === "running" || !agentSessionId}
+            actionBusy={returnState.status === "running"}
+            actionTitle={
+              returnState.status === "running"
+                ? t("sideChat.returning")
+                : blocked
+                  ? t(blocked)
+                  : undefined
+            }
+            onAction={() => {
+              if (!target || !agentSessionId || blocked) return;
+              void returnAgentToTarget({
+                projectId,
+                projectName: group?.name ?? "",
+                agentSessionId,
+                mode,
+                target,
+              });
+            }}
+          />
+        }
       />
-      {dialog === "send" ? (
-        <SendToConversationDialog
-          agentSessionId={agentSessionId}
-          targets={targets}
-          onClose={() => setDialog(null)}
-        />
-      ) : null}
-      {dialog === "bring" ? (
-        <BringInDialog
-          targets={targets}
-          onInsert={(text) => setDraft(draft.trim() ? `${draft.replace(/\s+$/, "")}\n\n${text}` : text)}
-          onClose={() => setDialog(null)}
-        />
-      ) : null}
     </section>
   );
 }

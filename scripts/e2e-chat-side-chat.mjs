@@ -5,10 +5,13 @@
  * E2E-CHAT-side-chat-detached-panel. A real chat is driven against a loopback model
  * fixture: Ask in side chat opens a draft tab (no session), typing creates nothing,
  * the first Send forks the child without switching the visible session, the reply
- * streams in the panel, Return to main thread is off by default (None), Summary asks
- * the side chat for a summary and Everything quotes the exchange, both only into the
- * parent draft and never sending, Open as a conversation activates the child, and closing a tab keeps its
- * child session. All mutable Host data is isolated; input is real CDP pointer input.
+ * streams in the panel, the floating return pill defaults to None (no return button),
+ * Summary asks the side chat for a summary and All quotes the exchange, both only into
+ * the parent draft and never sending, Open as a conversation activates the child, and
+ * closing a tab keeps its child session. The topbar's New side chat opens a side chat
+ * about the whole conversation. The chat is a non-project session: a project chat would
+ * open the project Agent tab by default and change the panel's starting state.
+ * All mutable Host data is isolated; input is real CDP pointer input.
  */
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -143,9 +146,13 @@ const RIGHT_FORM = '.work-panel [data-side-chat-form] textarea';
 
 try {
   const seed = new Host(hostBinary, data, { env: { HOME: home }, quiet: true });
-  try { await seed.start(); await seed.call("project.group.create", { name: "Side chat", folders: [join(root, "apps")] }); } finally { await seed.stop(); }
+  // No project group is created: the session stays a plain chat, so entering it does not
+  // add the project Agent tab to the panel.
+  try { await seed.start(); } finally { await seed.stop(); }
   await startApp();
-  const setup = await main.evaluate(`globalThis.__PI_DESKTOP_PLAN_UI_PROBE({operation:'liveSetup',workspace:${json(join(root, "apps"))}})`);
+  const workspace = join(scratch, "workspace");
+  await mkdir(workspace, { recursive: true });
+  const setup = await main.evaluate(`globalThis.__PI_DESKTOP_PLAN_UI_PROBE({operation:'liveSetup',workspace:${json(workspace)}})`);
   assert.equal(setup.ok, true, json(setup));
   const parentId = setup.sessionId;
   await invoke("settingsSet", { ...await invoke("settingsGet"), defaultProviderId: setup.providerId, defaultModelId: setup.modelId });
@@ -167,6 +174,17 @@ try {
   assert.ok(before.includes(parentId));
   coverage.push("A finished assistant turn offers Ask in side chat in its action row beside Fork");
 
+  // Every chat in a workspace is a project chat, so entering it opened the project Agent
+  // tab and revealed the panel. Start from the state this journey is about: the Agent tab
+  // closed (a closed Agent stays closed for this conversation) and the panel auto-hidden.
+  if (await page.evaluate("!!document.querySelector('.work-panel [data-project-agent-dock]')")) {
+    await realClick(".work-panel .work-panel-tab-close", "close the project Agent tab");
+    await until(() => page.evaluate("!document.querySelector('.work-panel [data-project-agent-dock]')"), "Agent tab closed");
+  }
+  await move(300, 600);
+  await page.call("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await until(async () => (await panelState()) === null, "panel auto-hidden again", 8000);
+
   // 2. Entry: a real click opens a draft tab in the (unpinned) panel; nothing is created.
   assert.equal(await panelState(), null, "panel is auto-hidden before the click");
   await realClick(".main-pane [data-side-chat-role=assistant]", "Ask in side chat button");
@@ -174,7 +192,7 @@ try {
   await until(() => page.evaluate("!!document.querySelector('.work-panel [data-side-chat]')"), "side-chat tab rendered");
   assert.equal(await sideSession(), "", "no session before the first Send");
   assert.equal(await page.evaluate("document.querySelectorAll('.work-panel [role=tab]').length"), 1);
-  assert.match(await panelText(), /MAIN_REPLY_1|About|关于/);
+  assert.match(await page.evaluate("document.querySelector('.work-panel [role=tab]')?.title ?? ''"), /MAIN_REPLY_1/, "the tab tooltip carries the anchored message");
   await sleep(500);
   assert.deepEqual(await sessionIds(), before, "opening creates no session");
   coverage.push("Ask in side chat reveals the auto-hide work panel and opens a draft tab anchored at the message without creating a session");
@@ -202,26 +220,34 @@ try {
   await capture("02-first-send-streaming-light.png");
   coverage.push("First Send forks one durable child without activating it, the tab refers to the child, and the reply streams through the detached transcript while the parent stays visible");
 
-  // 5. Return to main thread. The default mode is None: nothing returns.
-  const RETURN = ".work-panel [data-side-chat-action=return-to-main]";
-  const radios = ".work-panel [data-side-chat-return-mode] [role=radio]";
-  const radioState = () => page.evaluate(`[...document.querySelectorAll(${json(radios)})].map((el) => el.getAttribute('aria-checked'))`);
-  const pickMode = async (index) => { await realClick(`${radios}:nth-child(${index + 1})`, `return mode ${index}`); await until(async () => (await radioState())[index] === "true", `mode ${index} selected`); };
-  const returnState = () => page.evaluate(`(() => { const el = document.querySelector(${json(RETURN)}); return el ? { disabled: el.disabled, busy: el.getAttribute('aria-busy') === 'true', title: el.title } : null })()`);
-  assert.equal(await page.evaluate(`!!document.querySelector('.work-panel [data-side-chat-return-mode] [role=radiogroup]')`), true, "the modes are a radiogroup");
-  assert.deepEqual(await radioState(), ["true", "false", "false"], "None is selected by default");
-  const initial = await returnState();
-  assert.equal(initial.disabled, true, "Return is disabled while the mode is None");
-  assert.ok(initial.title, "the disabled button explains why");
+  // 5. The floating return control: a pill, no header. The default mode is None: nothing returns.
+  const RETURN = ".work-panel [data-return-action]";
+  const PILL = ".work-panel [data-return-pill]";
+  const pillText = () => page.evaluate(`document.querySelector(${json(PILL)})?.innerText.trim() ?? ''`);
+  const pickMode = async (mode, label) => {
+    await realClick(PILL, "return pill");
+    await realClick(`[data-return-option="mode:${mode}"]`, `return mode ${mode}`);
+    await until(async () => label.test(await pillText()), `pill shows ${label}`);
+  };
+  const returnState = () => page.evaluate(`(() => { const el = document.querySelector(${json(RETURN)}); return el ? { disabled: el.disabled, busy: el.getAttribute('aria-busy') === 'true' } : null })()`);
+  assert.match(await pillText(), /Return: None|回传：不回传/, "the pill names the default None mode");
+  assert.equal(await page.evaluate("!!document.querySelector('.work-panel .side-chat-header, .work-panel header.side-chat-header')"), false, "no header bar");
+  assert.equal(await returnState(), null, "no return button while the mode is None");
+  const geometry = await page.evaluate(`(() => { const pill=document.querySelector(${json(PILL)}).getBoundingClientRect(); const panel=document.querySelector('.work-panel .detached-conversation').getBoundingClientRect(); const first=document.querySelector('.work-panel .message-row, .work-panel [data-message-id]')?.getBoundingClientRect(); return { pillLeft: pill.left-panel.left, pillTop: pill.top-panel.top, pillHeight: pill.height, firstTop: first ? first.top-pill.bottom : null }; })()`);
+  assert.ok(geometry.pillLeft < 24 && geometry.pillTop < 16, `the pill floats at the top-left: ${json(geometry)}`);
+  assert.equal(Math.round(geometry.pillHeight), 28, "the pill is 28px like the composer pills");
+  assert.ok(geometry.firstTop === null || geometry.firstTop >= 0, `the first message is not covered by the pill: ${json(geometry)}`);
+  const tabTitle = await page.evaluate("document.querySelector('.work-panel [role=tab]')?.title ?? ''");
+  assert.match(tabTitle, /About|关于/, `the tab tooltip carries the anchored context: ${tabTitle}`);
   await capture("03-return-none-default-light.png");
-  coverage.push("The side-chat header offers a Return to main thread radiogroup that defaults to None, and the return action is disabled with a reason");
+  coverage.push("The side chat has no header: a 28px return pill floats at the top-left defaulting to None with no return button, the first message clears it, and the removed context sits in the tab tooltip");
 
   // 5a. Summary: a visible prompt in the side chat, then the answer quoted into the parent draft.
   await page.evaluate(`(() => { const input=document.querySelector('.composer-input'); input.focus(); input.textContent='my own draft'; input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'x'})); input.blur(); })()`);
-  await pickMode(1);
-  await until(async () => (await returnState()).disabled === false, "Return enabled in Summary mode");
-  await realClick(RETURN, "Return to main thread (summary)");
-  await until(async () => (await returnState()).busy, "progress on the button while the summary runs", 8000);
+  await pickMode("summary", /Summary|摘要/);
+  await until(async () => (await returnState())?.disabled === false, "Return enabled in Summary mode");
+  await realClick(RETURN, "Return to conversation (summary)");
+  await until(async () => (await returnState())?.busy, "progress on the button while the summary runs", 8000);
   assert.equal((await returnState()).disabled, true, "a second click is blocked while running");
   await capture("04-return-summary-running-light.png");
   await until(() => panelText().then((text) => text.includes("SIDE_SUMMARY_3")), "summary answer visible in the side chat", 30000);
@@ -237,13 +263,13 @@ try {
   assert.ok(json(modelRequests[2].messages).includes("SIDE_REPLY_2"), "the summary request went to the side chat");
   assert.ok((await page.evaluate("[...document.querySelectorAll('.main-pane [data-message-id]')].map((el) => el.innerText).join('|')")).includes("MAIN_REPLY_1") && !(await page.evaluate("[...document.querySelectorAll('.main-pane [data-message-id]')].map((el) => el.innerText).join('|')")).includes("SIDE_SUMMARY"), "nothing reached the parent transcript");
   assert.equal(await visibleMainSession(), parentId);
-  await until(async () => !(await returnState()).busy, "button idle again");
+  await until(async () => !(await returnState())?.busy, "button idle again");
   await capture("05-return-summary-draft-light.png");
   coverage.push("Summary sends a visible prompt in the side chat, shows progress and blocks a second click, then quotes the new answer with a Summary label and attribution into the parent draft without sending");
 
   // 5b. Everything: the exchange after the fork anchor, quoted with role labels.
-  await pickMode(2);
-  await realClick(RETURN, "Return to main thread (everything)");
+  await pickMode("full", /All|全部/);
+  await realClick(RETURN, "Return to conversation (all)");
   await until(async () => (await composerText()).includes("SIDE_QUESTION: why that sentence?"), "full transcript in the parent composer");
   const fullDraft = await composerText();
   assert.ok(fullDraft.includes("SIDE_REPLY_2") && fullDraft.includes("SIDE_SUMMARY_3"), "assistant turns present");
@@ -253,9 +279,9 @@ try {
   assert.equal(modelRequests.length, 3, "Everything sends nothing");
   assert.equal(await visibleMainSession(), parentId);
   await capture("06-return-everything-draft-light.png");
-  coverage.push("Everything quotes every user and assistant exchange after the fork anchor in order with role labels, excludes the parent prefix, appends to the parent draft and sends nothing");
-  await pickMode(0);
-  await until(async () => (await returnState()).disabled === true, "Return disabled again in None");
+  coverage.push("All quotes every user and assistant exchange after the fork anchor in order with role labels, excludes the parent prefix, appends to the parent draft and sends nothing");
+  await pickMode("none", /None|不回传/);
+  await until(async () => (await returnState()) === null, "the return button disappears in None");
 
   // 6. Open as a conversation: the child becomes the visible session; the tab is gone.
   await until(async () => (await panelState()) === "open" || (await page.evaluate("!!document.querySelector('.work-panel [data-side-chat]')")), "panel still available");
@@ -307,6 +333,33 @@ try {
   assert.equal(await page.evaluate("document.querySelector('.work-panel [data-side-chat-form] .send-btn')?.disabled"), false);
   assert.equal(modelRequests.length, 5, "the blocked draft sent nothing");
   coverage.push("A running parent disables the first Send with a visible reason, and Send recovers automatically");
+
+  // 9. The conversation topbar's New side chat: a side chat about the whole conversation.
+  const TOPBAR = '[data-nav="new-side-chat"]';
+  assert.equal(await page.evaluate(`document.querySelector(${json(TOPBAR)})?.disabled`), false, "New side chat is enabled in a conversation with messages");
+  const beforeWhole = await sessionIds();
+  const tabCount = () => page.evaluate("document.querySelectorAll('.work-panel [role=tab]').length");
+  const tabsBefore = await tabCount();
+  // The unpinned panel overlays the topbar's right end; hide it so the button is reachable.
+  await move(300, 600);
+  await page.call("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await until(async () => (await panelState()) === null, "panel auto-hidden before using the topbar", 8000);
+  // The button sits in the edge-reveal hot zone, so a real pointer would land on the revealed panel; activate it directly.
+  await page.evaluate(`document.querySelector(${json(TOPBAR)}).click()`);
+  await until(async () => (await panelState()) === "open", "the click reveals the panel", 4000);
+  await until(async () => (await tabCount()) === tabsBefore + 1, "a new side chat tab opened");
+  await until(() => page.evaluate("document.activeElement?.closest?.('[data-side-chat-form]') !== null && document.activeElement?.tagName === 'TEXTAREA'"), "the side composer is focused");
+  assert.deepEqual(await sessionIds(), beforeWhole, "opening it creates no session");
+  const wholeTitle = await page.evaluate("document.querySelector('.work-panel [role=tab][aria-selected=true]')?.title ?? ''");
+  assert.match(wholeTitle, /About|关于/, `the tooltip names the conversation: ${wholeTitle}`);
+  await move(300, 600);
+  await page.call("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await until(async () => (await panelState()) === null, "panel auto-hidden again", 8000);
+  // The button sits in the edge-reveal hot zone, so a real pointer would land on the revealed panel; activate it directly.
+  await page.evaluate(`document.querySelector(${json(TOPBAR)}).click()`);
+  await until(async () => (await tabCount()) === tabsBefore + 2, "each press opens another side chat");
+  await capture("09-topbar-new-side-chat-light.png");
+  coverage.push("The topbar's New side chat opens a draft side chat about the whole conversation, reveals the panel, focuses its composer and creates no session until Send");
 
   await writeFile(join(output, "result.json"), json({ ok: true, coverage, modelRequestCount: modelRequests.length }, null, 2));
   await rm(join(output, "failure.txt"), { force: true }); await rm(join(output, "failure.png"), { force: true });

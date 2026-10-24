@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormHTMLAttributes } from "react";
+import { useEffect, useState, type FormHTMLAttributes, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Textarea, TooltipButton } from "../ui";
 import { IconArrowUp, IconSquare } from "../icons";
@@ -37,6 +37,7 @@ export function DetachedConversation({
   scopeLabel,
   disabledReason,
   formProps,
+  floating,
 }: {
   /** Absent until the conversation exists (first send may create it). */
   sessionId?: string;
@@ -57,6 +58,11 @@ export function DetachedConversation({
   /** When set, sending is unavailable and this explains why. */
   disabledReason?: string;
   formProps?: FormDataAttributes;
+  /**
+   * Controls that float over the top of the transcript (the return pill). The
+   * transcript reserves room for them so the first message is never covered.
+   */
+  floating?: ReactNode;
 }) {
   const { t } = useTranslation();
   const attach = useAppStore((state) => state.attachSessionTranscript);
@@ -101,8 +107,9 @@ export function DetachedConversation({
   }
 
   return (
-    <div className="detached-conversation">
+    <div className={floating ? "detached-conversation has-floating" : "detached-conversation"}>
       <div className="detached-conversation-body">
+        {floating}
         {sessionId && attached ? <SessionPane sessionId={sessionId} visible /> : null}
         {!hasContent ? <p className="detached-conversation-empty">{emptyText}</p> : null}
       </div>

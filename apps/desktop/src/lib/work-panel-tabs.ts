@@ -170,9 +170,11 @@ export function sideChatWorkPanelTab(
   anchor: SideChatAnchor,
   label: string,
   childSessionId?: string,
+  /** Makes the tab new each time (a side chat about the whole conversation). */
+  uniqueSuffix?: string,
 ): WorkPanelTab {
   return {
-    id: `sidechat:${anchor.parentSessionId}:${anchor.anchorMessageId}`,
+    id: `sidechat:${anchor.parentSessionId}:${anchor.anchorMessageId}${uniqueSuffix ? `:${uniqueSuffix}` : ""}`,
     kind: "sidechat",
     label,
     ...(childSessionId ? { resource: childSessionId } : {}),

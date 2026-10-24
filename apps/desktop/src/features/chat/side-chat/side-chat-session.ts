@@ -9,10 +9,7 @@ import type { SessionConfigurationInput } from "../../../stores/app-state";
 import { useSyncExternalStore } from "react";
 import i18n from "i18next";
 import { useAppStore } from "../../../stores/app-store";
-import {
-  appendComposerDraftText,
-  draftKeyForSession,
-} from "../../../lib/composer-draft-cache";
+import { insertIntoComposerDraft } from "../../../lib/composer-draft-insert";
 import type { WorkPanelTab } from "../../../lib/work-panel-tabs";
 import type { UiMessage } from "@pi-desktop/shared";
 import {
@@ -138,19 +135,15 @@ export async function sendSideChatMessage(
 
 /** Append a quote to the parent's composer draft. Never sends. */
 function insertIntoParentDraft(parentSessionId: string, quote: string): boolean {
-  const snapshot = appendComposerDraftText(draftKeyForSession(parentSessionId), quote);
-  const state = useAppStore.getState();
-  // A mounted Composer adopts the new draft through its ordinary prefill path.
-  if (snapshot && state.activeSessionId === parentSessionId) {
-    useAppStore.setState({
-      composerPrefill: {
-        sessionId: parentSessionId,
-        text: snapshot.text,
-        fileReferences: snapshot.fileReferences,
-      },
-    });
+  const inserted = insertIntoComposerDraft(parentSessionId, quote);
+  if (inserted) {
+    const parent = useAppStore.getState().sessions.find((session) => session.id === parentSessionId);
+    useAppStore.getState().showToast(
+      i18n.t("workPanel.return.inserted", { title: parent?.title.trim() || i18n.t("chat.untitledTask") }),
+      { variant: "success" },
+    );
   }
-  return Boolean(snapshot);
+  return inserted;
 }
 
 const FAILURE_KEYS: Record<SideChatReturnFailure, string> = {
@@ -223,10 +216,10 @@ export async function returnSideChatToMain(tab: WorkPanelTab): Promise<void> {
     useAppStore.getState().patchSideChatReturn(tab.id, { status: "idle", error: undefined });
   } catch (error) {
     const failure = error instanceof SideChatReturnError ? error.failure : undefined;
-    useAppStore.getState().patchSideChatReturn(tab.id, {
-      status: "idle",
-      error: i18n.t(failure ? FAILURE_KEYS[failure] : "sideChat.summaryRejected"),
-    });
+    const message = i18n.t(failure ? FAILURE_KEYS[failure] : "sideChat.summaryRejected");
+    useAppStore.getState().patchSideChatReturn(tab.id, { status: "idle", error: message });
+    // The floating control has no hint line; a failed return is a toast.
+    useAppStore.getState().showToast(message, { variant: "error" });
   } finally {
     if (summaryWaits.get(tab.id) === wait) summaryWaits.delete(tab.id);
   }

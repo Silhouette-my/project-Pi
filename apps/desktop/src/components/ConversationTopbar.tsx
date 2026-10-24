@@ -16,6 +16,12 @@ import {
   scheduledReturnUsesHistory,
 } from "../features/scheduled/scheduled-return";
 import {
+  selectCanOpenSideChat,
+  selectSideChatAnchorId,
+  openWholeConversationSideChat,
+} from "../features/chat/side-chat/side-chat-entry";
+import {
+  IconChat,
   IconChevronLeft,
   IconSidebar,
   IconNewSession,
@@ -91,6 +97,11 @@ export function ConversationTopbar({
         shortcut: searchShortcutLabel,
       })
     : t("nav.search");
+
+  // A side chat about the whole conversation needs something to fork from.
+  const sideChatAnchorId = useAppStore(selectSideChatAnchorId);
+  const canSideChat = useAppStore(selectCanOpenSideChat);
+  const sideChatEmpty = !sideChatAnchorId;
 
   const { snapshot } = useProjectWorkflow();
   const groups = useWorkflowProjectGroups(workspace?.path);
@@ -172,6 +183,19 @@ export function ConversationTopbar({
 
       <div className="ct-right">
         <div className="ct-actions">
+          {canSideChat ? (
+            <TooltipButton
+              type="button"
+              className="ct-icon-btn"
+              tooltip={sideChatEmpty ? t("workPanel.sideChatEmpty") : t("workPanel.newSideChat")}
+              ariaLabel={t("workPanel.newSideChat")}
+              data-nav="new-side-chat"
+              disabled={sideChatEmpty}
+              onClick={() => openWholeConversationSideChat()}
+            >
+              <IconChat size={15} />
+            </TooltipButton>
+          ) : null}
           {projectId && !isRemoteSession(activeSession) ? <ProjectAgentButton projectId={projectId} className="ct-icon-btn" /> : null}
           <TooltipButton
             type="button"

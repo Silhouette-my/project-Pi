@@ -10,6 +10,7 @@ import { requestWorkPanelNavigationReveal } from "../../lib/work-panel-navigatio
 import { workflowContextProjectId } from "../project-workflow/navigation-model";
 import { useProjectWorkflow } from "../project-workflow/useProjectWorkflow";
 import { useWorkflowProjectGroups } from "../project-workflow/WorkflowNavigation";
+import { noteProjectConversation } from "./project-agent-return";
 
 /**
  * Navigation-driven default open of the project Agent (ADR 0033 amendment,
@@ -34,6 +35,17 @@ export function useProjectPanelDefaults(): void {
   const { snapshot } = useProjectWorkflow();
   const { groups } = useWorkflowProjectGroups(session?.projectPath);
   const handledVisit = useRef<string | null>(null);
+
+  // The project Agent returns into "the conversation the user came from", so
+  // remember which project conversation was last on screen.
+  useEffect(() => {
+    if (page !== "chat" || !session || !snapshot || isRemoteSession(session)) return;
+    const projectId = workflowContextProjectId(snapshot, groups, session);
+    if (!projectId) return;
+    const agentSessionId = snapshot.projectAgents?.find((agent) => agent.projectId === projectId)
+      ?.sessionId;
+    if (session.id !== agentSessionId) noteProjectConversation(projectId, session.id);
+  }, [groups, page, session, snapshot]);
 
   useEffect(() => {
     if (page !== "project" && page !== "chat") {

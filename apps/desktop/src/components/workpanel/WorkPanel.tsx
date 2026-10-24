@@ -19,6 +19,15 @@ import {
   workPanelTabReorderShouldArm,
 } from "../../lib/work-panel-tab-reorder";
 import {
+  ACTIVE_TAB_MIN_WIDTH,
+  TAB_TITLE_MIN_WIDTH,
+  adjacentTabId,
+  freezeTabWidths,
+  tabStripLayout,
+  tabWidth,
+  workPanelShortcut,
+} from "../../lib/work-panel-strip";
+import {
   isKnownWorkPanelTab,
   parsePluginViewRef,
   pluginWorkPanelTab,
@@ -52,8 +61,11 @@ import { SideChatTab } from "../../features/chat/side-chat/SideChatTab";
 import { ProjectAgentTab } from "../../features/project-panel/ProjectAgentTab";
 import { ProjectSideTab } from "../../features/project-panel/ProjectSideTab";
 import { ProjectPanelEmpty } from "../../features/project-panel/ProjectPanelEmpty";
+import { useOptionalProjectWorkflow } from "../../features/project-workflow/useProjectWorkflow";
+import { ProjectNewTabMenu } from "./ProjectNewTabMenu";
 import {
   isProjectPanelContextKey,
+  projectIdOfContextKey,
   workPanelContextKey,
 } from "../../lib/project-panel";
 import {
@@ -118,7 +130,7 @@ type WorkPanelTool = {
 
 function tabLabel(
   tab: WorkPanelTab,
-  t: (key: string) => string,
+  t: (key: string, options?: Record<string, unknown>) => string,
   pluginViews: PluginViewMeta[],
 ) {
   if (tab.kind === "plugin") {
@@ -132,10 +144,37 @@ function tabLabel(
   if (tab.kind === "subagent") return tab.label ?? t("panel.tabs.subagent");
   if (tab.kind === "sidechat") return t("sideChat.title");
   if (tab.kind === "project-agent") return t("projectPanel.agentTab");
-  if (tab.kind === "project-side") return tab.label || t("projectPanel.sideTab");
+  if (tab.kind === "project-side") {
+    return tab.label ? t("sideChat.sessionTitle", { title: tab.label }) : t("projectPanel.sideTab");
+  }
   if (tab.kind !== "file") return t(`panel.tabs.${tab.kind}`);
   const path = tab.resource ?? "";
   return path.split("/").filter(Boolean).pop() || t("panel.tabs.file");
+}
+
+/**
+ * The tab tooltip. A side chat or the project Agent has no header any more, so
+ * what the header said (what it is about, where it came from, what it may do)
+ * lives here. Other tabs keep their resource or label.
+ */
+function tabTooltip(
+  tab: WorkPanelTab,
+  label: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  workstreamTitleOf: (sessionId: string) => string | undefined,
+): string {
+  if (tab.kind === "sidechat") {
+    return tab.sideChat?.excerpt
+      ? t("workPanel.return.tooltipChat", { excerpt: tab.sideChat.excerpt })
+      : label;
+  }
+  if (tab.kind === "project-agent") return t("workPanel.return.tooltipAgent");
+  if (tab.kind === "project-side") {
+    const workstream = tab.resource ? workstreamTitleOf(tab.resource) : undefined;
+    return workstream ? t("workPanel.return.tooltipSide", { workstream }) : label;
+  }
+  if (tab.kind === "subagent") return tab.label ?? label;
+  return tab.resource ?? label;
 }
 
 function workPanelTools(
@@ -173,6 +212,10 @@ function ToolIcon({ item, size = 15 }: { item: WorkPanelTool; size?: number }) {
     </span>
   );
 }
+
+/** Space between tabs, and the sticky "+" slot (28px button plus its margin). */
+const TAB_GAP = 2;
+const NEW_TAB_SLOT_WIDTH = 30;
 
 /** Content left visible beside a revealed overlay panel, in CSS pixels. */
 const EDGE_PANEL_CONTENT_MARGIN = 48;
@@ -296,9 +339,29 @@ function LocalWorkPanel({
     ),
   );
 
+  const workflow = useOptionalProjectWorkflow();
+  const workstreamTitleOf = useCallback(
+    (sessionId: string) => {
+      const link = workflow?.snapshot?.conversations.find((item) => item.sessionId === sessionId);
+      return link
+        ? workflow?.snapshot?.workstreams.find((item) => item.id === link.workstreamId)?.title
+        : undefined;
+    },
+    [workflow?.snapshot],
+  );
+  const projectId = projectIdOfContextKey(contextKey);
+  const stripWrapRef = useRef<HTMLDivElement | null>(null);
+  const [stripWidth, setStripWidth] = useState(0);
+  const [stripFade, setStripFade] = useState({ start: false, end: false });
+  // Widths held after a close button press, so the next close lands under the
+  // pointer; released when the pointer leaves the strip.
+  const [frozenWidths, setFrozenWidths] = useState<Record<string, number> | null>(null);
   const [panelDragWidth, setPanelDragWidth] = useState<number | null>(null);
   const panelResizeState = useRef<WorkPanelResizeState | null>(null);
   const tabReorderState = useRef<WorkPanelTabReorderState | null>(null);
+  // The sticky "+" and the gaps between tabs come out of the room tabs share.
+  const stripAvailable = stripWidth - NEW_TAB_SLOT_WIDTH - Math.max(0, tabs.length - 1) * TAB_GAP;
+  const stripLayout = tabStripLayout(stripAvailable, tabs.length);
   const tabStripRef = useRef<HTMLDivElement | null>(null);
   const suppressedTabClickPointerIdsRef = useRef<Set<number>>(new Set());
   const tabWrapperRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -402,6 +465,37 @@ function LocalWorkPanel({
       inline: "nearest",
     });
   }, [activeTabId, tabs.length]);
+
+  // Tabs are sized from the room the strip has, so it is measured (not
+  // guessed) and re-measured whenever the panel is resized.
+  useLayoutEffect(() => {
+    const node = stripWrapRef.current;
+    if (!node) return;
+    const update = () => setStripWidth(node.clientWidth);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Edge fades show only on the side that has more tabs to scroll to.
+  const updateStripFade = useCallback(() => {
+    const strip = tabStripRef.current;
+    if (!strip) return;
+    const start = strip.scrollLeft > 1;
+    const end = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
+    setStripFade((current) =>
+      current.start === start && current.end === end ? current : { start, end },
+    );
+  }, []);
+  useLayoutEffect(() => {
+    updateStripFade();
+  }, [updateStripFade, stripWidth, tabSignature, frozenWidths, activeTabId]);
+
+  // A held width only lasts for the run of closes it was made for.
+  useEffect(() => {
+    setFrozenWidths(null);
+  }, [contextKey]);
 
   const finishTabReorder = useCallback(() => {
     const state = tabReorderState.current;
@@ -673,9 +767,18 @@ function LocalWorkPanel({
   );
 
   const closeTabAndFocus = useCallback(
-    (tabId: string) => {
+    (tabId: string, options?: { holdWidths?: boolean }) => {
       const index = tabs.findIndex((tab) => tab.id === tabId);
+      // Closing active activates the right neighbour, else the left one.
       const nextTab = index >= 0 ? tabs[index + 1] ?? tabs[index - 1] : undefined;
+      if (options?.holdWidths) {
+        const rendered: Record<string, number> = {};
+        for (const tab of tabs) {
+          const width = tabWrapperRefs.current[tab.id]?.getBoundingClientRect().width;
+          if (width) rendered[tab.id] = width;
+        }
+        setFrozenWidths(freezeTabWidths(rendered, tabId));
+      }
       closeTab(tabId);
       requestAnimationFrame(() => {
         if (nextTab) tabButtonRefs.current[nextTab.id]?.focus();
@@ -684,6 +787,43 @@ function LocalWorkPanel({
     },
     [closeTab, tabs],
   );
+  // Panel-scoped shortcuts: they act only while focus is inside the panel, so
+  // no global binding is spent and every shell shortcut keeps its key.
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const shortcut = workPanelShortcut(
+        event,
+        window.piDesktop?.platform ?? "darwin",
+      );
+      if (!shortcut) return;
+      const focused = document.activeElement;
+      if (!(focused instanceof Element) || !focused.closest('[data-testid="work-panel"]')) return;
+      const current = activeTabIdRef.current;
+      if (shortcut === "close-tab") {
+        if (!current) return;
+        event.preventDefault();
+        event.stopPropagation();
+        closeTabAndFocus(current);
+        return;
+      }
+      const target = adjacentTabId(
+        tabs.map((tab) => tab.id),
+        current,
+        shortcut === "next-tab" ? 1 : -1,
+      );
+      if (!target) return;
+      event.preventDefault();
+      event.stopPropagation();
+      activateTab(target);
+      requestAnimationFrame(() => tabButtonRefs.current[target]?.focus({ preventScroll: true }));
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [activateTab, closeTabAndFocus, tabs]);
+
   const onTabKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLButtonElement>, tabId: string) => {
       const index = tabs.findIndex((tab) => tab.id === tabId);
@@ -924,13 +1064,19 @@ function LocalWorkPanel({
       />
       <div className="work-panel-main">
         <header className="work-panel-header">
-          <div className="work-panel-tab-strip-wrap">
+          <div className="work-panel-tab-strip-wrap" ref={stripWrapRef}>
               <div
                 ref={tabStripRef}
-                className="work-panel-tab-strip no-drag"
+                className={cx(
+                  "work-panel-tab-strip no-drag",
+                  stripFade.start && "fade-start",
+                  stripFade.end && "fade-end",
+                )}
                 role="tablist"
                 aria-label={t("panel.tabsLabel")}
                 onWheel={onTabStripWheel}
+                onScroll={updateStripFade}
+                onPointerLeave={() => setFrozenWidths(null)}
               >
                 {tabs.map((tab) => {
                   const label =
@@ -938,6 +1084,10 @@ function LocalWorkPanel({
                       ? (subagentLabelById.get(tab.id) ?? tabLabel(tab, t, pluginViews))
                       : tabLabel(tab, t, pluginViews);
                   const selected = tab.id === activeTabId;
+                  const width = tabWidth(stripLayout, selected, frozenWidths?.[tab.id]);
+                  // Inactive tabs give up their title (and close button, shown on
+                  // hover over the icon) before the strip has to scroll.
+                  const iconOnly = !selected && width < TAB_TITLE_MIN_WIDTH;
                   const Icon =
                     tab.kind === "plugin"
                       ? pluginViewIcon(
@@ -952,10 +1102,12 @@ function LocalWorkPanel({
                       className={cx(
                         "work-panel-tab",
                         selected && "active",
+                        iconOnly && "is-icon-only",
                         draggingTabId === tab.id && "is-dragging",
                         dropIndicator?.tabId === tab.id &&
                           (dropIndicator.insertAfter ? "is-drop-after" : "is-drop-before"),
                       )}
+                      style={{ width: Math.max(width, selected ? ACTIVE_TAB_MIN_WIDTH : 0) }}
                       data-work-panel-tab-id={tab.id}
                       key={tab.id}
                     >
@@ -971,15 +1123,20 @@ function LocalWorkPanel({
                         tabIndex={selected ? 0 : -1}
                         aria-grabbed={draggingTabId === tab.id}
                         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+                        aria-label={iconOnly ? label : undefined}
                         className="work-panel-tab-button"
-                        title={tab.kind === "subagent" || tab.kind === "sidechat" || tab.kind === "project-agent" || tab.kind === "project-side" ? tab.label ?? label : tab.resource ?? label}
+                        title={tabTooltip(tab, label, t, workstreamTitleOf)}
                         onPointerDown={(event) => beginTabReorder(event, tab.id)}
+                        onMouseDown={(event) => {
+                          // Middle press would start the platform's autoscroll.
+                          if (event.button === 1) event.preventDefault();
+                        }}
                         onDragStart={(event) => event.preventDefault()}
                         onClick={() => activateTab(tab.id)}
                         onAuxClick={(event) => {
                           if (event.button !== 1) return;
                           event.preventDefault();
-                          closeTabAndFocus(tab.id);
+                          closeTabAndFocus(tab.id, { holdWidths: true });
                         }}
                         onKeyDown={(event) => onTabKeyDown(event, tab.id)}
                       >
@@ -995,30 +1152,35 @@ function LocalWorkPanel({
                         aria-label={t("panel.closeTab", { name: label })}
                         title={t("panel.closeTab", { name: label })}
                         onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => closeTabAndFocus(tab.id)}
+                        onClick={() => closeTabAndFocus(tab.id, { holdWidths: true })}
                       >
                         <IconClose size={12} />
                       </button>
                     </div>
                   );
                 })}
+                {/* Right after the last tab; sticky at the right edge once the strip scrolls. */}
+                {projectContext ? (
+                  <ProjectNewTabMenu
+                    projectId={projectId}
+                    t={t}
+                    agentOpen={tabs.some((tab) => tab.kind === "project-agent")}
+                  />
+                ) : (
+                  <TooltipButton
+                    ref={newTabButtonRef}
+                    type="button"
+                    className="work-panel-new-tab work-panel-tab-plus"
+                    tooltip={t("panel.new.open")}
+                    ariaLabel={t("panel.new.open")}
+                    onClick={openNewWorkPanelTab}
+                  >
+                    <IconPlus size={16} />
+                  </TooltipButton>
+                )}
               </div>
           </div>
           <div className="work-panel-actions no-drag">
-              {/* The project context holds only project conversations: the
-                  launcher's tools need a session of their own. */}
-              {projectContext ? null : (
-                <TooltipButton
-                  ref={newTabButtonRef}
-                  type="button"
-                  className="work-panel-new-tab"
-                  tooltip={t("panel.new.open")}
-                  ariaLabel={t("panel.new.open")}
-                  onClick={openNewWorkPanelTab}
-                >
-                  <IconPlus size={16} />
-                </TooltipButton>
-              )}
             {onTogglePin ? (
               <TooltipButton
                 type="button"
