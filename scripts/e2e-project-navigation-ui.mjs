@@ -216,9 +216,9 @@ try {
   await drag(row("session",setup.sessionId),row("folder",chats.id),.1,"drop-before-folder.png");
   await until(async () => !(await snapshot()).navigation.find(item=>item.sessionId===setup.sessionId)?.folderId,"project conversation back at root");
   await capture("project-tree-light.png");
-  // Title, Home and the console's Agent dock all open the canonical Agent, never a row.
-  await until(() => page.evaluate(`(() => { if(document.querySelector(${json(`[data-project-agent-dock] [data-project-agent="${projectId}"]`)})) return true; const toggle=document.querySelector('[data-project-agent-dock-toggle]'); if(toggle && !toggle.disabled && toggle.getAttribute('aria-pressed')!=='true') toggle.click(); return false })()`), "project Agent dock entry");
-  await page.evaluate(`document.querySelector(${json(`[data-project-agent-dock] [data-project-agent="${projectId}"]`)}).click()`);
+  // Title, Home and the Agent tab in the right work panel all open the canonical Agent, never a row.
+  await until(() => page.evaluate(`(() => { if(document.querySelector(${json(`.work-panel [data-project-agent-dock] [data-project-agent="${projectId}"]`)})) return true; const toggle=document.querySelector('[data-project-agent-dock-toggle]'); if(toggle && !toggle.disabled) toggle.click(); return false })()`), "project Agent tab entry");
+  await page.evaluate(`document.querySelector(${json(`.work-panel [data-project-agent-dock] [data-project-agent="${projectId}"]`)}).click()`);
   await until(() => page.evaluate("!!document.querySelector('.workflow-conversation-bar')"),"Agent chat");
   const agent = (await snapshot()).projectAgents.find(item=>item.projectId===projectId);
   assert.ok(agent?.sessionId);

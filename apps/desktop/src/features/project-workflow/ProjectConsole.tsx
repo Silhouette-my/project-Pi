@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useViewportWidth } from "../../hooks/use-viewport-width";
 import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord, ProjectWorkflowSearchHit } from "@pi-desktop/shared";
 import { Badge, Button, Field, Select, TooltipButton } from "../../components/ui";
@@ -19,22 +18,21 @@ import { WorkflowArtifacts } from "./WorkflowArtifacts";
 import { WorkstreamEditorDialog } from "./WorkstreamEditorDialog";
 import { ProjectOverview } from "./ProjectOverview";
 import { ProjectStructureView } from "./ProjectStructureView";
-import { AGENT_TAB, ProjectAgentDock } from "./ProjectAgentDock";
-import { useEdgeReveal } from "../../hooks/use-edge-reveal";
-import { isPanelPinned, setPanelPinned } from "../../lib/panel-pin";
+import {
+  openProjectAgentPanel,
+  openProjectSidePanel,
+  subscribeProjectContextView,
+  takeProjectContextView,
+} from "../project-panel/project-panel-actions";
 import { WorkflowContext } from "./WorkflowContext";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { workflowOwnerLabel } from "./workflow-display";
-import { useProjectAgentDockState } from "./project-agent-dock-state";
 import "./workflow.css";
 import "./project-console-styles.css";
 import "./project-structure-styles.css";
 import "./project-home-styles.css";
 import "./project-settings-look.css";
 
-/** Below this console width the Agent dock overlays the page instead of docking. */
-const DOCKED_AGENT_MIN_WIDTH = 960;
-const AGENT_DOCK_WIDTH = 340;
 /** Page width from which the workstream list and detail sit side by side. */
 const SPLIT_WORK_MIN_WIDTH = 720;
 
@@ -48,44 +46,20 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   const [selectedId, setSelectedId] = useState("");
   const [tab, setTab] = useState<"overview" | "work" | "context" | "structure">("overview");
   const root = useRef<HTMLDivElement>(null);
-  const [consoleWidth, setConsoleWidth] = useState(DOCKED_AGENT_MIN_WIDTH);
-  const wide = consoleWidth >= DOCKED_AGENT_MIN_WIDTH;
-  const [dockedOpen, setDockedOpen] = useProjectAgentDockState(projectId, wide);
-  // An overlay covers the page, so it opens only on request and never persists.
-  const [overlayOpen, setOverlayOpen] = useState(false);
-  useEffect(() => {
-    if (wide) setOverlayOpen(false);
-  }, [wide]);
-  // The right-edge pin preference is shared with the chat work panel: one
-  // "right panel" choice. Unpinned, the dock auto-hides and reveals from the
-  // window edge (ADR auto-hide-side-panels); pinned keeps the docked layout.
-  const viewportWidth = useViewportWidth();
-  const rightPinned = useAppStore((state) => isPanelPinned(state.settings, "workPanelPinned", viewportWidth));
-  const edgeDock = useEdgeReveal({ side: "right", enabled: !rightPinned && Boolean(snapshot) });
-  const pinnedDockOpen = wide ? dockedOpen : overlayOpen;
-  const dockOpen = rightPinned ? pinnedDockOpen : edgeDock.mounted;
-  const setDockOpen = (open: boolean) => {
-    if (!rightPinned) return open ? edgeDock.openPanel() : edgeDock.closePanel();
-    return wide ? setDockedOpen(open) : setOverlayOpen(open);
-  };
-  const [sideTabs, setSideTabs] = useState<string[]>([]);
-  const [dockTab, setDockTab] = useState(AGENT_TAB);
+  const [consoleWidth, setConsoleWidth] = useState(SPLIT_WORK_MIN_WIDTH);
+  // The project Agent and side conversations live in the right work panel
+  // (the project's own context); the console only asks for them to be shown.
   const openSide = (sessionId: string) => {
-    setSideTabs((tabs) => (tabs.includes(sessionId) ? tabs : [...tabs, sessionId]));
-    setDockTab(sessionId);
-    setDockOpen(true);
-  };
-  const closeSide = (sessionId: string) => {
-    setSideTabs((tabs) => tabs.filter((id) => id !== sessionId));
-    setDockTab((tab) => (tab === sessionId ? AGENT_TAB : tab));
+    const title = useAppStore.getState().sessions.find((item) => item.id === sessionId)?.title?.trim();
+    openProjectSidePanel(projectId, sessionId, title || undefined);
   };
   const [editing, setEditing] = useState<"new" | "edit" | null>(null);
   const [contextEditor, setContextEditor] = useState<"instructions" | "memory" | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTarget, setSearchTarget] = useState<ProjectWorkflowSearchHit | null>(null);
   const mounted = useRef(true);
-  // Measure before first paint so the dock mode (docked vs overlay) is never
-  // decided from the placeholder width.
+  // Measure before first paint so the split/stacked layout is never decided
+  // from the placeholder width.
   useLayoutEffect(() => {
     const element = root.current;
     if (!element) return;
@@ -109,6 +83,20 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
     setTab(next);
     setSearchTarget(null);
   };
+  // An Explore side conversation in the work panel asks for the Shared
+  // context tab ("review proposals"); the console owns its tab state.
+  useEffect(() => {
+    const consume = () => {
+      const request = takeProjectContextView(projectId);
+      if (!request) return;
+      selectWorkstream(request.workstreamId ?? "", false);
+      selectTab("context");
+    };
+    consume();
+    return subscribeProjectContextView(consume);
+    // The handlers only touch state setters and a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
   useEffect(() => {
     mounted.current = true;
     let cancelled = false;
@@ -133,8 +121,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
       .filter((item) => item.projectId === projectId)
       .sort((left, right) => left.order - right.order) ?? [];
   const selected = workstreams.find((item) => item.id === selectedId);
-  const pageWidth = consoleWidth - (rightPinned && dockOpen && wide ? AGENT_DOCK_WIDTH : 0);
-  const splitWork = pageWidth >= SPLIT_WORK_MIN_WIDTH;
+  const splitWork = consoleWidth >= SPLIT_WORK_MIN_WIDTH;
   // A split view shows list and detail together, so it never shows an empty
   // detail; a stacked one shows the list until a workstream is chosen.
   const shown = selected ?? (splitWork ? workstreams[0] : undefined);
@@ -208,11 +195,9 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   );
   const projectColor = useAppStore((s) => group ? normalizeAccentPresetId(projectMetaFor(group.primaryPath, s.projectMeta).color) : undefined);
   const project = group ? { name: group.name, path: group.primaryPath, groupId: group.id } : null;
-  const dockVisible = dockOpen && Boolean(snapshot);
   return (
     <div className="workflow-console" ref={root} data-workflow="console" data-project-id={projectId}
-      data-project-color={projectColor} style={projectAccentStyle(projectColor)}
-      data-agent-dock={dockVisible ? (!rightPinned ? "edge" : wide ? "docked" : "overlay") : "closed"}>
+      data-project-color={projectColor} style={projectAccentStyle(projectColor)}>
       <div className="workflow-page">
         <header className="workflow-header">
           <div className="workflow-project-identity">
@@ -233,11 +218,10 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                 </div>
               </details>
             </div>
-            <TooltipButton className={`ct-icon-btn workflow-agent-dock-toggle${dockVisible ? " is-active" : ""}`}
-              tooltip={t(dockVisible ? "workflow.agentDockClose" : "workflow.agentDockOpen")}
-              ariaLabel={t(dockVisible ? "workflow.agentDockClose" : "workflow.agentDockOpen")}
-              aria-pressed={dockVisible} data-project-agent-dock-toggle={projectId} disabled={!snapshot}
-              onClick={() => setDockOpen(!dockVisible)}><IconPanelOpen size={16} /></TooltipButton>
+            <TooltipButton className="ct-icon-btn workflow-agent-dock-toggle"
+              tooltip={t("workflow.agentDockOpen")} ariaLabel={t("workflow.agentDockOpen")}
+              data-project-agent-dock-toggle={projectId} disabled={!snapshot}
+              onClick={() => openProjectAgentPanel(projectId)}><IconPanelOpen size={16} /></TooltipButton>
           </div>
         </header>
         {(error || localError) && (
@@ -307,7 +291,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                   </div>
                   {workstreams.length ? workstreamRows(workstreams) : (
                     <div className="workflow-empty"><strong>{t("workflow.noCurrentWork")}</strong><p>{t("workflow.startWithAgent")}</p>
-                      <Button variant="ghost" onClick={() => setDockOpen(true)}>{t("workflow.agentDockOpen")}</Button></div>
+                      <Button variant="ghost" onClick={() => openProjectAgentPanel(projectId)}>{t("workflow.agentDockOpen")}</Button></div>
                   )}
                 </nav>
                 {shown ? (
@@ -410,15 +394,6 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
         )}
         {groupLoaded && !group && <p role="status">{t("workflow.projectMissing")}</p>}
       </div>
-      {!rightPinned && snapshot ? <div className="edge-reveal-zone" {...edgeDock.zoneProps} /> : null}
-      {dockVisible ? (
-        <ProjectAgentDock projectId={projectId} projectName={group?.name}
-          sideSessionIds={sideTabs} activeTab={sideTabs.includes(dockTab) ? dockTab : AGENT_TAB}
-          onSelectTab={setDockTab} onCloseSide={closeSide} onClose={() => setDockOpen(false)}
-          onOpenContext={(id) => { selectWorkstream(id ?? "", false); selectTab("context"); }}
-          pinned={rightPinned} onTogglePin={() => void setPanelPinned("workPanelPinned", !rightPinned)}
-          edgePanel={rightPinned ? undefined : { ...edgeDock.panelProps, className: "edge-panel" }} />
-      ) : null}
       {editing && <WorkstreamEditorDialog onClose={() => setEditing(null)}>
         <WorkstreamEditor key={editing === "edit" ? shown?.id : "new"} projectId={projectId}
           workstream={editing === "edit" ? shown : undefined} onClose={() => setEditing(null)}

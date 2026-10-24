@@ -105,3 +105,20 @@ Panel layout offers Auto / Docked / Auto-hide per side; Auto clears the
 stored flag. On an unpinned sidebar the visible chrome sidebar button docks
 it again instead of opening a transient overlay, because a retracting overlay
 read as "cannot restore"; Cmd/Ctrl+B keeps the overlay toggle.
+
+## Amendment: the project page presents a project-scoped context (2026-10-22)
+
+The right work panel no longer hides on the project page. Panel contexts stay
+keyed per active session (ADR 0028), and the project page, which has no
+session, presents its own context keyed `project:<projectId>`. It holds the
+project Agent tab and project side-conversation tabs
+(ADR project-structure-views amendment). Switching between the project page and
+a chat swaps contexts without losing either: the store swaps the visible
+projection on the page change, and a session change underneath the project page
+does not disturb the project context. The pin/width rules, the edge hot zone and
+the overlay behave exactly as for sessions; the project context has no `+`
+launcher because the launcher's tools need a session of their own.
+
+Default open is navigation-driven (ADR 0033 amendment). For an auto-hidden
+panel "open" means the edge overlay is revealed once on entry
+(`requestWorkPanelNavigationReveal`), without taking focus from the composer.

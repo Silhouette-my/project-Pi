@@ -110,8 +110,11 @@ const clickAria = async (label, selector = "button[aria-label]") => page.evaluat
 const fillByLabel = async (label, value) => page.evaluate(`(() => { const labels=[...document.querySelectorAll('label')]; const label=labels.find(x=>x.textContent?.trim().startsWith(${json(label)})); const input=label?.querySelector('input,textarea,select') || (label?.htmlFor && document.getElementById(label.htmlFor)); if(!input) return false; const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value')?.set; setter?.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); return true })()`);
 const fillControl = async (selector, value) => page.evaluate(`(() => { const input=document.querySelector(${json(selector)}); if(!input) return false; Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value').set.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); return true })()`);
 const submitForm = async selector => page.evaluate(`(() => { const form=document.querySelector(${json(selector)}); if(!form) return false; form.requestSubmit(); return true })()`);
-// Idempotent under until(): resolves only once the dock is actually rendered.
-const openAgentDock = async () => page.evaluate(`(() => { if(document.querySelector('[data-project-agent-dock]')) return true; const toggle=document.querySelector('[data-project-agent-dock-toggle]'); if(toggle && !toggle.disabled && toggle.getAttribute('aria-pressed')!=='true') toggle.click(); return false })()`);
+// The Agent is a work-panel tab: the project page presents it by default, so this only
+// asks again (idempotently, under until()) when the panel is not showing it yet.
+const agentTabSelector = () => `.work-panel [data-project-agent-dock="${projectId}"]`;
+const openAgentDock = async () => page.evaluate(`(() => { if(document.querySelector(${json(agentTabSelector())})) return true; const toggle=document.querySelector('[data-project-agent-dock-toggle]'); if(toggle && !toggle.disabled) toggle.click(); return false })()`);
+const selectControl = async (selector, value) => page.evaluate(`(() => { const input=document.querySelector(${json(selector)}); if(!input) return false; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(input,${json(value)}); input.dispatchEvent(new Event('change',{bubbles:true})); return input.value===${json(value)} })()`);
 const openContextTab = async () => clickText("共享上下文", ".workflow-tabs button");
 const capture = async name => { const shot = await page.call("Page.captureScreenshot", { format: "png" }); await writeFile(join(output, name), Buffer.from(shot.data, "base64")); };
 try {
@@ -131,7 +134,10 @@ try {
   await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim().includes('Workflow UI Production'))`), "empty project in sidebar", 60000);
   await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
   assert.ok(await clickText("项目首页"));
-  await until(() => openAgentDock(), "project Agent dock toggle");
+  // Default open: entering the project page presents the Agent tab in the right work panel
+  // without any toggle; docked or revealed over the page depending on the window width.
+  await until(() => page.evaluate(`!!document.querySelector(${json(agentTabSelector())}) && !!document.querySelector('[data-work-panel-tab-id="project-agent:${projectId}"]')`), "project page opens with the Agent tab in the right panel");
+  assert.ok(await page.evaluate(`!!document.querySelector('[data-workflow="console"]') && !document.querySelector('.project-agent-dock')`), "the console no longer renders its own dock");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "empty project Agent composer");
   assert.equal((await snapshot()).workstreams.length, 0);
   assert.ok(await fillControl('[data-workflow="project-intent"] textarea', "PROJECT_AGENT_EMPTY_PROJECT: discuss before working"));
@@ -139,7 +145,7 @@ try {
   await until(() => page.evaluate(`document.querySelector('[data-project-agent-dock]')?.innerText.includes('PROJECT_AGENT_REPLY_1')`), "actual Agent response rendered in the project dock");
   assert.equal(await page.evaluate(`document.querySelector('[data-workflow="console"]') ? 'project' : 'other'`), "project", "discussing keeps the Project Console as the page");
   await capture("renderer-project-agent-dock.png");
-  await page.evaluate(`document.querySelector('[data-project-agent-dock] [data-project-agent]').click()`);
+  await page.evaluate(`document.querySelector(${json(agentTabSelector() + " [data-project-agent]")}).click()`);
   await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar')`), "full Agent conversation opened from the dock");
   const projectAgentSession = (await snapshot()).projectAgents.find(agent => agent.projectId === projectId).sessionId;
   assert.equal((await snapshot()).workstreams.length, 0, "discussion creates no hidden workstream");
@@ -153,7 +159,7 @@ try {
   // A narrow console overlays the dock only on request, so reopen it explicitly.
   await until(() => openAgentDock(), "project Agent dock toggle on return");
   await until(() => page.evaluate(`!!document.querySelector('[data-project-agent-dock] [data-project-agent]')`), "project Agent dock entry on return");
-  await page.evaluate(`document.querySelector('[data-project-agent-dock] [data-project-agent]').click()`);
+  await page.evaluate(`document.querySelector(${json(agentTabSelector() + " [data-project-agent]")}).click()`);
   await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar')`), "project Agent reopened");
   assert.equal((await snapshot()).projectAgents[0].sessionId, projectAgentSession);
   assert.equal(modelRequests.length, 1, "reopening never sends another prompt");
@@ -165,7 +171,7 @@ try {
   assert.ok(await clickText("项目首页"));
   await until(() => openAgentDock(), "project Agent dock toggle after restart");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "project composer after restart");
-  await page.evaluate(`document.querySelector('[data-project-agent-dock] [data-project-agent]').click()`);
+  await page.evaluate(`document.querySelector(${json(agentTabSelector() + " [data-project-agent]")}).click()`);
   await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar') && !!document.querySelector('.composer-input')`), "resumed Agent Composer");
   assert.ok(await page.evaluate(`(() => { const input=document.querySelector('.composer-input'); if(!input) return false; input.focus(); input.textContent='PROJECT_AGENT_RESTART: continue the same discussion'; input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'PROJECT_AGENT_RESTART: continue the same discussion'})); return true })()`));
   await until(() => page.evaluate(`!!document.querySelector('.composer-toolbar .send-btn:not(:disabled)')`), "real Composer send enabled");
@@ -177,6 +183,44 @@ try {
   coverage.push("Restart keeps the same project Agent and transcript; the existing Composer sends the next message with its configured model and still no execution tools");
   await page.evaluate(`document.querySelector('.workflow-conversation-bar button').click()`);
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "return before work creation");
+
+  // Send to conversation: the user hands the Agent's latest answer to a project chat from the
+  // Agent tab. The target receives a prompt; the console stays the visible page.
+  await until(() => openAgentDock(), "project Agent tab before sending to a conversation");
+  const requestsBeforeSend = modelRequests.length;
+  assert.ok(await page.evaluate(`(() => { const button=document.querySelector('[data-project-send-open]'); if(!button) return false; button.click(); return true })()`), "Send to conversation entry in the Agent tab");
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-send-dialog"]')`), "Send to conversation dialog");
+  await until(() => selectControl('[data-project-send-target]', setup.sessionId), "project chat offered as a target");
+  await until(() => page.evaluate(`document.querySelector('[data-project-send-preview]')?.value.includes('PROJECT_AGENT_REPLY_2')`), "latest Agent answer previewed");
+  assert.match(await page.evaluate(`document.querySelector('[data-project-send-preview]').value`), /^来自项目 Agent：/, "preview carries the attribution line");
+  await capture("renderer-send-to-conversation.png");
+  assert.ok(await fillControl('[data-project-send-preview]', (await page.evaluate(`document.querySelector('[data-project-send-preview]').value`)) + "\nSEND_TO_CONVERSATION_EDIT"));
+  assert.ok(await page.evaluate(`(() => { const button=document.querySelector('[data-project-send-submit]'); if(!button || button.disabled) return false; button.click(); return true })()`));
+  await until(() => page.evaluate(`!document.querySelector('[data-workflow="project-send-dialog"]')`), "Send to conversation dialog closed after sending");
+  await until(() => modelRequests.length > requestsBeforeSend, "target conversation received the forwarded prompt");
+  const forwarded = JSON.stringify(modelRequests.at(-1).messages);
+  assert.ok(forwarded.includes("PROJECT_AGENT_REPLY_2") && forwarded.includes("SEND_TO_CONVERSATION_EDIT"), "forwarded prompt carries the edited Agent answer");
+  assert.ok(await page.evaluate(`!!document.querySelector('[data-workflow="console"]') && !document.querySelector('.workflow-conversation-bar')`), "sending to a conversation keeps the console as the visible page");
+  assert.equal((await snapshot()).runs.length, 0, "forwarding starts no workflow run");
+  coverage.push("Sent the Agent's latest answer from the Agent tab to a project chat through the Send to conversation dialog: attributed, editable, the target received the prompt, and the console stayed the visible page");
+
+  // A project chat shows the Agent tab by default; closing it keeps it closed for that chat.
+  const openSetupChat = () => page.evaluate(`(() => { const button=document.querySelector('[data-sidebar-session-row="${setup.sessionId}"] .thread-item-main'); if(!button) return false; button.click(); return true })()`);
+  const chatAgentTab = `[data-work-panel-tab-id="project-agent:${projectId}"]`;
+  await until(() => openSetupChat(), "project chat row in the sidebar");
+  await until(() => page.evaluate(`!document.querySelector('[data-workflow="console"]') && !!document.querySelector(${json(chatAgentTab)}) && !!document.querySelector(${json(agentTabSelector())})`), "a project chat shows the Agent tab in the right panel by default");
+  await capture("renderer-project-chat-agent-tab.png");
+  assert.ok(await page.evaluate(`(() => { const close=document.querySelector(${json(chatAgentTab + " .work-panel-tab-close")}); if(!close) return false; close.click(); return true })()`));
+  await until(() => page.evaluate(`!document.querySelector(${json(chatAgentTab)})`), "Agent tab closed in the chat context");
+  assert.ok(await clickText("项目首页"));
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]') && !!document.querySelector(${json(agentTabSelector())})`), "project page presents the Agent again after the chat close");
+  await until(() => openSetupChat(), "project chat row after returning");
+  await until(() => page.evaluate(`!document.querySelector('[data-workflow="console"]')`), "project chat reopened");
+  await sleep(1000);
+  assert.ok(await page.evaluate(`!document.querySelector(${json(chatAgentTab)})`), "a closed Agent tab is not re-added to that chat");
+  assert.ok(await clickText("项目首页"));
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "return to the console after the chat checks");
+  coverage.push("A project chat shows the project Agent tab in the right panel by default, and after the user closes it the tab is not re-added for that chat while the project page still presents it");
   await main.evaluate(`(() => { const makeRequire=process.getBuiltinModule('module').createRequire; const req=makeRequire(${json(join(root, "apps/desktop/package.json"))}); const shell=req('electron').shell; globalThis.__workflowOpenedPaths=[]; shell.openPath=async path=>{ globalThis.__workflowOpenedPaths.push(path); return ''; }; })()`);
   const now = stamp(), workstreamId = "ui-workstream", candidateId = "ui-candidate", resourceId = "ui-resource";
   const workstream = { id: workstreamId, projectId, title: "Measured rollout", goal: "Ship the measured release", acceptance: [{ id: "ui-acceptance", title: "Candidate reviewed", status: "pending", evidenceIds: [] }], owner: { kind: "session", ref: setup.sessionId }, status: "draft", priority: 0, order: 0, dependencyIds: [], nextAction: "Review the candidate", blocker: { reason: "Candidate review is pending", owner: "Release lead", resumeWhen: "Approve candidate-r7" }, mainSessionId: setup.sessionId, revision: 0, decisionRevision: 0, createdAt: now, updatedAt: now };

@@ -4,7 +4,9 @@ export type WorkPanelTabKind =
   | "file"
   | "plugin"
   | "subagent"
-  | "sidechat";
+  | "sidechat"
+  | "project-agent"
+  | "project-side";
 
 /**
  * The anchor of a chat side chat (ADR side-chats-on-detached-transcripts).
@@ -103,7 +105,10 @@ export function switchWorkPanelContextState(
 }
 
 export function toolWorkPanelTab(
-  kind: Exclude<WorkPanelTabKind, "new" | "file" | "plugin" | "subagent" | "sidechat">,
+  kind: Exclude<
+    WorkPanelTabKind,
+    "new" | "file" | "plugin" | "subagent" | "sidechat" | "project-agent" | "project-side"
+  >,
 ): WorkPanelTab {
   return { id: kind, kind };
 }
@@ -302,6 +307,9 @@ export function isKnownWorkPanelTab(tab: WorkPanelTab): boolean {
     (tab.kind === "new" || tab.kind === "review" ||
       tab.kind === "file" || tab.kind === "plugin" ||
       (tab.kind === "sidechat" && Boolean(tab.sideChat)) ||
+      // Project tabs are meaningless without the project / session they name.
+      ((tab.kind === "project-agent" || tab.kind === "project-side") &&
+        Boolean(tab.resource)) ||
       tab.kind === "subagent")
   );
 }

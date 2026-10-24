@@ -3,6 +3,11 @@ import { useViewportWidth } from "../../hooks/use-viewport-width";
 import type { AppSettings } from "@pi-desktop/shared";
 import { type UseEdgeRevealResult, useEdgeReveal } from "../../hooks/use-edge-reveal";
 import { isPanelPinned } from "../../lib/panel-pin";
+import {
+  hasWorkPanelNavigationReveal,
+  subscribeWorkPanelNavigationReveal,
+  takeWorkPanelNavigationReveal,
+} from "../../lib/work-panel-navigation-reveal";
 import { useAppStore } from "../../stores/app-store";
 
 /**
@@ -27,19 +32,21 @@ export type SidePanelReveal = {
  * (docs/adr/auto-hide-side-panels.md). A pinned panel docks exactly as before;
  * an unpinned one takes no layout width and is revealed over the content.
  *
- * The work panel keeps its availability rule: no active session, or a page
- * that hides the panel, means no hot zone and no reveal.
+ * The work panel keeps its availability rule: no presented context (an active
+ * session, or the project on the project page), or a page that hides the
+ * panel, means no hot zone and no reveal.
  */
 export function useSidePanelReveal({
   ready,
   page,
-  activeSessionId,
+  contextKey,
   workPanelOpen,
   settings,
 }: {
   ready: boolean;
   page: string;
-  activeSessionId: string | undefined;
+  /** The presented work-panel context: `project:<id>` on the project page, else the session id. */
+  contextKey: string | undefined;
   workPanelOpen: boolean;
   settings: AppSettings | null | undefined;
 }): SidePanelReveal {
@@ -48,9 +55,7 @@ export function useSidePanelReveal({
   const sidebarPinned = isPanelPinned(settings, "sidebarPinned", viewportWidth);
   const workPanelPinned = isPanelPinned(settings, "workPanelPinned", viewportWidth);
   const pageHidesWorkPanel =
-    page === "settings" || page === "plugins" || page === "scheduled" ||
-      // The Project Console owns its right edge (the project Agent dock).
-      page === "project";
+    page === "settings" || page === "plugins" || page === "scheduled";
 
   const leftReveal = useEdgeReveal({
     side: "left",
@@ -59,7 +64,7 @@ export function useSidePanelReveal({
   const rightReveal = useEdgeReveal({
     side: "right",
     enabled:
-      ready && !workPanelPinned && !pageHidesWorkPanel && Boolean(activeSessionId),
+      ready && !workPanelPinned && !pageHidesWorkPanel && Boolean(contextKey),
   });
 
   const lastGestureAt = useRef(Number.NEGATIVE_INFINITY);
@@ -79,11 +84,11 @@ export function useSidePanelReveal({
   // panel is unpinned that flag is a request, consumed here: a gesture-driven
   // open (a file or link opened into the panel) reveals the overlay, anything
   // else (an agent event, a session switch, unpinning) is dropped quietly.
-  const previous = useRef({ pinned: workPanelPinned, sessionId: activeSessionId });
+  const previous = useRef({ pinned: workPanelPinned, sessionId: contextKey });
   const openPanel = rightReveal.openPanel;
   useEffect(() => {
     const was = previous.current;
-    previous.current = { pinned: workPanelPinned, sessionId: activeSessionId };
+    previous.current = { pinned: workPanelPinned, sessionId: contextKey };
     if (workPanelPinned || !workPanelOpen) return;
     const gesture =
       performance.now() - lastGestureAt.current <= USER_GESTURE_WINDOW_MS;
@@ -91,20 +96,56 @@ export function useSidePanelReveal({
     const reveal =
       gesture &&
       !was.pinned &&
-      was.sessionId === activeSessionId &&
+      was.sessionId === contextKey &&
       ready &&
       !pageHidesWorkPanel &&
-      Boolean(activeSessionId);
+      Boolean(contextKey);
     store.collapseWorkPanel();
     if (reveal) openPanel();
   }, [
-    activeSessionId,
+    contextKey,
     openPanel,
     pageHidesWorkPanel,
     ready,
     workPanelOpen,
     workPanelPinned,
   ]);
+
+  // Navigation reveal (ADR 0033 amendment): entering a project, or a chat that
+  // belongs to one, presents the project Agent. A docked panel is already open
+  // through the store; an auto-hidden one is revealed once, on request of the
+  // default-open hook only. Focus stays where the navigation left it, so a
+  // reveal never takes the composer away from the user.
+  const rightEnabled = rightReveal.enabled;
+  useEffect(() => {
+    const reveal = () => {
+      if (!hasWorkPanelNavigationReveal() || !ready) return;
+      if (workPanelPinned) {
+        takeWorkPanelNavigationReveal(contextKey);
+        return;
+      }
+      if (!rightEnabled) return;
+      if (!takeWorkPanelNavigationReveal(contextKey)) return;
+      const focused = document.activeElement;
+      openPanel();
+      window.requestAnimationFrame(() =>
+        window.requestAnimationFrame(() => {
+          const panel = document.querySelector('[data-edge-reveal="right"]');
+          if (
+            focused instanceof HTMLElement &&
+            focused.isConnected &&
+            panel &&
+            panel.contains(document.activeElement) &&
+            !panel.contains(focused)
+          ) {
+            focused.focus({ preventScroll: true });
+          }
+        }),
+      );
+    };
+    reveal();
+    return subscribeWorkPanelNavigationReveal(reveal);
+  }, [contextKey, openPanel, ready, rightEnabled, workPanelPinned]);
 
   return { sidebarPinned, workPanelPinned, leftReveal, rightReveal };
 }

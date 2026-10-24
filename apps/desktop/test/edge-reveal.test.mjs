@@ -362,9 +362,9 @@ test("the shell never budgets an unpinned panel and routes the shortcuts to the 
   assert.match(appSource, /const sidebarCollapsed = sidebarDockCollapsed \|\| !sidebarPinned;/);
   assert.match(appSource, /const workPanelVisible = workPanelOpen && workPanelPinned;/);
   assert.match(appSource, /if \(!sidebarPinnedRef\.current\) \{\s*toggleLeftOverlay\(\);/);
-  assert.match(appSource, /if \(!workPanelPinnedRef\.current\) \{\s*if \(store\.activeSessionId\) toggleRightOverlay\(\);/);
-  // Availability is unchanged: no session, no hot zone and no reveal.
-  assert.match(appSource, /enabled:\s*ready && !workPanelPinned && !pageHidesWorkPanel && Boolean\(activeSessionId\)/);
+  assert.match(appSource, /if \(!workPanelPinnedRef\.current\) \{\s*if \(workPanelContextKey\(store\)\) toggleRightOverlay\(\);/);
+  // Availability: no presented context (session or project), no hot zone and no reveal.
+  assert.match(appSource, /enabled:\s*ready && !workPanelPinned && !pageHidesWorkPanel && Boolean\(contextKey\)/);
   // Agent and tool results never reveal: only a fresh user gesture does.
   assert.match(appSource, /USER_GESTURE_WINDOW_MS/);
   assert.match(appSource, /gesture &&\s*!was\.pinned/);

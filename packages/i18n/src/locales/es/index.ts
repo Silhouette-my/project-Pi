@@ -2922,6 +2922,43 @@ sklm: {
       "continue": "Continuar",
       "dismiss": "Descartar"
     }
+  },
+  projectPanel: {
+    agentTab: "Agente",
+    sideTab: "Conversación lateral",
+    emptyHint: "Aquí todavía no hay nada abierto.",
+    openAgent: "Abrir el agente del proyecto",
+    untitled: "Conversación sin título",
+    sendOpen: "Enviar a una conversación…",
+    bringOpen: "Traer una conversación…",
+    sendTitle: "Enviar a una conversación",
+    sendDescription: "Elige una conversación del proyecto y qué llevar. No se envía nada hasta que pulses Enviar.",
+    target: "Conversación",
+    content: "Contenido",
+    contentLatest: "Última respuesta del agente",
+    contentLast1: "Último intercambio",
+    contentLast3: "Últimos 3 intercambios",
+    contentAll: "Toda la discusión",
+    preview: "Vista previa (editable)",
+    fromAgent: "Del agente del proyecto:",
+    youLabel: "Tú",
+    agentLabel: "Agente",
+    kindWorkstream: "Línea de trabajo",
+    kindChat: "Chat",
+    kindSide: "Conversación lateral",
+    noTargets: "Este proyecto aún no tiene otras conversaciones.",
+    nothingToSend: "El agente aún no ha respondido, así que no hay nada que enviar.",
+    send: "Enviar",
+    insertDraft: "Insertar en su borrador",
+    sent: "Enviado a {{title}}",
+    inserted: "Añadido al borrador de {{title}}",
+    sendFailed: "El mensaje no se envió.",
+    bringTitle: "Traer una conversación",
+    bringDescription: "Cita la última respuesta de una conversación en el borrador del agente. No se envía nada hasta que lo envíes.",
+    source: "Conversación",
+    quotedFrom: "Citado de {{title}}",
+    noAnswer: "Esta conversación aún no tiene una respuesta que citar.",
+    insertAgentDraft: "Insertar en el borrador del agente"
   }
 } satisfies EnglishCatalog;
 

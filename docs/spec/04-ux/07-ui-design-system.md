@@ -1508,12 +1508,12 @@ adjacent form inputs; dense surfaces may override that metric locally.
 
 - **Project Console**: a compact project identity/header sits below the existing
   46px native titlebar safe area. Window controls remain Electron-owned. Overview,
-  Workstreams, Shared context and Structure use a quiet underline navigation. The Project Agent occupies a right dock (340px, `--ds-bg-dock`, with compact
-  28px tabs for opened side conversations and a pin control shared with the work
-  panel; unpinned it is an `.edge-panel` overlay below the titlebar,
-  subtle leading divider) that renders the existing session pane and a Composer
-  plate, and reaches the full chat surface through the existing Agent entry rather
-  than a second transcript implementation. Overview leads with one muted summary
+  Workstreams, Shared context and Structure use a quiet underline navigation. The Project Agent is a tab of the right work panel (its tab strip, pin and
+  resize controls; unpinned it is the panel's `.edge-panel` overlay) that renders
+  the existing session pane and a Composer plate, and reaches the full chat
+  surface through the existing Agent entry rather than a second transcript
+  implementation. Send to conversation and Bring in a conversation are modal
+  dialogs in the Folder/Rename dialog family. Overview leads with one muted summary
   line of real counts (no KPI tiles), then pending decisions and unknown effects,
   then one row per current workstream with its status badge, owner (a readable
   name, never a raw id), next action, blocker, current candidate revision and an
@@ -1541,7 +1541,7 @@ adjacent form inputs; dense surfaces may override that metric locally.
   UA triangle; section rhythm stays within 28px and dividers use `border-subtle`.
   Sidebar navigation-tree actions stay hidden until their row or toolbar is
   hovered or keyboard-focused, matching native sidebar rows. Detached conversations
-  (the project Agent dock, project side conversations and chat side chats) use
+  (the project Agent tab, project side conversations and chat side chats) use
   the chat Composer plate (`.composer-shell` / `.composer-toolbar`) and the same
   model × reasoning picker bound to their own session; a choice made before the
   conversation exists is applied to it before its first prompt, keeping the

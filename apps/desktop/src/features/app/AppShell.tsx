@@ -25,6 +25,7 @@ import { CollapsedTitlebarActions, RoutePending } from "./chrome";
 import { useAppShellRuntime } from "./useAppShellRuntime";
 import { ProjectWorkflowProvider, useProjectWorkflow } from "../project-workflow/useProjectWorkflow";
 import { WorkflowConversationBar } from "../project-workflow/WorkflowConversationBar";
+import { useProjectPanelDefaults } from "../project-panel/useProjectPanelDefaults";
 import { useAppStore } from "../../stores/app-store";
 
 const ProjectConsole = lazy(() => import("../project-workflow/ProjectConsole").then((module) => ({ default: module.ProjectConsole })));
@@ -68,6 +69,7 @@ function AppShellContent() {
     ready,
     page,
     activeSessionId,
+    panelContextKey,
     workPanelOpen,
     searchOpen,
     setSearchOpen,
@@ -114,6 +116,7 @@ function AppShellContent() {
     toggleWorkPanelPinned,
   } = useAppShellRuntime();
   useCopyTex();
+  useProjectPanelDefaults();
 
   useEffect(() => {
     void loadChatSurface().catch((error: unknown) => {
@@ -433,7 +436,7 @@ function AppShellContent() {
                   ? workPanelOpen || presentedWorkPanelOpen
                   : rightReveal.open
               }
-              disabled={!activeSessionId && !presentedWorkPanelOpen && !workPanelExiting}
+              disabled={!panelContextKey && !presentedWorkPanelOpen && !workPanelExiting}
               onClick={togglePresentedWorkPanel}
             >
               <span className="app-work-panel-toggle-icon" aria-hidden>

@@ -26,6 +26,7 @@ import {
 } from "../../lib/sidebar-preferences";
 import { sidebarWidthBudget } from "../../lib/sidebar-resize";
 import { commitWorkPanelPresentation } from "../../lib/work-panel-presentation";
+import { workPanelContextKey } from "../../lib/project-panel";
 import {
   MAIN_PANE_MIN_WIDTH,
   workPanelRequestedWidth,
@@ -63,6 +64,9 @@ export function useAppShellRuntime() {
   const ready = useAppStore((s) => s.ready);
   const page = useAppStore((s) => s.page);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
+  const projectConsoleId = useAppStore((s) => s.projectConsoleId);
+  /** The work-panel context on screen: the project's on the project page, else the session's. */
+  const panelContextKey = workPanelContextKey({ page, projectConsoleId, activeSessionId });
   const acknowledgeSessionOutcome = useAppStore(
     (s) => s.acknowledgeSessionOutcome,
   );
@@ -93,7 +97,7 @@ export function useAppShellRuntime() {
   // panel takes no layout width, so everything below that budgets the dock
   // treats it as collapsed (docs/adr/auto-hide-side-panels.md).
   const { sidebarPinned, workPanelPinned, leftReveal, rightReveal } =
-    useSidePanelReveal({ ready, page, activeSessionId, workPanelOpen, settings });
+    useSidePanelReveal({ ready, page, contextKey: panelContextKey, workPanelOpen, settings });
   const workPanelVisible = workPanelOpen && workPanelPinned;
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -343,7 +347,7 @@ export function useAppShellRuntime() {
     // An unpinned panel is an overlay: the toggle shows or hides it. It stays
     // unavailable without a session, exactly like the docked toggle.
     if (!workPanelPinnedRef.current) {
-      if (store.activeSessionId) toggleRightOverlay();
+      if (workPanelContextKey(store)) toggleRightOverlay();
       return;
     }
     if (workPanelExitingRef.current) {
@@ -395,9 +399,7 @@ export function useAppShellRuntime() {
 
   useEffect(() => {
     const pageHidesWorkPanel =
-      page === "settings" || page === "plugins" || page === "scheduled" ||
-      // The Project Console owns its right edge (the project Agent dock).
-      page === "project";
+      page === "settings" || page === "plugins" || page === "scheduled";
     const shouldPresent =
       ready && !pageHidesWorkPanel && workPanelVisible;
     const request = ++workPanelReservationRequest.current;
@@ -982,7 +984,7 @@ export function useAppShellRuntime() {
             const p = useAppStore.getState().page;
             if (p !== "settings" && p !== "plugins" && p !== "scheduled") {
               if (workPanelPinnedRef.current) useAppStore.getState().toggleWorkPanel();
-              else if (useAppStore.getState().activeSessionId) toggleRightOverlay();
+              else if (workPanelContextKey(useAppStore.getState())) toggleRightOverlay();
             }
             break;
           }
@@ -1147,6 +1149,7 @@ export function useAppShellRuntime() {
     ready,
     page,
     activeSessionId,
+    panelContextKey,
     workPanelOpen,
     searchOpen,
     setSearchOpen,
