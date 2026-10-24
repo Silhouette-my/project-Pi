@@ -362,8 +362,8 @@ export const ko = {
     emptyTitleTemporary: "무엇을 임시로 탐색해 볼까요?",
     placeholder: "PI-Desktop에 무엇이든 도움을 요청하세요",
     placeholderHome: "무엇이든 물어보세요",
-    placeholderHint: "명령은 / · 파일은 @ 입력",
-    placeholderHomeHint: "명령은 / · 파일은 @ 입력",
+    placeholderHint: "명령은 / · 파일·대화는 @ 입력",
+    placeholderHomeHint: "명령은 / · 파일·대화는 @ 입력",
     placeholderShortcut: "줄바꿈은 Shift+Enter · 보내기를 눌러 제출",
     suggestionHint: "Tab 수락 · Esc 무시",
     addFiles: "파일 추가",
@@ -3000,6 +3000,16 @@ importConfirm: "가져온 확장은 에이전트 프로세스 안에서 에이�
     quotedFrom: "{{title}}에서 인용",
     noAnswer: "이 대화에는 아직 인용할 답변이 없습니다.",
     insertAgentDraft: "에이전트 초안에 삽입"
+  },
+  mention: {
+    groupProject: "현재 프로젝트",
+    groupRecent: "최근",
+    groupOther: "다른 프로젝트",
+    groupFiles: "파일",
+    empty: "일치하는 대화 없음",
+    sideOf: "사이드 채팅 · {{title}}",
+    menu: "대화 언급",
+    tooltip: "언급한 대화: {{title}}"
   }
 } satisfies EnglishCatalog;
 

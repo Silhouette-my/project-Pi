@@ -166,7 +166,7 @@ export function useComposerAttachments({
     const title = (
       useAppStore.getState().sessions.find((session) => session.id === id)?.title ?? ""
     ).trim();
-    return `${t("chat.sessionReference")} · ${title || id.slice(0, 8)}`;
+    return title || id.slice(0, 8);
   };
 
   /**

@@ -54,7 +54,7 @@ test("an empty reference never produces an excerpt", () => {
   );
 });
 
-test("session links resolve against their own project only", async () => {
+test("session links resolve across projects", async () => {
   const host = fakeHost({
     "same-project": {
       id: "same-project",
@@ -80,14 +80,16 @@ test("session links resolve against their own project only", async () => {
     host,
     logger: silentLogger,
     sessionId: "current",
-    projectPath: PROJECT,
     content,
   });
 
-  assert.equal(attachments.length, 1, "only the same-project reference is attached");
   assert.deepEqual(
-    { kind: attachments[0].kind, name: attachments[0].name, ref: attachments[0].ref },
-    { kind: "session", name: "Dependency sweep", ref: "same-project" },
+    attachments.map((a) => [a.kind, a.name, a.ref]),
+    [
+      ["session", "Dependency sweep", "same-project"],
+      ["session", "Elsewhere", "other-project"],
+    ],
+    "a conversation of another project is referenced like any other",
   );
   assert.match(attachments[0].text, /user: check the lockfile/);
   assert.match(attachments[0].text, /assistant: two advisories/);
@@ -107,7 +109,6 @@ test("the current session is never referenced and a missing one is skipped", asy
     host,
     logger: silentLogger,
     sessionId: "current",
-    projectPath: PROJECT,
     content: `${formatSessionLink("current")} ${formatSessionLink("missing")}`,
   });
   assert.deepEqual(attachments, []);
@@ -132,7 +133,6 @@ test("a resolved reference keeps the message text untouched", async () => {
     host,
     logger: silentLogger,
     sessionId: "current",
-    projectPath: PROJECT,
     content,
   });
   assert.equal(content, `see ${formatSessionLink("session-a")}`);

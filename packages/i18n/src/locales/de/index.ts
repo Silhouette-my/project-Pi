@@ -353,8 +353,8 @@ export const de = {
     "emptyTitleTemporary": "Was würden Sie gerne vorübergehend erkunden?",
     "placeholder": "Bitten Sie PI-Desktop um Hilfe bei allem",
     "placeholderHome": "Fragen Sie alles",
-    "placeholderHint": "Geben Sie / für Befehle · @ für Dateien ein",
-    "placeholderHomeHint": "Geben Sie / für Befehle · @ für Dateien ein",
+    "placeholderHint": "Geben Sie / für Befehle · @ für Dateien oder Unterhaltungen ein",
+    "placeholderHomeHint": "Geben Sie / für Befehle · @ für Dateien oder Unterhaltungen ein",
     "placeholderShortcut": "Umschalt+Eingabetaste für Zeilenumbruch · Verwenden Sie Senden, um zu senden",
     "suggestionHint": "Tab übernehmen · Esc verwerfen",
     "addFiles": "Dateien hinzufügen und mehr",
@@ -2961,6 +2961,16 @@ sklm: {
     quotedFrom: "Zitiert aus {{title}}",
     noAnswer: "Diese Konversation hat noch keine Antwort zum Zitieren.",
     insertAgentDraft: "In Agent-Entwurf einfügen"
+  },
+  mention: {
+    groupProject: "Aktuelles Projekt",
+    groupRecent: "Zuletzt",
+    groupOther: "Andere Projekte",
+    groupFiles: "Dateien",
+    empty: "Keine passende Unterhaltung",
+    sideOf: "Seitenchat · {{title}}",
+    menu: "Unterhaltung erwähnen",
+    tooltip: "Erwähnte Unterhaltung: {{title}}"
   }
 } satisfies EnglishCatalog;
 

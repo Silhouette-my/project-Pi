@@ -2425,7 +2425,8 @@ identify the platform validation still needed.
   without the link being written again. C's link and A's own link attach
   nothing: the message keeps its plaintext and the model receives no excerpt
   from them, because the resolver drops a self-reference before any read and
-  discards an excerpt whose conversation belongs to another project.
+  drops an unknown id; a link to a conversation of another project is attached
+  like any other (ADR conversation-mention).
   Renaming A afterwards renames the chip in B, which names the conversation from
   its current title; the excerpt the model already read keeps the name recorded
   when the reference was made.
@@ -2436,6 +2437,28 @@ identify the platform validation still needed.
 - **Status**: Draft — the resolver and the chip are covered at source level by
   `apps/desktop/test/session-references.test.mjs` and
   `apps/desktop/test/session-reference-ui.test.mjs`
+
+#### E2E-CHAT-conversation-mention: Typing @ mentions another conversation and the model receives its context
+
+- **Steps**: 1) In the chat Composer type `mail me@`, then clear it and type
+  `compare @`. 2) Type part of another conversation's title, press Enter.
+  3) Press Backspace, type `@` again, press Esc, then pick a row by click.
+  4) Add words and send; open the token in the sent message. 5) In a chat side
+  chat type `see @`, narrow, press Enter, add a question and send.
+- **Expected**: The mid-word `@` opens nothing. The list shows the current
+  project and other projects with each project's name, never the current
+  conversation. Enter inserts an icon-less `@title` chip with the `引用对话：<title>`
+  tooltip; Backspace removes it whole; Esc closes the list. The model request
+  of step 4 holds the referenced conversation's `<session_reference>` block next
+  to the user's words, the sent message shows the token, and activating it opens
+  that conversation. The side chat's textarea opens the same list at the caret,
+  paints a tile behind the token, and its first Send carries the same context.
+- **Specs linked**: `04-ux/08-component-spec.md` §20B, `03-runtime/02-agent-runtime.md`,
+  ADR conversation-mention
+- **Acceptance criterion**: C — Conversation & stream
+- **Milestone**: M2
+- **Status**: Implemented — `scripts/e2e-conversation-mention.mjs`; pure rules in
+  `apps/desktop/test/conversation-mention-core.test.mjs`
 
 #### E2E-COMPOSER-input-history-recall
 

@@ -346,6 +346,18 @@
   outline-offset: 1px;
 }
 
+/* A conversation mention: a quiet `@title` tile, no icon. */
+.composer-chip[data-mention] {
+  padding: 0 6px;
+  color: var(--ds-text-primary);
+  cursor: pointer;
+}
+
+.composer-chip[data-mention]:hover,
+.composer-chip[data-mention]:focus-visible {
+  background: var(--ds-tile-hover);
+}
+
 /* A plugin mark: text the plugin sends in its place, not a file. */
 .composer-chip[data-plugin-mark] {
   background: color-mix(in oklab, var(--ds-accent) 14%, var(--ds-tile-deep));

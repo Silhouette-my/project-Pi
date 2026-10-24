@@ -362,8 +362,8 @@ export const tr = {
     emptyTitleTemporary: "Geçici olarak neyi keşfetmek istersiniz?",
     placeholder: "PI-Desktop’tan herhangi bir konuda yardım isteyin",
     placeholderHome: "Bir şey sorun",
-    placeholderHint: "Komutlar için / · dosyalar için @ yazın",
-    placeholderHomeHint: "Komutlar için / · dosyalar için @ yazın",
+    placeholderHint: "Komutlar için / · dosya veya konuşma için @ yazın",
+    placeholderHomeHint: "Komutlar için / · dosya veya konuşma için @ yazın",
     placeholderShortcut: "Yeni satır için Shift+Enter · göndermek için Gönder",
     suggestionHint: "Tab kabul · Esc yoksay",
     addFiles: "Dosya ekle",
@@ -2994,6 +2994,16 @@ importConfirm: "İçe aktarılan uzantılar ajan sürecinde, ajanın kendi araç
     quotedFrom: "{{title}} konuşmasından alıntı",
     noAnswer: "Bu konuşmada henüz alıntılanacak bir yanıt yok.",
     insertAgentDraft: "Ajan taslağına ekle"
+  },
+  mention: {
+    groupProject: "Geçerli proje",
+    groupRecent: "Son",
+    groupOther: "Diğer projeler",
+    groupFiles: "Dosyalar",
+    empty: "Eşleşen konuşma yok",
+    sideOf: "Yan sohbet · {{title}}",
+    menu: "Bir konuşmaya değin",
+    tooltip: "Anılan konuşma: {{title}}"
   }
 } satisfies EnglishCatalog;
 

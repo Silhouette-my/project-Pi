@@ -361,8 +361,8 @@ export const en = {
     emptyTitleTemporary: "What would you like to explore temporarily?",
     placeholder: "Ask PI-Desktop to help with anything",
     placeholderHome: "Ask anything",
-    placeholderHint: "Type / for commands · @ for files",
-    placeholderHomeHint: "Type / for commands · @ for files",
+    placeholderHint: "Type / for commands · @ for files or conversations",
+    placeholderHomeHint: "Type / for commands · @ for files or conversations",
     placeholderShortcut: "Shift+Enter for newline · Use Send to submit",
     suggestionHint: "Tab to accept · Esc to ignore",
     addFiles: "Add files",
@@ -3103,6 +3103,16 @@ importConfirm: "Imported extensions run inside the agent process with the same a
     quotedFrom: "Quoted from {{title}}",
     noAnswer: "This conversation has no answer to quote yet.",
     insertAgentDraft: "Insert into Agent draft"
+  },
+  mention: {
+    groupProject: "Current project",
+    groupRecent: "Recent",
+    groupOther: "Other projects",
+    groupFiles: "Files",
+    empty: "No matching conversations",
+    sideOf: "Side chat · {{title}}",
+    menu: "Mention a conversation",
+    tooltip: "Mentioned conversation: {{title}}"
   }
 } as const;
 

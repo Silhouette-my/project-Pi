@@ -3489,7 +3489,7 @@ Anatomy:
   shadow, subtle hairline, `--radius-lg`); max-height caps with internal
   scroll and `scrollIntoView(nearest)` keyboard follow.
 - Slash mode (`/` typed at position 0, cursor inside the first token, no
-  whitespace yet): the placeholder teaches `Type / for commands · @ for files`
+  whitespace yet): the placeholder teaches `Type / for commands · @ for files or conversations`
   (localized in zh-CN), and groups appear in order — prompt templates (name +
   `argument-hint` ghost text + description, project source before
   user-global), app commands (builtin slash aliases), plugin commands,
@@ -3556,12 +3556,12 @@ Anatomy:
   main selects image blocks or path fallbacks from the exact model capability.
   Reference-only drafts are sendable. Builtin/plugin dispatch still bypasses
   the model-ready gate when no prompt text or file reference is sent.
-- A `pi-desktop://session/<id>` link in the draft is the reference itself: no
-  new trigger symbol joins `@` files and `/` commands, and the link stays
-  visible plaintext while the draft is unsent. Immediately before dispatch,
-  main resolves each link to another conversation in the same project into a
-  bounded excerpt attachment (§20B). An unknown id, a self-reference, and a
-  conversation in another project stay plaintext.
+- A `pi-desktop://session/<id>` link is the reference itself. `@` also lists
+  conversations (§20B): picking one inserts an atomic `@title` chip that
+  serializes to that link at send time, and a pasted link becomes the same
+  chip. Immediately before dispatch, main resolves each link to another
+  conversation into a bounded excerpt attachment (§20B). An unknown id and a
+  self-reference stay plaintext.
 - The Agent/Plan/Goal mode aliases can prefix a prompt in the same draft:
   `/agent-mode <prompt>`, `/plan-mode <prompt>`, and `/goal-mode <prompt>` apply
   the mode first, then send `<prompt>` plus any serialized references through
@@ -4399,10 +4399,38 @@ TASKS (2)                     │ Nightly dependency check   [Enabled] [Run now]
 
 ### 20B.1 Purpose
 
-Carry another conversation into a turn without retyping it. The
-`pi-desktop://session/<id>` link is the whole interaction: a reader copies it
-from the conversation overflow menu and pastes it into a Composer draft (issue
-#1324, option B). Copy conversation ID stays the developer-mode identifier.
+Carry another conversation into a turn without retyping it. Typing `@` in any
+composer lists conversations and inserts an `@title` mention (ADR
+conversation-mention); the mention is the `pi-desktop://session/<id>` link
+(issue #1324) in the draft's structure. A reader can still copy that link from
+the conversation overflow menu and paste it. Copy conversation ID stays the
+developer-mode identifier.
+
+### 20B.1a Mention list and token
+
+- Trigger: `@` at the start of the draft or after whitespace, outside IME
+  composition; an `@` inside a word is text. The same list serves the chat
+  Composer (a contenteditable with atomic chips) and the plain-textarea
+  composers of detached conversations (chat side chats, project side
+  conversations, the project Agent), where the token is `@title` text that
+  Backspace deletes whole and a quiet tile paints behind.
+- Rows: the title and a muted second column (the project name, or
+  `侧聊 · <parent>` for a side chat of an open tab). Groups: current project,
+  recent (conversations outside any project), other projects; empty groups are
+  dropped and the list holds at most 40 rows. Typing after `@` filters by
+  title. The current conversation, remote conversations and scheduled-run
+  transcripts are never offered. Nothing matching shows `无匹配对话` (or the
+  files message when a workspace exists).
+- In the chat Composer the rows sit above the file rows of the same `@` menu
+  (files keep their own heading); detached composers show conversations only,
+  in a menu anchored above the caret. Up/Down move, Enter or Tab pick, Esc
+  closes, a click picks.
+- Token: `@title` on a quiet tile (`--ds-tile-deep`), no icon and no remove
+  button; tooltip `引用对话：<title>`. Several mentions are allowed. The chat
+  Composer has no `+` menu (the `+` button attaches files), so there is no
+  menu entry for it.
+- Sent: the message shows the token inline, named from the conversation's
+  current title; activating it opens that conversation.
 
 ### 20B.2 Anatomy
 
@@ -4426,7 +4454,7 @@ Conversation overflow                    Composer draft (unsent)
 |---|---|
 | Reference attached | The body link renders as a chat-icon chip named with the catalog's reference label and the referenced conversation's current title; the message shows no second block for it |
 | Reference skipped | Nothing is attached; the body link still renders as that chip |
-| Another project | Skipped the same way: that transcript is not this turn's context |
+| Another project | Attached like any other: the `@` list offers it under its project, so naming it is the user's choice |
 | Self-reference | Dropped before any read, so the conversation itself is never a reference |
 | Empty referenced conversation | The resolver attaches nothing and the message keeps the link |
 | Chip activated | The referenced conversation becomes the active session |
@@ -4454,11 +4482,10 @@ Conversation overflow                    Composer draft (unsent)
 - The draft shows a pasted link as that chip, and the submitted text still
   carries the link: prose is never rewritten on the wire, and the attached
   excerpt is additive.
-- Boundary: only conversations of the same project are read, the current
-  conversation is dropped before any read, and a link to another project, an
-  unknown id, or a `remote:` identifier stays plaintext rather than becoming a
-  reference. A paste cannot make the app read a transcript its reader could not
-  open.
+- Boundary: any local conversation can be read, the current conversation is
+  dropped before any read, and an unknown id or a `remote:` identifier stays
+  plaintext rather than becoming a reference. The draft only carries what the
+  user picked or pasted; no model output can add a link to a prompt.
 - A chip inside a message borrows that message's own face, size and leading, and
   its tile is sized and aligned by that leading so it covers exactly one line of
   message text: the label sits on the line's baseline instead of poking out of

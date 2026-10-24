@@ -8,6 +8,7 @@ import type { SessionConfigurationInput } from "../../stores/app-state";
 import { messageHasTranscriptContent } from "../../lib/chat-launch-error";
 import { sessionAllows } from "../../lib/remote-session-safety";
 import { ComposerModelPicker } from "../../features/chat/composer/ComposerModelPicker";
+import { useTextareaMention } from "../../features/chat/mention/useTextareaMention";
 import { useComposerModelMenu } from "../../features/chat/composer/hooks/useComposerModelMenu";
 import { useSessionModelSelection } from "../../features/chat/composer/hooks/useSessionModelSelection";
 import "./detached-conversation.css";
@@ -80,6 +81,18 @@ export function DetachedConversation({
   // Model/effort chosen before the conversation exists; applied on first send.
   const [pendingConfiguration, setPendingConfiguration] = useState<SessionConfigurationInput>();
 
+  const projectPath = useAppStore(
+    (state) =>
+      state.sessions.find((item) => item.id === sessionId)?.projectPath ?? state.workspace?.path,
+  );
+  const mention = useTextareaMention({
+    draft,
+    onDraftChange,
+    draftKey: sessionId ?? "",
+    sessionId,
+    projectPath,
+  });
+
   useEffect(() => {
     if (sessionId && !attached) void attach(sessionId).catch(() => {});
   }, [attach, attached, sessionId]);
@@ -90,7 +103,7 @@ export function DetachedConversation({
     setSending(true);
     setError(null);
     try {
-      await onSend(text, sessionId ? undefined : pendingConfiguration);
+      await onSend(mention.serialize(text), sessionId ? undefined : pendingConfiguration);
       onDraftChange("");
       setPendingConfiguration(undefined);
     } catch (cause) {
@@ -119,14 +132,21 @@ export function DetachedConversation({
           void send();
         }}
       >
+        {mention.overlay}
         <Textarea
+          ref={mention.textareaRef}
           className="detached-conversation-input"
           aria-label={inputLabel}
           placeholder={placeholder}
           rows={2}
           value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
+          onChange={mention.onChange}
+          onSelect={mention.onSelect}
+          onBlur={mention.onBlur}
+          onCompositionStart={mention.onCompositionStart}
+          onCompositionEnd={mention.onCompositionEnd}
           onKeyDown={(event) => {
+            if (mention.handleKeyDown(event)) return;
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
               void send();
