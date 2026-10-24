@@ -231,6 +231,7 @@ const capture = async (name) => {
   const shot = await page.call("Page.captureScreenshot", { format: "png" });
   await writeFile(join(output, name), Buffer.from(shot.data, "base64"));
 };
+const openProjectHome = () => page.evaluate(`(() => { const el=document.querySelector('[data-sidebar-project-group] .sidebar-project-cube'); if(!el) return false; el.click(); return true })()`);
 
 const workspace = join(scratch, "structure-fixture");
 const viewerSource = process.env.PI_ARCHIFY_FIXTURE_DIR;
@@ -259,7 +260,7 @@ async function openHome() {
   await page.evaluate(
     `(() => { const group=document.querySelector('[data-project-agent="'+${json(projectId)}+'"]')?.closest('[data-sidebar-project-group]');const toggle=group?.querySelector('.project-toggle');if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`,
   );
-  assert.ok((await clickText("Project home")) || (await clickText("项目首页")));
+  assert.ok(await openProjectHome());
   await until(
     () => page.evaluate("!!document.querySelector('[data-project-overview]')"),
     "project overview",
