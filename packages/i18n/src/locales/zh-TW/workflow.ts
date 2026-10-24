@@ -147,6 +147,7 @@ export const workflowCatalog = {
     dialogDescription: "資料夾僅用於整理對話，不會變更對話的工作區或權限。", location: "位置", position: "排列位置",
     positionEnd: "放在最後", positionStart: "放在最前", create: "建立",
     removeFolderConfirm: "移除此資料夾？",
+    newCategory: "新增分類", renameCategoryTitle: "重新命名分類", categoryName: "分類名稱", renameCategory: "重新命名", deleteCategory: "刪除分類", categoryActions: "分類操作", emptyCategory: "尚無內容", noChats: "尚無對話", collapse: "收合", expand: "展開", toggleBranches: "展開或收合分支", projectInstructions: "專案說明", projectMemory: "記憶", renameProject: "重新命名",
   },
   workflowContext: {
     title: "共用脈絡", resources: "正式參照資料", addResource: "新增參照", noResources: "尚無共用參照資料。", projectScope: "整個專案", sourceValue: "{{kind}} · {{ref}} · 修訂 {{revision}}",

@@ -13,6 +13,7 @@ import {
   Bell,
   BookOpen,
   Bot,
+  Box,
   Camera,
   Check,
   CheckCheck,
@@ -193,6 +194,8 @@ export const IconDatabase = icon(Database);
 export const IconCheck = icon(Check);
 export const IconBell = icon(Bell);
 export const IconBot = icon(Bot);
+/** Outline cube: the project mark in the sidebar and project home. */
+export const IconCube = icon(Box);
 export const IconCheckCheck = icon(CheckCheck);
 export const IconShield = icon(Shield);
 export const IconChevronDown = icon(ChevronDown);

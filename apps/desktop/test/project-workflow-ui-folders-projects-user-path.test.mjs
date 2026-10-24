@@ -37,8 +37,8 @@ window.piDesktop={platform:"darwin",on(){return()=>{};},async invoke(channel,inp
   if(input.kind==="navigation.expand")snapshot.expandedIds=input.expandedIds;
   else if(input.kind==="tree.move") {
     function place(target,order){
-      if(target.kind==="folder"){const row=snapshot.folders.find(f=>f.id===target.id);row.parentId=input.folderId;row.order=order;}
-      else {const key=target.kind==="project"?"projectNavigation":"navigation",idKey=target.kind==="project"?"projectId":"sessionId";let row=snapshot[key].find(n=>n[idKey]===target.id);if(!row){row={[idKey]:target.id,favorite:false};snapshot[key].push(row);}row.folderId=input.folderId;row.order=order;}
+      if(target.kind==="folder"){const row=snapshot.folders.find(f=>f.id===target.id);row.parentId=input.folderId;row.order=order;if(input.scope!=="project")row.categoryId=input.categoryId;}
+      else {const key=target.kind==="project"?"projectNavigation":"navigation",idKey=target.kind==="project"?"projectId":"sessionId";let row=snapshot[key].find(n=>n[idKey]===target.id);if(!row){row={[idKey]:target.id,favorite:false};snapshot[key].push(row);}row.folderId=input.folderId;row.order=order;if(input.scope!=="project"){if(input.folderId)delete row.categoryId;else row.categoryId=input.categoryId;}}
     }
     place(input.target,input.order);input.siblingOrder?.forEach(place);
   } else throw Error("Unexpected mutation "+input.kind);
@@ -69,7 +69,7 @@ window.projectNavigationProbe=async()=>{
  check(document.querySelectorAll('[data-sidebar-project-group]').length===1,"Durable and legacy project rows duplicated, or closed/archived project returned");
  check(!document.body.textContent.includes("Closed must stay closed")&&!document.body.textContent.includes("Archived must stay archived"),"Host catalog overrode visible metadata");
  const group=document.querySelector('[data-sidebar-project-group="/visible"]');
- check(group.querySelector(".sidebar-project-pin"),"Pinned metadata lost");
+ check(group.querySelector('button.sidebar-project-cube'),"Project cube (opens project home) is missing");
  check(group.querySelector('[data-sidebar-session-row="legacy"]'),"Unfiled history is not directly reachable");
  check(!group.querySelector('[data-workflow-legacy]'),"Fixed history wrapper still exists");
  check(group.querySelectorAll('[data-sidebar-session-row="side"]').length===1,"Explicit child duplicated or missing");
@@ -77,13 +77,16 @@ window.projectNavigationProbe=async()=>{
  check(group.querySelector('[data-sidebar-session-row="completed-side"]'),"Completed execution transcript is unreachable");
  check(!group.querySelector('[data-sidebar-session-row="archived-side"]'),"Archive filter was bypassed");
  check(group.querySelector('[data-sidebar-session-row="unknown-side"]'),"Unknown-effect transcript is unreachable");
- check(group.querySelectorAll('[data-project-agent="visible-group"]').length===2,"Project title and Home must both expose Agent icons");
+ check(!group.querySelector('[data-project-agent]'),"Project Agent lives in the work panel, not on the sidebar project row");
+ check(![...group.querySelectorAll("button")].some(button=>button.textContent==="Project home"),"The Project home row is gone: the cube opens it");
  flushSync(()=>group.querySelector('button.project-toggle').click());
 	 check(group.querySelector('button.project-toggle').getAttribute("aria-expanded")==="false","Project title did not collapse its children");
 	 check(useAppStore.getState().page==="chat","Collapsing a project unexpectedly navigated away");
 	 flushSync(()=>group.querySelector('button.project-toggle').click());
 	 check(group.querySelector('button.project-toggle').getAttribute("aria-expanded")==="true","Project title did not expand its children");
-	 flushSync(()=>[...group.querySelectorAll("button")].find(button=>button.textContent==="Project home").click());
+	 flushSync(()=>group.querySelector('button.sidebar-project-cube').click());
+	 check(group.querySelector('button.sidebar-project-cube').classList.contains("is-active"),"Cube is not the active tile on project home");
+	 check(!group.querySelector(".sidebar-project-row").classList.contains("active"),"Project row must not be highlighted as a whole");
 	 check(useAppStore.getState().page==="project"&&useAppStore.getState().projectConsoleId==="visible-group","Project home did not open independent Console");
  await until(()=>group.querySelector('[data-sidebar-session-row="legacy"]'),"Legacy conversation no longer reachable");
  check(group.querySelector('[data-sidebar-session-row="legacy"] [data-action="session-menu"]'),"Existing session actions were replaced");
@@ -104,11 +107,11 @@ window.projectNavigationProbe=async()=>{
  check(useAppStore.getState().sessions.find(s=>s.id==="main").projectPath===null,"Navigation changed main session workspace");
  const revision=snapshot.revision;await drag(row("folder","pf-a"),row("folder","pf-c"));
  check(snapshot.revision===revision,"Cycle was dispatched to Host");
- const categories=document.querySelector('[data-workflow-tree="projects"]');
- await drag(row("project","visible-group"),categories.querySelector('.workflow-tree-root-target'));
- await until(()=>snapshot.projectNavigation[0].folderId===undefined,"Project could not return to root");
+ const projects=document.querySelector('[data-sidebar-category="projects"]');
+ await drag(row("project","visible-group"),projects.querySelector('.sidebar-category-header'));
+ await until(()=>snapshot.projectNavigation[0].folderId===undefined&&snapshot.projectNavigation[0].categoryId==="projects","Project could not return to the Projects category root");
  await drag(row("project","visible-group"),row("folder","cat-a"),.1);
- check(categories.querySelector('.workflow-tree-root-target > .workflow-tree-node').dataset.workflowTreeNode==="project:visible-group","Mixed project/category order not rendered");
+ check(projects.querySelector('.sidebar-category-body > .workflow-tree-node').dataset.workflowTreeNode==="project:visible-group","Mixed project/category order not rendered");
  check(document.querySelectorAll('[data-sidebar-project-group]').length===1,"Project duplicated after recategorization");
  flushSync(()=>rootNode.unmount());return{passed:true};
 };

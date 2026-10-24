@@ -101,7 +101,14 @@ Ordinary turns without a workflow binding retain their existing behavior.
 ## Navigation trees
 
 Folders support arbitrary depth. Optional `scope` is `chats`, `projects`, or
-`project`; omitted scope retains the standalone Chat meaning. Only `project`
+`project`; omitted scope retains the standalone Chat meaning. `chats` and
+`projects` are one category space: the optional `categories` collection holds
+user-defined categories, and optional `categoryId` on folders, session
+navigation and project placements names the category (built-in ids `chats` and
+`projects`; absent derives from scope or the default). A category mixes
+folders, standalone conversations and projects; `category.create|update|remove`
+manage them and removal moves contents to the matching built-in. See ADR
+`project-navigation-tree`. Only `project`
 folders carry a stable ProjectGroup `projectId`. The optional
 `projectNavigation` collection stores stable project placements, separate from
 session navigation. Old version-1 snapshots remain readable. Before the first

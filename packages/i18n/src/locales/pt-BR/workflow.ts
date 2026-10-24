@@ -147,6 +147,7 @@ export const workflowCatalog = {
     dialogDescription: "As pastas apenas organizam conversas; elas nunca alteram o espaço de trabalho ou as permissões de uma conversa.", location: "Local", position: "Posição",
     positionEnd: "No final", positionStart: "No início", create: "Criar",
     removeFolderConfirm: "Remover pasta?",
+    newCategory: "Nova categoria", renameCategoryTitle: "Renomear categoria", categoryName: "Nome da categoria", renameCategory: "Renomear", deleteCategory: "Excluir categoria", categoryActions: "Ações da categoria", emptyCategory: "Nada aqui ainda", noChats: "Nenhum chat", collapse: "Recolher", expand: "Expandir", toggleBranches: "Expandir ou recolher ramificações", projectInstructions: "Instruções do projeto", projectMemory: "Memória", renameProject: "Renomear",
   },
   workflowContext: {
     title: "Contexto compartilhado", resources: "Referências canônicas", addResource: "Adicionar referência", noResources: "Ainda não há referências compartilhadas.", projectScope: "Projeto inteiro", sourceValue: "{{kind}} · {{ref}} · revisão {{revision}}",

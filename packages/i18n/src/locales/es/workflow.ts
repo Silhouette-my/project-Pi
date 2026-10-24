@@ -147,6 +147,7 @@ export const workflowCatalog = {
     dialogDescription: "Las carpetas solo organizan conversaciones; nunca cambian el espacio de trabajo ni los permisos de una conversación.", location: "Ubicación", position: "Posición",
     positionEnd: "Al final", positionStart: "Al principio", create: "Crear",
     removeFolderConfirm: "¿Quitar carpeta?",
+    newCategory: "Nueva categoría", renameCategoryTitle: "Cambiar nombre de la categoría", categoryName: "Nombre de la categoría", renameCategory: "Cambiar nombre", deleteCategory: "Eliminar categoría", categoryActions: "Acciones de la categoría", emptyCategory: "Aún no hay nada", noChats: "Sin chats", collapse: "Contraer", expand: "Expandir", toggleBranches: "Expandir o contraer ramas", projectInstructions: "Instrucciones del proyecto", projectMemory: "Memoria", renameProject: "Cambiar nombre",
   },
   workflowContext: {
     title: "Contexto compartido", resources: "Referencias canónicas", addResource: "Añadir referencia", noResources: "Todavía no hay referencias compartidas.", projectScope: "Todo el proyecto", sourceValue: "{{kind}} · {{ref}} · revisión {{revision}}",

@@ -105,16 +105,22 @@ test("renders semantic, shape-distinct sidebar status indicators", () => {
   );
   const main = readMainSourceSync();
 
-  assert.match(sidebar, /sessionSelected[\s\S]*sessionCompleted[\s\S]*sessionFailed/);
-  assert.match(sidebar, /IconCheck[\s\S]*IconCircleAlert/);
-  assert.match(styles, /thread-item-status\.running::before[\s\S]*--ds-warning/);
-  assert.match(styles, /thread-item-status\.selected::before[\s\S]*--ds-accent/);
-  assert.match(styles, /thread-item-status\.completed[\s\S]*--ds-success/);
-  assert.match(styles, /thread-item-status\.failed[\s\S]*--ds-error/);
+  // Right-side dot: only running, permission and failed are drawn; completed,
+  // selected and unread are quiet (the active row is highlighted instead).
+  assert.match(sidebar, /const dotStatus = status === "running" \|\| status === "permission" \|\| status === "failed" \? status : null/);
+  assert.doesNotMatch(sidebar, /IconCheck|IconCircleAlert/);
+  assert.match(styles, /thread-item-status\.running\s*\{[^}]*--ds-accent/);
+  assert.match(styles, /thread-item-status\.permission\s*\{[^}]*--ds-purple/);
+  assert.match(styles, /thread-item-status\.failed\s*\{[^}]*--ds-error/);
+  assert.doesNotMatch(styles, /thread-item-status\.(completed|selected)/);
   assert.match(
     styles,
-    /prefers-reduced-motion: reduce[\s\S]*thread-item-status\.running::before[\s\S]*animation: none/,
+    /prefers-reduced-motion: reduce[\s\S]*thread-item-status\.running,\s*\.thread-item-status\.permission\s*\{[^}]*animation: none/,
   );
+  // The dot is vertically centred with right inset = top/bottom gap, and the
+  // hover "..." takes over the same slot.
+  assert.match(styles, /\.sidebar \.thread-item-meta\s*\{[^}]*margin-right:\s*5px/);
+  assert.match(styles, /\.sidebar \.thread-item:hover \.thread-item-status[\s\S]*display:\s*none/);
   assert.match(
     app,
     /seedSidebarStatuses[\s\S]*runningSessions[\s\S]*sessionOutcomes/,

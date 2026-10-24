@@ -16,7 +16,8 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import { emptyProjectWorkflowSnapshot } from "@pi-desktop/shared";
 import { ProjectWorkflowProvider } from "../../apps/desktop/src/features/project-workflow/useProjectWorkflow";
-import { WorkflowNavigation } from "../../apps/desktop/src/features/project-workflow/WorkflowNavigation";
+import { CategoryNavigation } from "../../apps/desktop/src/features/project-workflow/CategoryNavigation";
+import { openFolderDialog } from "../../apps/desktop/src/features/project-workflow/folder-dialog-store";
 import { useWorkflowSessionMenu } from "../../apps/desktop/src/features/project-workflow/session-menu";
 import { api } from "../../apps/desktop/src/lib/api";
 import { useAppStore } from "../../apps/desktop/src/stores/app-store";
@@ -34,22 +35,29 @@ api.projectWorkflow.mutate = async (command) => {
   if (command.expectedRevision !== snapshot.revision) throw Error("Revision conflict");
   if (command.kind === "folder.create") snapshot.folders.push(command.folder);
   if (command.kind === "folder.update") snapshot.folders = snapshot.folders.map(f => f.id === command.folder.id ? command.folder : f);
+  if (command.kind === "category.create") snapshot.categories = [...(snapshot.categories ?? []), command.category];
+  if (command.kind === "category.update") snapshot.categories = snapshot.categories.map(c => c.id === command.category.id ? command.category : c);
+  if (command.kind === "category.remove") {
+    snapshot.categories = snapshot.categories.filter(c => c.id !== command.categoryId);
+    snapshot.navigation = snapshot.navigation.map(n => n.categoryId === command.categoryId ? {...n,categoryId:"chats"} : n);
+  }
   if (command.kind === "folder.remove") {
-    snapshot.folders = snapshot.folders.filter(f => f.id !== command.folderId);
+    const removed = snapshot.folders.find(f => f.id === command.folderId);
+    snapshot.folders = snapshot.folders.filter(f => f.id !== command.folderId).map(f => f.parentId === command.folderId ? {...f,parentId:removed.parentId} : f);
     snapshot.navigation = snapshot.navigation.map(n => n.folderId === command.folderId ? {...n,folderId:undefined}:n);
   }
   if (command.kind === "navigation.expand") snapshot.expandedIds = command.expandedIds;
   if (command.kind === "tree.move") {
     function place(target,order) {
-      if(target.kind==="folder"){const row=snapshot.folders.find(f=>f.id===target.id);row.parentId=command.folderId;row.order=order;}
-      else {let row=snapshot.navigation.find(n=>n.sessionId===target.id);if(!row){row={sessionId:target.id,favorite:false};snapshot.navigation.push(row);}row.folderId=command.folderId;row.order=order;}
+      if(target.kind==="folder"){const row=snapshot.folders.find(f=>f.id===target.id);row.parentId=command.folderId;row.order=order;if(command.categoryId)row.categoryId=command.categoryId;}
+      else {let row=snapshot.navigation.find(n=>n.sessionId===target.id);if(!row){row={sessionId:target.id,favorite:false};snapshot.navigation.push(row);}row.folderId=command.folderId;row.order=order;if(command.folderId)delete row.categoryId;else row.categoryId=command.categoryId;}
     }
     place(command.target,command.order);command.siblingOrder?.forEach(place);
   }
   if (command.kind === "navigation.move") {
     for (const sessionId of command.sessionIds) {
       const old = snapshot.navigation.find(n => n.sessionId === sessionId);
-      snapshot.navigation = [...snapshot.navigation.filter(n => n.sessionId !== sessionId), {...old,sessionId,folderId:command.folderId,order:old?.order??0,favorite:old?.favorite??false}];
+      snapshot.navigation = [...snapshot.navigation.filter(n => n.sessionId !== sessionId), {...old,sessionId,folderId:command.folderId,categoryId:command.folderId?undefined:command.categoryId,order:old?.order??0,favorite:old?.favorite??false}];
     }
   }
   if (command.kind === "navigation.update") snapshot.navigation = [...snapshot.navigation.filter(n => n.sessionId !== command.navigation.sessionId), command.navigation];
@@ -72,7 +80,7 @@ function BulkMove() {
   const menu = useWorkflowSessionMenu([]);
   return <>{menu.batchItems(sessions, () => {}).map(item => <button key={item.id} data-bulk={item.id} onClick={item.onSelect}>{item.label}</button>)}</>;
 }
-flushSync(() => rootNode.render(<ProjectWorkflowProvider><WorkflowNavigation sessions={sessions} renderSessions={items => items.map(s => <SessionRow key={s.id} session={s} />)} /><BulkMove /></ProjectWorkflowProvider>));
+flushSync(() => rootNode.render(<ProjectWorkflowProvider><CategoryNavigation sessions={sessions} pinnedSessionIds={new Set()} projects={[]} onNewProject={() => {}} renderSessions={items => items.map(s => <SessionRow key={s.id} session={s} />)} /><BulkMove /></ProjectWorkflowProvider>));
 const frame = () => new Promise(requestAnimationFrame);
 async function drag(source,target,where=.5) {
  const sourceKey=source.parentElement.dataset.workflowTreeNode;
@@ -96,12 +104,15 @@ function setInput(input,value) { Object.getOwnPropertyDescriptor(HTMLInputElemen
  flushSync(()=>dialog().querySelector("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));
  await until(()=>snapshot.folders[0].name==="Renamed research","rename missing");
  await until(()=>!dialog(),"dialog not dismissed");
- click("workflowNav.newFolder"); await until(dialog,"create dialog missing"); setInput(dialog().querySelector("input"),"Must not be saved");
+ const chatsHeader=()=>document.querySelector('[data-sidebar-category="chats"] .sidebar-category-header');
+ click("workflowNav.newFolder",chatsHeader()); await until(dialog,"create dialog missing"); setInput(dialog().querySelector("input"),"Must not be saved");
  const cancelCount=calls.length; click("common.cancel",dialog().querySelector("form")); await frame();
  if(calls.length!==cancelCount||snapshot.folders.length!==1||dialog()) throw Error("Cancel submitted a folder mutation");
- click("workflowNav.newFolder"); await until(dialog,"create dialog missing"); setInput(dialog().querySelector("input"),"Second");
+ click("workflowNav.newFolder",chatsHeader()); await until(dialog,"create dialog missing"); setInput(dialog().querySelector("input"),"Second");
+ if(dialog().querySelector("select").value!=="category:chats") throw Error("A category header's New folder must default to that category's top level");
  flushSync(()=>dialog().querySelector("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));
  await until(()=>snapshot.folders.length===2,"create missing");
+ if(snapshot.folders[1].categoryId!=="chats"||snapshot.folders[1].parentId) throw Error("New folder was not created at the Chats root");
  await until(()=>!dialog(),"dialog not dismissed");
  click("workflowNav.newChat",document.querySelector('[data-workflow-folder="folder"]'));
  await until(()=>calls.some(c=>c.kind==="navigation.move"&&c.folderId==="folder"),"folder chat inheritance missing");
@@ -109,7 +120,7 @@ function setInput(input,value) { Object.getOwnPropertyDescriptor(HTMLInputElemen
  click("workflowNav.newChat",document.querySelector('[data-workflow-folder="folder"]'));
  await frame(); await frame();
  if(calls.length!==before) throw Error("Superseded creation moved an unrelated chat");
- nextCreated="chat"; click("workflowNav.newChat");
+ nextCreated="chat"; click("workflowNav.newChat",chatsHeader());
  await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat").folderId===undefined,"global chat not unfiled");
  // Bulk move through the multi-select menu and the Move dialog (keyboard-reachable select).
  await until(()=>document.querySelector('[data-bulk="batch-move-to-folder"]'),"bulk move item missing");
@@ -127,10 +138,9 @@ function setInput(input,value) { Object.getOwnPropertyDescriptor(HTMLInputElemen
  await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat").folderId===undefined,"Chat could not return to root");
  await until(()=>row("session","chat")?.draggable,"Root chat ready");
  flushSync(()=>row("session","chat").querySelector(".thread-item-main").click());
- await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat")?.lastAccessedAt,"Chat did not enter Recent");
- await until(()=>row("session","chat")?.draggable,"Recent shortcut ready");
- const favorite=row("session","chat").querySelector('[data-action="toggle-session-favorite"]');flushSync(()=>favorite.click());
- await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat")?.favorite,"Chat did not enter Favorites");
+ await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat")?.lastAccessedAt,"Chat did not record its access time");
+ if(document.querySelector('[data-action="toggle-session-favorite"]')) throw Error("Favorites left the session menu");
+ await until(()=>row("session","chat")?.draggable,"Chat ready");
  await drag(row("session","chat"),row("folder","folder"));
  await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat").folderId==="folder","Chat could not re-enter folder");
  // Move a single chat with the session row menu item, then a folder into another folder.
@@ -140,20 +150,47 @@ function setInput(input,value) { Object.getOwnPropertyDescriptor(HTMLInputElemen
  flushSync(()=>dialog().querySelector("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));
  await until(()=>snapshot.navigation.find(n=>n.sessionId==="other").folderId===second.id,"single session move missing");
  await until(()=>!dialog(),"session move dialog not dismissed");
- folderMenu(second.id,"move-folder");
- await until(dialog,"folder move dialog missing");
- flushSync(()=>{const select=dialog().querySelector("select");select.value="folder";select.dispatchEvent(new Event("change",{bubbles:true}));});
+ // A folder menu has Rename, New folder and Remove only; moving a folder is a drag.
+ flushSync(()=>document.querySelector('[data-workflow-folder="'+second.id+'"] [data-action="folder-menu"]').click());
+ if(["rename-folder","new-subfolder","remove-folder"].some(id=>!menuItem(id))||menuItem("move-folder")) throw Error("Folder menu items changed");
+ flushSync(()=>menuItem("new-subfolder").click());
+ await until(dialog,"subfolder dialog missing"); setInput(dialog().querySelector("input"),"Nested");
  flushSync(()=>dialog().querySelector("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));
- await until(()=>snapshot.folders.find(f=>f.id===second.id).parentId==="folder","folder move missing");
- await until(()=>!dialog(),"folder move dialog not dismissed");
+ await until(()=>snapshot.folders.some(f=>f.name==="Nested"&&f.parentId===second.id),"subfolder missing");
+ await until(()=>!dialog(),"subfolder dialog not dismissed");
+ await drag(row("folder",second.id),row("folder","folder"));
+ await until(()=>snapshot.folders.find(f=>f.id===second.id).parentId==="folder","folder drag missing");
+ // Removing is immediate (no confirmation) and never deletes chats; children move up one level.
  flushSync(()=>document.querySelector('[data-workflow-folder="'+second.id+'"] [data-action="folder-menu"]').click());
  flushSync(()=>menuItem("remove-folder").click());
- if(!document.querySelector('.sidebar-row-menu [data-sidebar-menu-note="remove-hint"]')) throw Error("Removal must ask for a second confirming click");
- if(snapshot.folders.length!==2) throw Error("First click removed the folder");
- flushSync(()=>menuItem("remove-folder").click());
- await until(()=>snapshot.folders.length===1,"remove missing");
+ await until(()=>!snapshot.folders.some(f=>f.id===second.id),"remove missing");
+ if(snapshot.folders.find(f=>f.name==="Nested").parentId!=="folder") throw Error("Removed folder's child did not move up one level");
  if(!document.body.textContent.includes("Existing chat")) throw Error("Folder deletion lost historical chat");
  if(!document.body.textContent.includes("Another chat")) throw Error("Moved chat disappeared after folder removal");
+ // User-defined categories: create, mix content, delete without confirmation.
+ openFolderDialog({mode:"category-create",context:{scope:"chats"}});
+ await until(dialog,"category dialog missing");
+ if(dialog().querySelector("select")) throw Error("A category dialog has no location");
+ setInput(dialog().querySelector("input"),"Reading");
+ flushSync(()=>dialog().querySelector("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));
+ await until(()=>snapshot.categories?.length===1,"category.create missing");
+ const category=snapshot.categories[0];
+ await until(()=>document.querySelector('[data-sidebar-category="'+category.id+'"]'),"custom category not rendered");
+ const section=()=>document.querySelector('[data-sidebar-category="'+category.id+'"]');
+ if(!section().textContent.includes("workflowNav.emptyCategory")) throw Error("Empty custom category must say so");
+ if(section().textContent.includes("workflowNav.recent")) throw Error("Custom categories have no Recent group");
+ await drag(row("session","other"),section().querySelector(".sidebar-category-header"));
+ await until(()=>snapshot.navigation.find(n=>n.sessionId==="other")?.categoryId===category.id,"session did not enter the custom category");
+ await until(()=>section().querySelector('[data-workflow-tree-node="session:other"]'),"session not shown at the category root");
+ if(section().querySelector(".is-recent-row")) throw Error("Custom category grew a Recent row");
+ click("workflowNav.newChat",section().querySelector(".sidebar-category-header"));
+ await until(()=>calls.some(c=>c.kind==="navigation.move"&&c.categoryId===category.id),"category + new chat missing");
+ flushSync(()=>section().querySelector('[data-action="category-menu"]').click());
+ if(!menuItem("rename-category")||!menuItem("delete-category")) throw Error("Category menu items missing");
+ flushSync(()=>menuItem("delete-category").click());
+ await until(()=>!snapshot.categories.length,"category.remove missing");
+ if(snapshot.navigation.find(n=>n.sessionId==="other").categoryId!=="chats") throw Error("Contents did not fall back to the built-in category");
+ if(!document.body.textContent.includes("Another chat")) throw Error("Deleting a category lost a chat");
  flushSync(()=>rootNode.unmount());
  return {passed:true};
 };

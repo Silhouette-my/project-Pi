@@ -185,6 +185,8 @@ function AppShellContent() {
                 onResizeCollapse={handleSidebarResizeCollapse}
                 pinned={sidebarPinned}
                 onTogglePin={toggleSidebarPinned}
+                onOpenSearch={() => setSearchOpen(true)}
+                onNewTask={() => void runMenuCommand("newTask")}
               />
             ) : null}
 
@@ -208,6 +210,8 @@ function AppShellContent() {
                   onResizeCollapse={handleSidebarResizeCollapse}
                   pinned={false}
                   onTogglePin={toggleSidebarPinned}
+                  onOpenSearch={() => setSearchOpen(true)}
+                  onNewTask={() => void runMenuCommand("newTask")}
                 />
               </>
             ) : null}
@@ -228,18 +232,6 @@ function AppShellContent() {
                     sidebarToggleShortcut={sidebarToggleShortcut}
                   />
                 )}
-                {!sidebarCollapsed && (
-                  <TooltipButton
-                    type="button"
-                    className="title-nav-btn"
-                    tooltip={t("nav.newTask")}
-                    ariaLabel={t("nav.newTask")}
-                    data-nav="new-task"
-                    onClick={() => void runMenuCommand("newTask")}
-                  >
-                    <IconNewSession size={15} />
-                  </TooltipButton>
-                )}
                 <div className="window-chrome-drag" aria-hidden />
               </div>
             )}
@@ -252,7 +244,6 @@ function AppShellContent() {
                     workPanelOpen={presentedWorkPanelOpen}
                     onToggleSidebar={toggleSidebarFromChrome}
                     onNewTask={() => void runMenuCommand("newTask")}
-                    onOpenSearch={() => setSearchOpen(true)}
                   />
                 ) : (
                   <div

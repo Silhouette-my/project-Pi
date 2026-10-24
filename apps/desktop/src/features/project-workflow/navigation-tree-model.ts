@@ -1,20 +1,48 @@
-import type {
-  ProjectWorkflowSnapshot,
-  WorkflowFolder,
-  WorkflowTreeScope,
+import {
+  WORKFLOW_CHATS_CATEGORY,
+  WORKFLOW_PROJECTS_CATEGORY,
+  type ProjectWorkflowSnapshot,
+  type WorkflowFolder,
+  type WorkflowTreeScope,
 } from "@pi-desktop/shared";
 
+/**
+ * `chats` and `projects` are one category space (see ADR project-navigation-tree):
+ * a category mixes folders, standalone conversations and projects. Only
+ * `project` is a separate tree, one per project.
+ */
 export type TreeContext = { scope: WorkflowTreeScope; projectId?: string };
 export type TreeEntry = {
   kind: "folder" | "session" | "project";
   id: string;
   label: string;
+  /** A folder id, or `categoryRoot(id)` for an entry at a category's top level. */
   parentId?: string;
   order: number;
   rank?: number;
+  /** Sessions: last activity, for the Recent group. */
+  recency?: number;
+  /** Projects only: the body is expanded, so the row renders as a shaded block. */
+  open?: boolean;
 };
+const ROOT_PREFIX = "category:";
+/** Pseudo parent id that places an entry at the top level of a category. */
+export function categoryRoot(categoryId: string) {
+  return `${ROOT_PREFIX}${categoryId}`;
+}
+/** The category a pseudo parent id stands for, or undefined for a real folder id. */
+export function rootCategoryId(parentId?: string) {
+  return parentId?.startsWith(ROOT_PREFIX) ? parentId.slice(ROOT_PREFIX.length) : undefined;
+}
+/** Legacy folders without `categoryId` derive it from their scope. */
+export function folderCategory(folder: WorkflowFolder) {
+  return folder.categoryId ?? (folder.scope === "projects" ? WORKFLOW_PROJECTS_CATEGORY : WORKFLOW_CHATS_CATEGORY);
+}
 export function folderInContext(folder: WorkflowFolder, context: TreeContext) {
-  return (folder.scope ?? "chats") === context.scope && folder.projectId === context.projectId;
+  const projectTree = (folder.scope ?? "chats") === "project";
+  return context.scope === "project"
+    ? projectTree && folder.projectId === context.projectId
+    : !projectTree;
 }
 export function treeFolders(snapshot: ProjectWorkflowSnapshot, context: TreeContext) {
   return snapshot.folders.filter((folder) => folderInContext(folder, context));
@@ -52,13 +80,15 @@ export function treePlacement(
   source: TreeEntry,
   target?: TreeEntry,
   position: DropPosition = "after",
+  /** Parent used when there is no target: a category root, or the tree root. */
+  rootId?: string,
 ) {
   if (source.id === target?.id && source.kind === target.kind) return null;
   if (target && position !== "inside") {
     const rank = (source.rank ?? 0) - (target.rank ?? 0);
     if ((position === "before" && rank > 0) || (position === "after" && rank < 0)) return null;
   }
-  const parentId = position === "inside" ? target?.id : target?.parentId;
+  const parentId = position === "inside" ? target?.id : target ? target.parentId : rootId;
   if (source.kind === "folder") {
     const descendants = new Set([source.id]);
     let changed = true;

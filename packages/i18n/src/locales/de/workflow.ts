@@ -147,6 +147,7 @@ export const workflowCatalog = {
     dialogDescription: "Ordner dienen nur zum Organisieren von Unterhaltungen; sie ändern nie den Arbeitsbereich oder die Berechtigungen einer Unterhaltung.", location: "Ort", position: "Position",
     positionEnd: "Am Ende", positionStart: "Am Anfang", create: "Erstellen",
     removeFolderConfirm: "Ordner entfernen?",
+    newCategory: "Neue Kategorie", renameCategoryTitle: "Kategorie umbenennen", categoryName: "Kategoriename", renameCategory: "Umbenennen", deleteCategory: "Kategorie löschen", categoryActions: "Kategorieaktionen", emptyCategory: "Noch nichts hier", noChats: "Keine Chats", collapse: "Einklappen", expand: "Ausklappen", toggleBranches: "Zweige ein- oder ausklappen", projectInstructions: "Projektanweisungen", projectMemory: "Gedächtnis", renameProject: "Umbenennen",
   },
   workflowContext: {
     title: "Gemeinsamer Kontext", resources: "Verbindliche Referenzen", addResource: "Referenz hinzufügen", noResources: "Noch keine gemeinsamen Referenzen.", projectScope: "Ganzes Projekt", sourceValue: "{{kind}} · {{ref}} · Revision {{revision}}",

@@ -1,8 +1,9 @@
-import { WorkflowProjectTree } from "../features/project-workflow/WorkflowProjectTree";
-import { ProjectAgentButton } from "../features/project-workflow/ProjectAgentButton";
-import { IconClock } from "./icons";
-import { WorkflowNavigation, WorkflowProjectConversations, useWorkflowProjectGroups } from "../features/project-workflow/WorkflowNavigation";
+import { CategoryNavigation } from "../features/project-workflow/CategoryNavigation";
+import { IconClock, IconCube, IconSearch } from "./icons";
+import { WorkflowProjectConversations, useWorkflowProjectGroups } from "../features/project-workflow/WorkflowNavigation";
 import { workflowGroupForPath, workflowProjectEntries } from "../features/project-workflow/navigation-model";
+import { ProjectInstructionsDialog } from "./ProjectInstructionsDialog";
+import { ProjectMemoryDialog } from "./ProjectMemoryDialog";
 import { openFolderDialog } from "../features/project-workflow/folder-dialog-store";
 import { useWorkflowSessionMenu } from "../features/project-workflow/session-menu";
 import { useProjectWorkflow } from "../features/project-workflow/useProjectWorkflow";
@@ -71,9 +72,7 @@ import {
   ProjectRunCount,
   ProjectRunRail,
 } from "./ProjectRunIndicator";
-import { ACCENT_PRESET_IDS, ErrorCodes, formatSessionLink } from "@pi-desktop/shared";
-import { ProjectColorDot } from "./ProjectColorDot";
-import { ACCENT_PRESET_LABEL_KEYS, projectAccentStyle } from "../lib/project-accent";
+import { ErrorCodes, formatSessionLink } from "@pi-desktop/shared";
 import type { SessionSummary } from "@pi-desktop/shared";
 import type {
   ProjectMeta,
@@ -122,21 +121,19 @@ import {
   IconArrowUpDown,
   IconPlug,
   IconBranch,
-  IconCheck,
   IconChevronDown,
   IconCopy,
-  IconCircleAlert,
   IconNewSession,
   IconFolder,
-  IconPalette,
   IconMore,
   IconNewProject,
   IconNewFolder,
   IconPin,
   IconPencil,
+  IconFileText,
+  IconSparkles,
   IconSidebar,
   IconSettings,
-  IconStar,
   IconTrash,
   IconX,
 } from "./icons";
@@ -257,6 +254,8 @@ export function Sidebar({
   edgePanel,
   pinned = true,
   onTogglePin,
+  onOpenSearch,
+  onNewTask,
 }: {
   onToggleSidebar: () => void;
   sidebarToggleShortcut: string;
@@ -275,6 +274,10 @@ export function Sidebar({
   /** Docked permanently; false while it auto-hides. */
   pinned?: boolean;
   onTogglePin?: () => void;
+  /** Opens the global search dialog. */
+  onOpenSearch?: () => void;
+  /** New conversation, same command as the menu and shortcut. */
+  onNewTask?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const workflow = useProjectWorkflow();
@@ -294,6 +297,7 @@ export function Sidebar({
   const sessionOutcomes = useAppStore((s) => s.sessionOutcomes);
   const pendingPermissions = useAppStore((s) => s.pendingPermissions);
   const setPage = useAppStore((s) => s.setPage);
+  const projectConsoleId = useAppStore((s) => s.projectConsoleId);
   const navBack = useAppStore((s) => s.navBack);
   const canNavBack = useAppStore((s) => s.canNavBack);
   const page = useAppStore((s) => s.page);
@@ -320,7 +324,6 @@ export function Sidebar({
   const moveSessionProject = useAppStore((s) => s.moveSessionProject);
   const setSessionArchiveVisibility = useAppStore((s) => s.setSessionArchiveVisibility);
   const toggleProjectPinned = useAppStore((s) => s.toggleProjectPinned);
-  const setProjectColor = useAppStore((s) => s.setProjectColor);
   const archiveProjectAction = useAppStore((s) => s.archiveProject);
   const restoreProject = useAppStore((s) => s.restoreProject);
   const setProjectCollapsed = useAppStore((s) => s.setProjectCollapsed);
@@ -345,7 +348,10 @@ export function Sidebar({
   // Multi-select: Shift/Cmd+click session rows for batch operations.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastClickedIdRef = useRef<string | null>(null);
-  const [sectionMenu, setSectionMenu] = useState<"sessions" | "projects" | null>(null);
+  const [sectionMenu, setSectionMenu] = useState<"sessions" | "projects" | "category" | null>(null);
+  const [collapsedBranches, setCollapsedBranches] = useState<Record<string, boolean>>({});
+  const [instructionsFor, setInstructionsFor] = useState<ProjectEntry | null>(null);
+  const [memoryFor, setMemoryFor] = useState<ProjectEntry | null>(null);
   const [menuPosition, setMenuPosition] = useState<{
     top: number;
     left: number;
@@ -613,7 +619,7 @@ export function Sidebar({
   );
 
   const openSectionMenu = useCallback(
-    (section: "sessions" | "projects", x: number, y: number) => {
+    (section: "sessions" | "projects" | "category", x: number, y: number) => {
       menuTriggerRef.current = null;
       setSortOpen(false);
       setSessionMenu(null);
@@ -1178,8 +1184,6 @@ export function Sidebar({
     const label = t(labelKey, { defaultValue: fallback });
     return (
       <span className={`thread-item-status ${status}`} aria-label={label} title={label}>
-        {status === "completed" ? <IconCheck size={10} aria-hidden /> : null}
-        {status === "failed" ? <IconCircleAlert size={11} aria-hidden /> : null}
       </span>
     );
   };
@@ -1603,6 +1607,18 @@ export function Sidebar({
     await createSession({ projectPath: path });
   };
 
+  /** New project conversation whose id the caller places (for example into a folder). */
+  const createProjectSessionId = async (path: string): Promise<string | undefined> => {
+    try {
+      const id = await newSession({ projectPath: path });
+      focusComposer();
+      return id || undefined;
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
   const openProjectPicker = async () => {
     try {
       await openProject();
@@ -1707,8 +1723,9 @@ export function Sidebar({
       const archived = sessionArchived(session, meta);
       const pinned = sessionPinned(session, meta);
       const native = session.source === "pi-native";
-      const gitItems = [
-        ...(native || !sessionAllows(session, "canEditMessages")
+      const gitItems = [...sessionWorktreeItems];
+      const branchItems =
+        native || !sessionAllows(session, "canEditMessages")
           ? []
           : [
               sidebarMenuAction({
@@ -1719,9 +1736,7 @@ export function Sidebar({
                 disabled: Boolean(runningSessions[session.id]),
                 onSelect: () => void forkSession(session),
               }),
-            ]),
-        ...sessionWorktreeItems,
-      ];
+            ];
       return {
         label: t("nav.sessionActions", { defaultValue: "Session actions" }),
         items: [
@@ -1747,6 +1762,7 @@ export function Sidebar({
             onSelect: () => toggleSessionPin(session),
           }),
           ...workflowSessionMenu.sessionItems(session, () => closeMenus(false)),
+          ...branchItems,
           sidebarMenuAction({
             id: "toggle-session-archive",
             label: archived
@@ -1860,21 +1876,6 @@ export function Sidebar({
       return {
         label: t("project.openActions", { name: entry.name }),
         items: [
-          sidebarMenuAction({
-            id: "open-project-folder",
-            label: t("project.openFolder", { defaultValue: "Open folder" }),
-            icon: <IconFolder size={14} />,
-            onSelect: () => void openProjectFolder(entry),
-          }),
-          sidebarMenuAction({
-            id: "edit-project",
-            label: t("project.edit", { defaultValue: "Edit project" }),
-            icon: <IconPencil size={14} />,
-            onSelect: () => {
-              closeMenus(false);
-              setEditProjectFor(entry);
-            },
-          }),
           ...(workflowGroup
             ? [
                 sidebarMenuAction({
@@ -1893,39 +1894,53 @@ export function Sidebar({
               ]
             : []),
           sidebarMenuAction({
+            id: "new-project-chat",
+            label: t("workflowNav.newChat"),
+            icon: <IconNewSession size={14} />,
+            onSelect: () => {
+              closeMenus(false);
+              void createProjectSession(entry.path);
+            },
+          }),
+          sidebarMenuAction({
+            id: "project-instructions",
+            label: t("workflowNav.projectInstructions"),
+            icon: <IconFileText size={14} />,
+            onSelect: () => {
+              closeMenus(false);
+              setInstructionsFor(entry);
+            },
+          }),
+          sidebarMenuAction({
+            id: "project-memory",
+            label: t("workflowNav.projectMemory"),
+            icon: <IconSparkles size={14} />,
+            onSelect: () => {
+              closeMenus(false);
+              setMemoryFor(entry);
+            },
+          }),
+          sidebarMenuAction({
+            id: "edit-project",
+            label: t("workflowNav.renameProject"),
+            icon: <IconPencil size={14} />,
+            onSelect: () => {
+              closeMenus(false);
+              setEditProjectFor(entry);
+            },
+          }),
+          sidebarMenuAction({
+            id: "open-project-folder",
+            label: t("project.openFolder", { defaultValue: "Open folder" }),
+            icon: <IconFolder size={14} />,
+            separatorBefore: true,
+            onSelect: () => void openProjectFolder(entry),
+          }),
+          sidebarMenuAction({
             id: "toggle-project-pin",
             label: entry.meta.pinned ? t("project.unpin") : t("project.pin"),
             icon: <IconPin size={14} />,
             onSelect: () => toggleProjectPin(entry),
-          }),
-          sidebarMenuSubmenu({
-            id: "project-color",
-            label: t("project.color"),
-            icon: <IconPalette size={14} />,
-            items: [
-              sidebarMenuAction({
-                id: "project-color-theme",
-                label: t("project.colorFollowTheme"),
-                icon: <ProjectColorDot />,
-                checked: !entry.meta.color,
-                onSelect: () => {
-                  setProjectColor(entry.path, undefined);
-                  closeMenus();
-                },
-              }),
-              ...ACCENT_PRESET_IDS.map((id) =>
-                sidebarMenuAction({
-                  id: `project-color-${id}`,
-                  label: t(ACCENT_PRESET_LABEL_KEYS[id]),
-                  icon: <ProjectColorDot color={id} />,
-                  checked: entry.meta.color === id,
-                  onSelect: () => {
-                    setProjectColor(entry.path, id);
-                    closeMenus();
-                  },
-                }),
-              ),
-            ],
           }),
           sidebarMenuAction({
             id: "toggle-project-archive",
@@ -1986,7 +2001,7 @@ export function Sidebar({
       setCollapsed,
       t,
       toggleProjectPin,
-      setProjectColor,
+      createProjectSession,
       workflow.snapshot,
       workflowGroups.groups,
     ],
@@ -2200,8 +2215,10 @@ export function Sidebar({
       projectPath?: string;
       global?: boolean;
       showLastReplyDate?: boolean;
+      /** Branches and child conversations nested under a row. */
+      childrenOf?: (session: SessionSummary) => SessionSummary[];
     },
-  ) => items.map((session) => {
+  ): React.ReactNode[] => items.map((session) => {
     const meta = sessionMeta[session.id] ?? {};
     const normalizedProjectPath = normalizeProjectPath(session.projectPath);
     const temporary = options?.temporary ?? !normalizedProjectPath;
@@ -2219,6 +2236,8 @@ export function Sidebar({
       outcome: sessionOutcomes[session.id],
       hasPendingPermission,
     });
+    // Only states that need attention get a dot: completed and unread are quiet.
+    const dotStatus = status === "running" || status === "permission" || status === "failed" ? status : null;
     const lastReplyDate = options?.showLastReplyDate
       ? formatSessionLastReplyDate(
           session.updatedAt,
@@ -2226,10 +2245,12 @@ export function Sidebar({
           i18n.resolvedLanguage ?? i18n.language,
         )
       : "";
-    return (
+    const kids = options?.childrenOf?.(session) ?? [];
+    const kidsOpen = !collapsedBranches[session.id];
+    const row = (
       <div
         key={session.id}
-        className={`thread-item ${active ? "active" : ""} ${archived ? "archived" : ""} ${draggingSessionId === session.id ? "is-dragging" : ""} ${selectedIds.has(session.id) ? "selected" : ""}`}
+        className={`thread-item ${active ? "active" : ""} ${archived ? "archived" : ""} ${draggingSessionId === session.id ? "is-dragging" : ""} ${selectedIds.has(session.id) ? "selected" : ""} ${sessionMenu === session.id ? "is-menu-open" : ""}`}
         data-sidebar-session-row={session.id}
         draggable={!running && !isRemoteSession(session)}
         onDragStart={(event) => {
@@ -2267,10 +2288,9 @@ export function Sidebar({
           );
         }}
       >
-        {status ? renderSessionStatus(status) : null}
         <button
           type="button"
-          className="thread-item-main"
+          className={cx("thread-item-main", kids.length > 0 && "has-kids")}
           onPointerEnter={() => scheduleSessionPrefetch(session.id)}
           onPointerLeave={cancelSessionPrefetch}
           onFocus={() => void prefetchSession(session.id).catch(() => undefined)}
@@ -2293,6 +2313,7 @@ export function Sidebar({
           aria-current={active ? "page" : undefined}
           aria-describedby={sessionHoverCard?.session.id === session.id ? `session-hover-${session.id}` : undefined}
         >
+          <span className="thread-item-title">{taskTitle(session.title)}</span>
           {sessionPinned(session, meta) ? (
             <IconPin size={11} className="thread-item-pin" aria-hidden />
           ) : null}
@@ -2301,22 +2322,41 @@ export function Sidebar({
           ) : null}
           {isRemoteSession(session) && <span className="thread-item-source" title={session.remoteHostLabel}>{t("remote:remote")}</span>}
           <WorktreeBadge worktree={session.worktree} sessionId={session.id} />
-          <span className="thread-item-title">{taskTitle(session.title)}</span>
           {options?.global ? (
             <span className="thread-item-project">
               {owningProject}
             </span>
           ) : null}
         </button>
+        {kids.length > 0 ? (
+          <>
+            <button
+              type="button"
+              className="sidebar-chevron-button"
+              data-action="toggle-branches"
+              aria-expanded={kidsOpen}
+              aria-label={t("workflowNav.toggleBranches")}
+              title={t("workflowNav.toggleBranches")}
+              onClick={(event) => {
+                event.stopPropagation();
+                setCollapsedBranches((previous) => ({ ...previous, [session.id]: kidsOpen }));
+              }}
+            >
+              <IconChevronDown size={11} className={kidsOpen ? "" : "workflow-navigation-folded"} />
+            </button>
+            <span className="thread-item-spacer" />
+          </>
+        ) : null}
         <div
           className={cx(
             "thread-item-meta",
             sessionMenu === session.id && "is-menu-open",
           )}
         >
-          {lastReplyDate ? (
+          {lastReplyDate && !dotStatus ? (
             <span className="thread-item-last-reply">{lastReplyDate}</span>
           ) : null}
+          {dotStatus ? renderSessionStatus(dotStatus) : null}
           <TooltipButton
             type="button"
             className="thread-item-more"
@@ -2340,6 +2380,21 @@ export function Sidebar({
         </div>
       </div>
     );
+    if (!kids.length) return row;
+    return (
+      <div key={session.id} className="thread-item-group">
+        {row}
+        {kidsOpen ? (
+          <div className="thread-item-kids">
+            {kids.map((kid) => (
+              <div key={kid.id} className="thread-item-kid">
+                {renderSessionRows([kid], options)}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
   });
 
   const renderProjectGroup = (entry: ProjectEntry) => {
@@ -2347,6 +2402,7 @@ export function Sidebar({
     const collapsedProject = entry.meta.collapsed ?? projectCollapsed[entry.key] ?? false;
     const projectId = projectDomId(entry.key);
     const isMenuOpen = projectMenu === entry.key;
+    const home = Boolean(workflowGroup && page === "project" && projectConsoleId === workflowGroup.id);
 
     // Show the initial page by default; the remaining sessions stay folded
     // behind the Load more affordance.
@@ -2390,12 +2446,20 @@ export function Sidebar({
       }
       return result;
     };
+    const toggleProject = () => {
+      if (workflowGroup) {
+        setCollapsed(entry.path, !collapsedProject);
+        return;
+      }
+      void (async () => {
+        if (!entry.active && !(await selectProject(entry.path))) return;
+        setCollapsed(entry.path, !collapsedProject);
+      })();
+    };
 
     return (
       <section
         key={entry.key}
-        data-project-color={entry.meta.color}
-        style={projectAccentStyle(entry.meta.color)}
         className={`sidebar-session-group project-group ${entry.meta.archived ? "archived" : ""} ${runIsLive ? "has-running-sessions" : ""} ${showRunRail ? "has-run-rail" : ""} ${collapsedProject ? "is-collapsed" : ""} ${dropProjectKey === entry.key ? "is-drop-target" : ""} ${draggingProjectKey === entry.key ? "is-dragging" : ""} ${dropIndicator?.key === entry.key ? (dropIndicator.insertAfter ? "is-drop-after" : "is-drop-before") : ""}`}
         aria-labelledby={projectId}
         data-sidebar-project-group={entry.key}
@@ -2416,17 +2480,13 @@ export function Sidebar({
       >
         {showRunRail ? <ProjectRunRail summary={runSummary} /> : null}
         <div
-          className="sidebar-session-group-header"
+          className={cx("sidebar-session-group-header sidebar-project-row", isMenuOpen && "is-menu-open")}
           onClick={(event) => {
-            // Same one-target rule as a session row: the header's own controls
-            // stay the only spelled-out targets, so the gutter next to a hidden
-            // control still activates and toggles the group.
+            // The row's own controls stay the only spelled-out targets, so the
+            // gutter next to them still toggles the project.
             const target = event.target as HTMLElement | null;
             if (target?.closest("button, [data-action]")) return;
-            void (async () => {
-              if (!entry.active && !(await selectProject(entry.path))) return;
-              setCollapsed(entry.path, !collapsedProject);
-            })();
+            toggleProject();
           }}
           onContextMenu={(event) => {
             if (projectReorderRef.current) {
@@ -2445,10 +2505,30 @@ export function Sidebar({
             );
           }}
         >
+          {workflowGroup ? (
+            <TooltipButton
+              type="button"
+              className={cx("sidebar-project-cube", home && "is-active")}
+              data-action="open-project-home"
+              tooltip={t("workflow.projectHome")}
+              ariaLabel={t("workflow.projectHome")}
+              aria-current={home ? "page" : undefined}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPage("project", { projectId: workflowGroup.id });
+              }}
+            >
+              <IconCube size={15} />
+            </TooltipButton>
+          ) : (
+            <span className="sidebar-project-cube is-static" aria-hidden>
+              <IconCube size={15} />
+            </span>
+          )}
           <TooltipButton
             type="button"
             id={projectId}
-            className="sidebar-session-group-title project-toggle"
+            className="sidebar-project-name project-toggle"
             tooltip={entry.displayPath ?? entry.path}
             tooltipDelayMs={500}
             tooltipClassName="ui-tooltip-path"
@@ -2467,45 +2547,51 @@ export function Sidebar({
                 suppressProjectTitleClickRef.current = false;
                 return;
               }
-              if (workflowGroup) {
-                setCollapsed(entry.path, !collapsedProject);
-                return;
-              }
-              void (async () => {
-                if (!entry.active && !(await selectProject(entry.path))) return;
-                setCollapsed(entry.path, !collapsedProject);
-              })();
+              toggleProject();
             }}
           >
-            <IconChevronDown
-              size={13}
-              className={`sidebar-disclosure-icon ${collapsedProject ? "collapsed" : ""}`}
-            />
-            {entry.meta.pinned ? (
-              <IconStar
-                size={13}
-                fill="currentColor"
-                className="sidebar-project-pin"
-                aria-hidden
-              />
-            ) : (
-              <IconFolder size={13} aria-hidden />
-            )}
             <span>{entry.name}</span>
             {showRunBadge ? <ProjectRunBadge summary={runSummary} /> : null}
             {showRunRail ? <ProjectRunCount summary={runSummary} /> : null}
-            {entry.active ? <span className="sidebar-project-active-dot" aria-label={t("project.active", { defaultValue: "Active" })} /> : null}
           </TooltipButton>
           <span id={`${projectId}-path-description`} className="sr-only">
             {entry.displayPath ?? entry.path}
             {". "}
             {t("project.reorder", { name: entry.name, defaultValue: "Reorder {{name}}" })}
           </span>
-          {workflowGroup ? <ProjectAgentButton projectId={workflowGroup.id} className="sidebar-toolbar-button" /> : null}
-          <div className="sidebar-menu-wrap">
+          <div className="workflow-tree-actions">
             <TooltipButton
               type="button"
-              className="thread-item-more project-more"
+              className="sidebar-row-action"
+              data-action="project-new-chat"
+              tooltip={t("workflowNav.newChat")}
+              ariaLabel={t("workflowNav.newChat")}
+              onClick={(event) => {
+                event.stopPropagation();
+                void createProjectSession(entry.path);
+              }}
+            >
+              <IconNewSession size={13} />
+            </TooltipButton>
+            {workflowGroup ? (
+              <TooltipButton
+                type="button"
+                className="sidebar-row-action"
+                data-action="project-new-folder"
+                tooltip={t("workflowNav.newFolder")}
+                ariaLabel={t("workflowNav.newFolder")}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setCollapsed(entry.path, false);
+                  openFolderDialog({ mode: "create", context: { scope: "project", projectId: workflowGroup.id } });
+                }}
+              >
+                <IconNewFolder size={13} />
+              </TooltipButton>
+            ) : null}
+            <TooltipButton
+              type="button"
+              className="sidebar-row-action thread-item-more project-more"
               tooltip={t("project.openActions", { name: entry.name })}
               ariaLabel={t("project.openActions", { name: entry.name })}
               aria-haspopup="menu"
@@ -2523,32 +2609,16 @@ export function Sidebar({
               <IconMore size={14} />
             </TooltipButton>
           </div>
-          <TooltipButton
-            type="button"
-            className="sidebar-session-group-add"
-            tooltip={entry.active ? t("project.newTask") : t("project.openAndNewTask", { defaultValue: "Open project and create task" })}
-            ariaLabel={entry.active ? t("project.newTask") : t("project.openAndNewTask", { defaultValue: "Open project and create task" })}
-            onClick={() => void createProjectSession(entry.path)}
-          >
-            <IconNewSession size={13} />
-          </TooltipButton>
         </div>
-        <div
-          id={`${projectId}-sessions`}
-          className={`sidebar-session-group-body project ${collapsedProject ? "collapsed" : ""}`}
-          role="region"
-          aria-hidden={collapsedProject}
-          inert={collapsedProject ? true : undefined}
-        >
-          <div className="sidebar-session-group-clip">
-            <div className="sidebar-session-group-list">
-              {workflowGroup ? <WorkflowProjectConversations projectId={workflowGroup.id} sessions={entry.sessions}
-                renderSessions={(items) => renderSessionRows(items, { projectPath: entry.path, showLastReplyDate: settings?.sidebarSessionTime === true })} /> : entry.sessions.length > 0 ? renderProjectSessions(visibleSessions) : (
-                <div className="sidebar-session-empty">{t("nav.noProjectSessions")}</div>
-              )}
-            </div>
+        {collapsedProject ? null : (
+          <div id={`${projectId}-sessions`} className="sidebar-project-body" role="region">
+            {workflowGroup ? <WorkflowProjectConversations projectId={workflowGroup.id} sessions={entry.sessions}
+              createSession={() => createProjectSessionId(entry.path)}
+              renderSessions={(items, childrenOf) => renderSessionRows(items, { projectPath: entry.path, childrenOf, showLastReplyDate: settings?.sidebarSessionTime === true })} /> : entry.sessions.length > 0 ? renderProjectSessions(visibleSessions) : (
+              <div className="sidebar-session-empty">{t("nav.noProjectSessions")}</div>
+            )}
           </div>
-        </div>
+        )}
       </section>
     );
   };
@@ -2566,6 +2636,31 @@ export function Sidebar({
     const entry = projectMenu
       ? projectEntries.find((item) => item.key === projectMenu)
       : undefined;
+    if (sectionMenu === "category") {
+      return portalToBody(
+        <SidebarMenuPanel
+          menuRef={floatingMenuRef}
+          firstItemRef={menuFirstItemRef}
+          className="sidebar-section-menu"
+          position={position}
+          onKeyDown={onMenuKeyDown}
+          content={{
+            label: t("workflowNav.newCategory"),
+            items: [
+              sidebarMenuAction({
+                id: "new-category",
+                label: t("workflowNav.newCategory"),
+                icon: <IconNewFolder size={14} />,
+                onSelect: () => {
+                  closeMenus(false);
+                  openFolderDialog({ mode: "category-create", context: { scope: "chats" } });
+                },
+              }),
+            ],
+          }}
+        />,
+      );
+    }
     if (sectionMenu) {
       const isSessions = sectionMenu === "sessions";
       return portalToBody(
@@ -2600,7 +2695,7 @@ export function Sidebar({
                       icon: <IconNewFolder size={14} />,
                       onSelect: () => {
                         closeMenus(false);
-                        openFolderDialog({ mode: "create", context: { scope: "projects" } });
+                        openFolderDialog({ mode: "create", context: { scope: "chats" }, parentId: "category:projects" });
                       },
                     }),
                   ]
@@ -2673,6 +2768,36 @@ export function Sidebar({
           <span>{t("app.shellName")}</span>
         </TooltipButton>
         <div className="sidebar-header-actions no-drag">
+          {onOpenSearch ? (
+            <TooltipButton
+              type="button"
+              className="icon-btn icon-btn-square"
+              tooltip={t("nav.search")}
+              ariaLabel={t("nav.search")}
+              data-nav="search"
+              onClick={onOpenSearch}
+            >
+              <IconSearch size={15} />
+            </TooltipButton>
+          ) : null}
+          {onNewTask ? (
+            <TooltipButton
+              type="button"
+              className="icon-btn icon-btn-square"
+              tooltip={t("nav.newTask")}
+              ariaLabel={t("nav.newTask")}
+              data-nav="new-task"
+              onClick={onNewTask}
+              onContextMenu={(event) => {
+                if (!workflow.snapshot) return;
+                event.preventDefault();
+                event.stopPropagation();
+                openSectionMenu("category", event.clientX, event.clientY);
+              }}
+            >
+              <IconNewSession size={15} />
+            </TooltipButton>
+          ) : null}
           {onTogglePin ? (
             <TooltipButton
               type="button"
@@ -2708,8 +2833,7 @@ export function Sidebar({
 
       <div className="sidebar-body no-drag">
 
-        {workflow.snapshot ? <WorkflowNavigation sessions={filtered} renderSessions={(items) => renderSessionRows(items)} /> : null}
-        {pinnedSessions.length > 0 ? (
+        {!workflow.snapshot && pinnedSessions.length > 0 ? (
           <section
             className="sidebar-pinned-sessions"
             aria-labelledby="sidebar-pinned-label"
@@ -2805,6 +2929,59 @@ export function Sidebar({
           </div>
         </section> : null}
 
+        {workflow.snapshot ? (
+          <div
+            className={`sidebar-session-groups sidebar-category-scroll min-h-0 flex-1 overflow-auto ${projectsDropActive ? "is-drop-target" : ""}`}
+            onScroll={() => {
+              if (sessionMenu || projectMenu || sectionMenu || sortOpen) closeMenus(false);
+            }}
+            onContextMenu={(event) => {
+              if (
+                (event.target as Element).closest?.(
+                  "[data-sidebar-session-row], [data-sidebar-project-group], [data-sidebar-category], .workflow-tree-row",
+                )
+              ) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              openSectionMenu("category", event.clientX, event.clientY);
+            }}
+            onDragEnter={(event) => {
+              if (hasComposerFileDrag(event.dataTransfer)) event.preventDefault();
+            }}
+            onDragOver={onProjectsAreaDragOver}
+            onDragLeave={onProjectsAreaDragLeave}
+            onDrop={onProjectsAreaDrop}
+          >
+            {workflowGroups.error ? <p role="alert" className="workflow-navigation-error">{workflowGroups.error}</p> : null}
+            <CategoryNavigation
+              sessions={filtered}
+              pinnedSessionIds={pinnedSessionIds}
+              renderSessions={(items) => renderSessionRows(items)}
+              onNewProject={() => void openProjectPicker()}
+              projects={workflowProjectEntries(projectEntries, workflowGroups.groups).flatMap((entry, index) => {
+                const group = workflowGroupForPath(workflowGroups.groups, entry.path);
+                return group ? [{
+                  id: group.id,
+                  name: entry.name,
+                  order: projectMetaFor(group.primaryPath, projectMeta).order ?? entry.meta.order ?? index,
+                  pinned: entry.meta.pinned,
+                  archived: entry.meta.archived,
+                  open: !(entry.meta.collapsed ?? projectCollapsed[entry.key] ?? false),
+                  render: renderProjectGroup(entry),
+                }] : [];
+              })}
+            />
+            {projectEntries.filter(entry => !workflowGroupForPath(workflowGroups.groups, entry.path)).map(renderProjectGroup)}
+            <RemoteProjectGroups groups={remoteProjectGroups}
+              renderSessions={(sessions) => renderSessionRows(sessions, {
+                temporary: false,
+                showLastReplyDate: settings?.sidebarSessionTime === true,
+              })} />
+          </div>
+        ) : (
+          <>
         <div
           className="sidebar-list-toolbar"
           data-sidebar-section="projects"
@@ -2854,14 +3031,7 @@ export function Sidebar({
           onDragLeave={onProjectsAreaDragLeave}
           onDrop={onProjectsAreaDrop}
         >
-          {workflow.snapshot && workflowGroups.error ? <p role="alert" className="workflow-navigation-error">{workflowGroups.error}</p> : null}
-          {workflow.snapshot ? <>
-            <WorkflowProjectTree projects={workflowProjectEntries(projectEntries, workflowGroups.groups).flatMap((entry, index) => {
-              const group = workflowGroupForPath(workflowGroups.groups, entry.path);
-              return group ? [{ id: group.id, name: entry.name, order: projectMetaFor(group.primaryPath, projectMeta).order ?? entry.meta.order ?? index, pinned: entry.meta.pinned, archived: entry.meta.archived, render: renderProjectGroup(entry) }] : [];
-            })} />
-            {projectEntries.filter(entry => !workflowGroupForPath(workflowGroups.groups, entry.path)).map(renderProjectGroup)}
-          </> : projectEntries.map(renderProjectGroup)}
+          {projectEntries.map(renderProjectGroup)}
           {projectEntries.length === 0 ? (
             <section className="sidebar-session-group" aria-labelledby="sidebar-project-group-label">
               <div className="sidebar-session-group-header">
@@ -2878,6 +3048,9 @@ export function Sidebar({
               showLastReplyDate: settings?.sidebarSessionTime === true,
             })} />
         </div>
+
+          </>
+        )}
 
         <div className="sidebar-footer no-drag">
           <div className="footer-actions">
@@ -2982,6 +3155,32 @@ export function Sidebar({
               renameProject(group.primaryPath, group.name);
             }
           }}
+          onError={reportError}
+        />
+      ) : null}
+      {instructionsFor ? (
+        <ProjectInstructionsDialog
+          project={{
+            name: instructionsFor.name,
+            path: instructionsFor.path,
+            groupId: workflowGroupForPath(workflowGroups.groups, instructionsFor.path)?.id,
+            legacy: workflowGroupForPath(workflowGroups.groups, instructionsFor.path)?.legacy,
+          }}
+          onClose={() => setInstructionsFor(null)}
+          onSaved={() => undefined}
+          onError={reportError}
+        />
+      ) : null}
+      {memoryFor ? (
+        <ProjectMemoryDialog
+          project={{
+            name: memoryFor.name,
+            path: memoryFor.path,
+            groupId: workflowGroupForPath(workflowGroups.groups, memoryFor.path)?.id,
+            legacy: workflowGroupForPath(workflowGroups.groups, memoryFor.path)?.legacy,
+          }}
+          onClose={() => setMemoryFor(null)}
+          onSaved={() => undefined}
           onError={reportError}
         />
       ) : null}

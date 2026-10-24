@@ -537,8 +537,9 @@
 
 .conversation-topbar.ct-collapsed {
   /* The out-of-flow .ct-lead reserves no space of its own, so the title's
-   * offset is the inset plus the 28px button and .ct-left's 8px gap. */
-  padding-left: calc(var(--ct-lead-inset) + 36px);
+   * offset is the inset plus the two 28px buttons (dock toggle, new chat), the
+   * 4px between them and .ct-left's 8px gap. */
+  padding-left: calc(var(--ct-lead-inset) + 68px);
   transition: padding-left var(--motion-duration-fast) var(--motion-ease-in);
 }
 
@@ -795,11 +796,12 @@
    * mid-flight. Expanded it lands off the pane's left edge, where it is
    * invisible anyway, and slides in rather than materialising over the title.
    */
-  left: calc(var(--ct-lead-inset) - 36px);
+  left: calc(var(--ct-lead-inset) - 68px);
   top: 0;
   bottom: 0;
   display: flex;
   align-items: center;
+  gap: 4px;
   /*
    * Out of flow, so .ct-left's no-drag box no longer covers it: .ct-left starts
    * at the padding edge (x=124 collapsed) while this sits at x=88. Without its

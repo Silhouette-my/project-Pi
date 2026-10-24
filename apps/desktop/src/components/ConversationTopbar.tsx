@@ -19,7 +19,6 @@ import {
   IconChevronLeft,
   IconSidebar,
   IconNewSession,
-  IconSearch,
 } from "./icons";
 import { TooltipButton } from "./ui";
 
@@ -41,13 +40,11 @@ export function ConversationTopbar({
   workPanelOpen,
   onToggleSidebar,
   onNewTask,
-  onOpenSearch,
 }: {
   sidebarCollapsed: boolean;
   workPanelOpen: boolean;
   onToggleSidebar: () => void;
   onNewTask: () => void;
-  onOpenSearch: () => void;
 }) {
   const { t } = useTranslation();
   const activeSessionId = useAppStore((s) => s.activeSessionId);
@@ -64,19 +61,10 @@ export function ConversationTopbar({
   const newTaskShortcut = KEYBOARD_SHORTCUTS.find(
     (shortcut) => shortcut.id === "newTask",
   );
-  const searchShortcut = KEYBOARD_SHORTCUTS.find(
-    (shortcut) => shortcut.id === "openSearch",
-  );
   const newTaskBinding = newTaskShortcut
     ? resolveKeybinding(newTaskShortcut, keybindings, platform)
     : null;
-  const searchBinding = searchShortcut
-    ? resolveKeybinding(searchShortcut, keybindings, platform)
-    : null;
   const newTaskShortcutLabel = keybindingDisplayParts(newTaskBinding, platform).join(
-    platform === "darwin" ? "" : "+",
-  );
-  const searchShortcutLabel = keybindingDisplayParts(searchBinding, platform).join(
     platform === "darwin" ? "" : "+",
   );
   const newTaskTooltip = newTaskShortcutLabel
@@ -85,12 +73,6 @@ export function ConversationTopbar({
         shortcut: newTaskShortcutLabel,
       })
     : t("nav.newTask");
-  const searchTooltip = searchShortcutLabel
-    ? t("nav.actionWithShortcut", {
-        action: t("nav.search"),
-        shortcut: searchShortcutLabel,
-      })
-    : t("nav.search");
 
   const { snapshot } = useProjectWorkflow();
   const groups = useWorkflowProjectGroups(workspace?.path);
@@ -147,6 +129,17 @@ export function ConversationTopbar({
           >
             <IconSidebar size={15} />
           </TooltipButton>
+          <TooltipButton
+            type="button"
+            className="ct-icon-btn"
+            tooltip={newTaskTooltip}
+            ariaLabel={t("nav.newTask")}
+            tabIndex={sidebarCollapsed ? undefined : -1}
+            data-nav="new-task"
+            onClick={onNewTask}
+          >
+            <IconNewSession size={15} />
+          </TooltipButton>
         </div>
         {scheduledSession ? (
           <button
@@ -173,24 +166,6 @@ export function ConversationTopbar({
       <div className="ct-right">
         <div className="ct-actions">
           {projectId && !isRemoteSession(activeSession) ? <ProjectAgentButton projectId={projectId} className="ct-icon-btn" /> : null}
-          <TooltipButton
-            type="button"
-            className="ct-icon-btn"
-            tooltip={newTaskTooltip}
-            ariaLabel={t("nav.newTask")}
-            onClick={onNewTask}
-          >
-            <IconNewSession size={15} />
-          </TooltipButton>
-          <TooltipButton
-            type="button"
-            className="ct-icon-btn"
-            tooltip={searchTooltip}
-            ariaLabel={t("nav.search")}
-            onClick={onOpenSearch}
-          >
-            <IconSearch size={15} />
-          </TooltipButton>
         </div>
       </div>
     </div>

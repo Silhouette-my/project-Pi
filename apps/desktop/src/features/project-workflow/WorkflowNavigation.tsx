@@ -1,129 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type {
-  ProjectGroupRecord,
-  SessionSummary,
-  WorkflowNavigation as NavigationRecord,
-} from "@pi-desktop/shared";
-import { Button, TooltipButton } from "../../components/ui";
-import { IconFolder, IconNewSession } from "../../components/icons";
+import type { ProjectGroupRecord, SessionSummary } from "@pi-desktop/shared";
 import { api } from "../../lib/api";
-import { sessionArchived } from "../../lib/sidebar-session-groups";
+import { sessionArchived, sessionPinned } from "../../lib/sidebar-session-groups";
 import { useAppStore } from "../../stores/app-store";
 import { useProjectWorkflow } from "./useProjectWorkflow";
-import { navigationHighlights, navigationSessions } from "./navigation-model";
-import { ProjectAgentButton } from "./ProjectAgentButton";
 import { NavigationTree } from "./NavigationTree";
 import { folderInContext } from "./navigation-tree-model";
+import { projectSessionChildren } from "./navigation-session-children";
 import "./navigation-styles.css";
-
-type Props = {
-  sessions: SessionSummary[];
-  renderSessions: (sessions: SessionSummary[]) => ReactNode;
-};
-
-export function WorkflowNavigation({ sessions, renderSessions }: Props) {
-  const workflow = useProjectWorkflow();
-  const { t } = useTranslation();
-  const [creating, setCreating] = useState(false);
-  const [creationError, setCreationError] = useState<string | null>(null);
-  const snapshot = workflow.snapshot;
-  if (!snapshot) return null;
-  const folders = snapshot.folders.filter((folder) => folderInContext(folder, { scope: "chats" }));
-  const nav = new Map(snapshot.navigation.map((item) => [item.sessionId, item]));
-  const record = (sessionId: string): NavigationRecord =>
-    nav.get(sessionId) ?? { sessionId, order: 0, favorite: false };
-  const { favorites, recent, promotedIds } = navigationHighlights(snapshot, sessions);
-  const eligible = [
-    ...navigationSessions(snapshot, sessions),
-    ...folders.flatMap((folder) => navigationSessions(snapshot, sessions, folder.id)),
-  ];
-  async function newChat(folderId?: string) {
-    setCreating(true);
-    setCreationError(null);
-    try {
-      const sessionId = await useAppStore.getState().newSession({ projectPath: null });
-      if (sessionId)
-        await workflow.mutate({ kind: "navigation.move", sessionIds: [sessionId], folderId });
-    } catch (cause) {
-      setCreationError(
-        t("workflow.requestFailed", {
-          detail: cause instanceof Error ? cause.message : String(cause),
-        }),
-      );
-    } finally {
-      setCreating(false);
-    }
-  }
-  function renderChat(session: SessionSummary) {
-    return (
-      <div
-        key={session.id}
-        className="workflow-navigation-chat"
-        onClickCapture={(event) => {
-          if ((event.target as Element).closest(".thread-item-main"))
-            void workflow.mutate({
-              kind: "navigation.update",
-              navigation: { ...record(session.id), lastAccessedAt: new Date().toISOString() },
-            });
-        }}
-      >
-        <div className="workflow-navigation-session">{renderSessions([session])}</div>
-      </div>
-    );
-  }
-  return (
-    <section className="workflow-navigation" aria-label={t("workflowNav.chats")}>
-      {creationError ? (
-        <p role="alert" className="workflow-navigation-error">
-          {creationError}
-        </p>
-      ) : null}
-      <NavigationTree
-        context={{ scope: "chats" }}
-        label={t("workflowNav.chats")}
-        toolbarActions={
-          <TooltipButton
-            className="sidebar-toolbar-button"
-            tooltip={t("workflowNav.newChat")}
-            ariaLabel={t("workflowNav.newChat")}
-            disabled={creating || workflow.busy}
-            onClick={() => void newChat()}
-          >
-            <IconNewSession size={14} />
-          </TooltipButton>
-        }
-        renderFolderActions={(folder) => (
-          <TooltipButton
-            className="sidebar-toolbar-button"
-            tooltip={t("workflowNav.newChat")}
-            ariaLabel={t("workflowNav.newChat")}
-            disabled={creating || workflow.busy}
-            onClick={() => void newChat(folder.id)}
-          >
-            <IconNewSession size={13} />
-          </TooltipButton>
-        )}
-        entries={eligible.map((session, index) => ({
-          kind: "session",
-          id: session.id,
-          label: session.title,
-          parentId: nav.get(session.id)?.folderId,
-          order: nav.get(session.id)?.order ?? index,
-        }))}
-        renderEntry={(entry) => {
-          const session = eligible.find((session) => session.id === entry.id);
-          return session ? renderChat(session) : null;
-        }}
-        shortcuts={[
-          { label: t("workflowNav.favorites"), ids: favorites.map((item) => item.id) },
-          { label: t("workflowNav.recent"), ids: recent.map((item) => item.id) },
-        ]}
-        hiddenRootIds={[...promotedIds]}
-      />
-    </section>
-  );
-}
 
 /** Resolve durable identity only; Sidebar remains the owner of visible project ordering/filtering. */
 export function useWorkflowProjectGroups(refreshKey: unknown) {
@@ -149,16 +34,29 @@ export function useWorkflowProjectGroups(refreshKey: unknown) {
   return { groups, error };
 }
 
+type ProjectConversationsProps = {
+  sessions: SessionSummary[];
+  /** Rows for these sessions; `childrenOf` supplies the branches nested under each. */
+  renderSessions: (
+    sessions: SessionSummary[],
+    childrenOf?: (session: SessionSummary) => SessionSummary[],
+  ) => ReactNode;
+  projectId: string;
+  /** Create a conversation in the project and resolve its id. */
+  createSession: () => Promise<string | undefined>;
+};
+
+/** One project's own tree: its folders, conversations and their branches. */
 export function WorkflowProjectConversations({
   sessions,
   renderSessions,
   projectId,
-}: Props & { projectId: string }) {
-  const { snapshot } = useProjectWorkflow();
+  createSession,
+}: ProjectConversationsProps) {
+  const workflow = useProjectWorkflow();
+  const { snapshot } = workflow;
   const { t } = useTranslation();
-  const setPage = useAppStore((state) => state.setPage);
-  const page = useAppStore((state) => state.page);
-  const consoleId = useAppStore((state) => state.projectConsoleId);
+  const [creating, setCreating] = useState(false);
   const agentIds = new Set((snapshot?.projectAgents ?? []).map((agent) => agent.sessionId));
   const nav = new Map(snapshot?.navigation.map((item) => [item.sessionId, item]));
   const allSessions = useAppStore((state) => state.sessions);
@@ -188,25 +86,36 @@ export function WorkflowProjectConversations({
       .filter((folder) => folderInContext(folder, { scope: "project", projectId }))
       .map((folder) => folder.id),
   );
+  // Branches and child conversations nest under their parent when it is shown.
+  const { roots, childrenOf } = projectSessionChildren(snapshot?.conversations ?? [], projectId, visible);
+  async function newChat(where: { folderId?: string }) {
+    if (!snapshot) return;
+    setCreating(true);
+    try {
+      const sessionId = await createSession();
+      if (!sessionId) return;
+      const siblings = roots.filter((session) => nav.get(session.id)?.folderId === where.folderId);
+      const order = Math.max(-1, ...siblings.map((session) => nav.get(session.id)?.order ?? 0)) + 1;
+      await workflow.mutate({
+        kind: "tree.move",
+        target: { kind: "session", id: sessionId },
+        scope: "project",
+        projectId,
+        folderId: where.folderId,
+        order,
+      });
+    } finally {
+      setCreating(false);
+    }
+  }
   return (
     <div className="workflow-navigation-projects">
-      <div className="workflow-navigation-project-entry">
-        <Button
-          variant="ghost"
-          className="workflow-navigation-label"
-          aria-current={page === "project" && consoleId === projectId ? "page" : undefined}
-          onClick={() => setPage("project", { projectId })}
-        >
-          <IconFolder size={14} />
-          <span>{t("workflow.projectHome")}</span>
-        </Button>
-        <ProjectAgentButton projectId={projectId} className="sidebar-toolbar-button" />
-      </div>
       <NavigationTree
         context={{ scope: "project", projectId }}
         label={t("workflowNav.chats")}
-        toolbar={false}
-        entries={visible.map((session, index) => ({
+        newChatDisabled={creating}
+        onNewChat={(where) => void newChat(where)}
+        entries={roots.map((session, index) => ({
           kind: "session",
           id: session.id,
           label: session.title,
@@ -214,9 +123,10 @@ export function WorkflowProjectConversations({
             ? nav.get(session.id)?.folderId
             : undefined,
           order: nav.get(session.id)?.order ?? index,
+          rank: sessionPinned(session, sessionMeta[session.id] ?? {}) ? -1 : 0,
         }))}
         renderEntry={(entry) =>
-          renderSessions(visible.filter((session) => session.id === entry.id))
+          renderSessions(roots.filter((session) => session.id === entry.id), childrenOf)
         }
       />
     </div>
