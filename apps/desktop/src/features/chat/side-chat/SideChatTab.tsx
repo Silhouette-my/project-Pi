@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { Button, SegmentedControl } from "../../../components/ui";
+import { TooltipButton } from "../../../components/ui";
+import { IconNewSession } from "../../../components/icons";
 import { DetachedConversation } from "../../../components/conversation/DetachedConversation";
+import { FloatingReturnBar } from "../../../components/workpanel/FloatingReturnBar";
 import { useAppStore } from "../../../stores/app-store";
 import type { WorkPanelTab } from "../../../lib/work-panel-tabs";
 import {
@@ -24,8 +26,11 @@ installSideChatLifecycle();
 /**
  * The work-panel surface of one side chat (ADR side-chats-on-detached-transcripts).
  *
- * A compact header, then the shared detached conversation. Before the first
- * Send there is no session: the panel is only a draft anchored at a message.
+ * The shared detached conversation with the floating return control over it:
+ * a pill for the return mode (changeable at any time) and, while a mode other
+ * than "none" is chosen, "Return to conversation". What used to be a header
+ * (title, anchored excerpt) lives in the tab tooltip. Before the first Send
+ * there is no session: the panel is only a draft anchored at a message.
  */
 export function SideChatTab({ tab }: { tab: WorkPanelTab }) {
   const { t } = useTranslation();
@@ -38,21 +43,17 @@ export function SideChatTab({ tab }: { tab: WorkPanelTab }) {
   const parentRunning = useAppStore((state) =>
     anchor ? state.runningSessions[anchor.parentSessionId] === true : false,
   );
-  const childTitle = useAppStore((state) =>
-    childId ? state.sessions.find((session) => session.id === childId)?.title.trim() : undefined,
-  );
   const returnState = useAppStore((state) => state.sideChatReturn[tab.id]);
   const setReturnMode = useAppStore((state) => state.setSideChatReturnMode);
   const childRunning = useAppStore((state) =>
     childId ? state.runningSessions[childId] === true : false,
   );
   // Count only: the selector returns a number so a streaming token that adds no
-  // new exchange does not re-render the header.
+  // new exchange does not re-render the tab.
   const turnCount = useAppStore((state) => sideChatDiscussion(state, tab).length);
   if (!anchor) return null;
 
   const blocked = childId ? undefined : sideChatFirstSendBlockReason(parent, parentRunning);
-  const title = childTitle || tab.label || t("sideChat.title");
   const mode = returnState?.mode ?? DEFAULT_SIDE_CHAT_RETURN_MODE;
   const returning = returnState?.status === "running";
   const returnBlock = sideChatReturnBlockReason({
@@ -61,73 +62,9 @@ export function SideChatTab({ tab }: { tab: WorkPanelTab }) {
     childRunning,
     turnCount,
   });
-  // Only a reason the user did not just cause is spelled out under the actions;
-  // "no mode chosen" and "nothing sent yet" are explained by the button tooltip.
-  const returnHint = returnState?.error
-    ? returnState.error
-    : returnBlock === "sideChat.returnBusy" && !returning
-      ? t(returnBlock)
-      : undefined;
 
   return (
     <div className="side-chat" data-side-chat={tab.id} data-side-chat-session={childId ?? ""}>
-      <header className="side-chat-header">
-        <h3 className="side-chat-title" title={title}>{title}</h3>
-        {anchor.excerpt ? (
-          <p className="side-chat-excerpt" title={anchor.excerpt}>
-            {t("sideChat.parentExcerpt", { excerpt: anchor.excerpt })}
-          </p>
-        ) : null}
-        <div className="side-chat-return" data-side-chat-return-mode={mode}>
-          <span className="side-chat-return-label">{t("sideChat.returnLabel")}</span>
-          <SegmentedControl
-            label={t("sideChat.returnLabel")}
-            role="radiogroup"
-            value={mode}
-            onChange={(next) => setReturnMode(tab.id, next)}
-            disabled={returning}
-            className="side-chat-return-modes"
-            itemClassName="side-chat-return-mode"
-            options={SIDE_CHAT_RETURN_MODES.map((value) => ({
-              value,
-              label: t(`sideChat.returnMode.${value}`),
-            }))}
-          />
-        </div>
-        <div className="side-chat-actions">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            data-side-chat-action="return-to-main"
-            disabled={Boolean(returnBlock) || returning}
-            aria-busy={returning || undefined}
-            title={returnBlock && !returning ? t(returnBlock) : undefined}
-            onClick={() => void returnSideChatToMain(tab)}
-          >
-            {returning ? t("sideChat.returning") : t("sideChat.returnToMain")}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            data-side-chat-action="open-as-session"
-            disabled={!childId}
-            onClick={() => void openSideChatAsConversation(tab)}
-          >
-            {t("sideChat.openAsSession")}
-          </Button>
-        </div>
-        {returnHint ? (
-          <p
-            className={`side-chat-return-hint${returnState?.error ? " is-error" : ""}`}
-            role={returnState?.error ? "alert" : "status"}
-            data-side-chat-return-hint
-          >
-            {returnHint}
-          </p>
-        ) : null}
-      </header>
       <DetachedConversation
         key={tab.id}
         sessionId={childId}
@@ -140,6 +77,46 @@ export function SideChatTab({ tab }: { tab: WorkPanelTab }) {
         sendLabel={t("chat.send")}
         disabledReason={blocked ? t(blocked) : undefined}
         formProps={{ "data-side-chat-form": tab.id }}
+        floating={
+          <FloatingReturnBar
+            workflow="side-chat"
+            label={t("workPanel.return.pill", { mode: t(`sideChat.returnMode.${mode}`) })}
+            menuLabel={t("workPanel.return.menuLabel")}
+            sections={[
+              {
+                id: "mode",
+                options: SIDE_CHAT_RETURN_MODES.map((value) => ({
+                  id: value,
+                  label: t(`sideChat.returnMode.${value}`),
+                  checked: value === mode,
+                  disabled: returning,
+                })),
+                onSelect: (value) => setReturnMode(tab.id, value as typeof mode),
+              },
+            ]}
+            actionLabel={t("workPanel.return.action")}
+            showAction={mode !== "none"}
+            actionDisabled={Boolean(returnBlock) || returning}
+            actionBusy={returning}
+            actionTitle={
+              returning ? t("sideChat.returning") : returnBlock ? t(returnBlock) : undefined
+            }
+            onAction={() => void returnSideChatToMain(tab)}
+            trailing={
+              <TooltipButton
+                type="button"
+                className="ct-icon-btn"
+                tooltip={t("sideChat.openAsSession")}
+                ariaLabel={t("sideChat.openAsSession")}
+                data-side-chat-action="open-as-session"
+                disabled={!childId}
+                onClick={() => void openSideChatAsConversation(tab)}
+              >
+                <IconNewSession size={14} />
+              </TooltipButton>
+            }
+          />
+        }
       />
     </div>
   );

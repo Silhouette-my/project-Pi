@@ -454,8 +454,12 @@ test("the entry, panel and slice are wired without a renderer-owned projection",
   const tab = await read("../src/features/chat/side-chat/SideChatTab.tsx");
   assert.match(tab, /<DetachedConversation/);
   assert.match(tab, /disabledReason=/);
-  assert.match(tab, /<SegmentedControl[\s\S]*role="radiogroup"/);
-  assert.match(tab, /data-side-chat-action="return-to-main"/);
+  // The return control floats over the transcript: a pill for the mode, and
+  // "Return to conversation" only while a mode other than None is chosen.
+  assert.match(tab, /<FloatingReturnBar/);
+  assert.match(tab, /showAction=\{mode !== "none"\}/);
+  assert.match(tab, /floating=\{/);
+  assert.doesNotMatch(tab, /<SegmentedControl|<header|side-chat-header|side-chat-return-hint/);
   assert.doesNotMatch(tab, /add-to-main/, "Add to main chat is replaced by the mode-aware return");
   const slice = await read("../src/stores/slices/side-chat-slice.ts");
   assert.match(slice, /commitForkedSession\(child, \{ activate: false/);

@@ -198,22 +198,53 @@
      Keep unused header space outside this content-sized viewport draggable. */
   flex: 0 1 auto;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-inline: contain;
-  scroll-padding-inline: 2px;
+  scroll-padding-inline: 14px 44px;
+  --tab-fade-start: 0px;
+  --tab-fade-end: 0px;
 }
 
 .work-panel-tab-strip::-webkit-scrollbar {
   display: none;
 }
 
+/* Edge fades: only the side that still has tabs to scroll to fades out. The
+   last 32px (the sticky "+") always stays fully painted. */
+.work-panel-tab-strip.fade-start {
+  --tab-fade-start: 14px;
+}
+.work-panel-tab-strip.fade-end {
+  --tab-fade-end: 14px;
+}
+.work-panel-tab-strip.fade-start,
+.work-panel-tab-strip.fade-end {
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--tab-fade-start),
+    #000 calc(100% - 32px - var(--tab-fade-end)),
+    transparent calc(100% - 32px),
+    #000 calc(100% - 32px)
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--tab-fade-start),
+    #000 calc(100% - 32px - var(--tab-fade-end)),
+    transparent calc(100% - 32px),
+    #000 calc(100% - 32px)
+  );
+}
+
+/* Tab widths come from the strip layout (lib/work-panel-strip.ts) as an inline
+   width: tabs shrink evenly, inactive ones to their icon, before it scrolls. */
 .work-panel-tab {
   position: relative;
   display: inline-flex;
-  min-width: 92px;
-  max-width: 180px;
+  min-width: 0;
   height: 28px;
   flex: 0 0 auto;
   align-items: center;
@@ -318,6 +349,53 @@
   background: var(--ds-bg-active);
   color: var(--ds-text-primary);
 }
+
+/* Icon-only inactive tab: the title and the close button drop out; on hover the
+   close button takes the icon's place so a tab can still be closed. */
+.work-panel-tab.is-icon-only .work-panel-tab-button {
+  justify-content: center;
+  padding: 0;
+}
+.work-panel-tab.is-icon-only .work-panel-tab-label {
+  display: none;
+}
+.work-panel-tab.is-icon-only .work-panel-tab-close {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+}
+.work-panel-tab.is-icon-only:hover .work-panel-tab-close,
+.work-panel-tab.is-icon-only .work-panel-tab-close:focus-visible {
+  opacity: 1;
+}
+.work-panel-tab.is-icon-only:hover .work-panel-tab-button > svg {
+  opacity: 0;
+}
+
+/* "+" sits right after the last tab and sticks to the right edge on overflow. */
+.work-panel-tab-plus,
+.work-panel-tab-plus-wrap {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+/* The seat is opaque so tabs scrolling underneath never show through it. */
+.work-panel-tab-strip .work-panel-tab-plus {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+  background: var(--ds-bg-dock-raised);
+}
+.work-panel-tab-strip .work-panel-tab-plus:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--ds-bg-dock-raised) 92%, var(--ds-text-primary));
+}
+
 
 :root[data-work-panel-tab-reordering="true"],
 :root[data-work-panel-tab-reordering="true"] * {

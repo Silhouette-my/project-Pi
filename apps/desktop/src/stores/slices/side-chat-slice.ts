@@ -15,6 +15,8 @@ import type { SessionSliceDependencies } from "./session-slice";
 import type { StoreAccess } from "./types";
 import { currentWorkPanelContext } from "./work-panel-slice";
 
+let wholeSideChatSequence = 0;
+
 /**
  * Chat side chats (ADR side-chats-on-detached-transcripts).
  *
@@ -59,7 +61,7 @@ export function createSideChatSlice({
         };
       }),
 
-    openSideChat: (anchorMessageId) => {
+    openSideChat: (anchorMessageId, options) => {
       const state = get();
       const parentSessionId = state.activeSessionId;
       if (!parentSessionId) return null;
@@ -67,13 +69,18 @@ export function createSideChatSlice({
       const parent = state.sessions.find((session) => session.id === parentSessionId);
       if (!message || !parent || !sessionAllows(parent, "canEditMessages")) return null;
       const parentTitle = parent.title.trim() || i18n.t("chat.untitledTask");
+      const whole = options?.whole === true;
+      wholeSideChatSequence += whole ? 1 : 0;
       const draft = sideChatWorkPanelTab(
         {
           parentSessionId,
           anchorMessageId,
-          excerpt: anchorExcerptLine(message.content || ""),
+          // A side chat about the whole conversation is about its title, not one reply.
+          excerpt: anchorExcerptLine(whole ? parentTitle : message.content || ""),
         },
         i18n.t("sideChat.sessionTitle", { title: parentTitle }),
+        undefined,
+        whole ? `whole-${Date.now().toString(36)}-${wholeSideChatSequence}` : undefined,
       );
       // Asking again from the same message reuses its tab, so a created child
       // is never forgotten by re-opening the draft.

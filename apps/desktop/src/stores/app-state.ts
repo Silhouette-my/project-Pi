@@ -437,7 +437,12 @@ export type AppState = {
    * conversation. Creates no session; resolves the tab id, or null when the
    * message cannot anchor one.
    */
-  openSideChat: (anchorMessageId: string) => string | null;
+  /**
+   * Open a draft side chat anchored at a message. `whole` anchors it at the
+   * conversation's last message as a new side chat every time (the topbar
+   * action); otherwise asking again from the same message reuses its tab.
+   */
+  openSideChat: (anchorMessageId: string, options?: { whole?: boolean }) => string | null;
   /** First-Send fork: a durable child that is not activated. Resolves its id. */
   createSideChatChild: (input: {
     parentSessionId: string;

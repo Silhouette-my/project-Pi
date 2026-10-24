@@ -286,6 +286,68 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             }
             Ok(())
         }
+        "conversation.policy" => {
+            let i = conversation_index(value, command)?;
+            if value["conversations"][i]["relation"] == "main" {
+                return Err(Error::conflict(
+                    "the main conversation keeps its delivery policy",
+                ));
+            }
+            // Only the return policy moves; context and ancestry stay immutable.
+            value["conversations"][i]["returnPolicy"] = command["returnPolicy"].clone();
+            Ok(())
+        }
+        "conversation.return" => {
+            let i = conversation_index(value, command)?;
+            let conversation = value["conversations"][i].clone();
+            if conversation["relation"] == "main" {
+                return Err(Error::conflict(
+                    "the main conversation delivers through its runs",
+                ));
+            }
+            let title = command["title"].as_str().unwrap().trim();
+            let text = command["text"].as_str().unwrap().trim();
+            if title.is_empty() || text.is_empty() {
+                return Err(Error::invalid(
+                    "a returned conversation needs a title and text",
+                ));
+            }
+            let source = json!({"kind":"session","ref":conversation["sessionId"],
+                "revision":conversation["sourceRevision"].to_string()});
+            let (key, row) = match conversation["returnPolicy"].as_str().unwrap() {
+                "proposal" => (
+                    "decisions",
+                    json!({"id":command["recordId"],"projectId":command["projectId"],
+                        "workstreamId":command["workstreamId"],"title":title,"statement":text,
+                        "state":"proposed","sources":[source],"createdAt":command["createdAt"]}),
+                ),
+                "delivery" => (
+                    "artifacts",
+                    json!({"id":command["recordId"],"projectId":command["projectId"],
+                        "workstreamId":command["workstreamId"],"label":title,"kind":"report",
+                        "revision":"1","environment":"",
+                        "entryPoint":format!("session:{}", conversation["sessionId"].as_str().unwrap()),
+                        "source":{"kind":"session","ref":conversation["sessionId"]},
+                        "createdAt":command["createdAt"]}),
+                ),
+                _ => return Err(Error::conflict("this conversation does not return")),
+            };
+            insert(value, key, row)?;
+            if key == "artifacts" {
+                let wi = work_index(db, value, command)?;
+                touch(&mut value["workstreams"][wi]);
+            }
+            Ok(())
+        }
         _ => unreachable!(),
     }
+}
+
+fn conversation_index(value: &Value, command: &Value) -> Result<usize> {
+    let i = rows(value, "conversations")
+        .iter()
+        .position(|row| row["sessionId"] == command["sessionId"])
+        .ok_or_else(|| Error::missing("conversation not found"))?;
+    check_scope(&value["conversations"][i], command)?;
+    Ok(i)
 }

@@ -1,0 +1,132 @@
+/*
+  Floating return control of a right-panel conversation tab. It floats over
+  the transcript (no header bar, no divider): a pill at the top-left, the
+  return action at the top-right, both on a translucent copy of the dock tone.
+  The transcript reserves the strip through `.detached-conversation.has-floating`.
+*/
+.work-return-bar {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  left: 12px;
+  z-index: 3;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  /* Only the controls take the pointer; the strip between them stays scrollable. */
+  pointer-events: none;
+}
+.work-return-bar > *,
+.work-return-bar .work-return {
+  pointer-events: auto;
+}
+.work-return {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.work-return-pill,
+.work-return-end {
+  background: color-mix(in oklab, var(--ds-bg-dock) 92%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 0 1px var(--ds-border-subtle);
+}
+
+.work-return-pill {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.work-return-pill:hover,
+.work-return-pill.active {
+  background: color-mix(in oklab, var(--ds-bg-dock) 80%, var(--ds-text-primary) 8%);
+  color: var(--ds-text-primary);
+}
+.work-return-pill:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 1px;
+}
+.work-return-pill-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-return-pill-caret {
+  flex: 0 0 auto;
+  color: var(--ds-text-muted);
+}
+
+.work-return-end {
+  display: flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding: 0 2px;
+  border-radius: var(--radius-full);
+}
+.work-return-end .work-return-action {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.work-return-action-tip {
+  display: inline-flex;
+  border-radius: var(--radius-full);
+}
+.work-return-action-tip:focus-visible {
+  outline: 2px solid var(--ds-focus);
+}
+.work-return-end .ct-icon-btn {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  color: var(--ds-text-secondary);
+}
+.work-return-end .ct-icon-btn:hover:not(:disabled) {
+  background: var(--ds-bg-hover);
+  color: var(--ds-text-primary);
+}
+.work-return-end .ct-icon-btn:disabled {
+  opacity: 0.4;
+}
+
+.work-return-menu {
+  width: min(280px, calc(100vw - 24px));
+}
+.work-return-heading {
+  padding: 4px 8px 2px;
+  color: var(--ds-text-muted);
+  font-size: var(--text-xs);
+}
+.work-return-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--ds-border-subtle);
+}
+.work-return-option-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

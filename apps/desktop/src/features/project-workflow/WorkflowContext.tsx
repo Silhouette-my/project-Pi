@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowDecision, WorkflowResource, WorkflowSource } from "@pi-desktop/shared";
 import { Badge, Button, Field, Input, Select, Textarea } from "../../components/ui";
+import { useAppStore } from "../../stores/app-store";
+import { sideSourceTitle } from "../project-panel/side-source";
 import { formatWorkflowTime } from "./workflow-display";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import { WorkflowRecord, WorkflowReference, type WorkflowSurfaceProps } from "./WorkflowReference";
@@ -54,6 +56,7 @@ export function WorkflowContext({
 }: WorkflowSurfaceProps) {
   const { t, i18n } = useTranslation();
   const workflow = useProjectWorkflow();
+  const sessions = useAppStore((state) => state.sessions);
   const [resource, setResource] = useState<ResourceDraft | null>(null);
   const [proposal, setProposal] = useState<{
     title: string;
@@ -86,12 +89,15 @@ export function WorkflowContext({
     id
       ? (workstreams.find((item) => item.id === id)?.title ?? id)
       : t("workflowContext.projectScope");
-  const sourceLabel = (source: WorkflowSource) =>
-    t("workflowContext.sourceValue", {
+  const sourceLabel = (source: WorkflowSource) => {
+    const sideTitle = sideSourceTitle(snapshot, sessions, source, t("projectPanel.untitled"));
+    if (sideTitle !== undefined) return t("projectPanel.sourceFromSide", { title: sideTitle });
+    return t("workflowContext.sourceValue", {
       kind: t(`workflowContext.sourceKinds.${source.kind}`),
       ref: source.ref,
       revision: source.revision || t("workflowContext.unspecified"),
     });
+  };
   function editResource(item: WorkflowResource) {
     setResource({
       ...item,

@@ -135,6 +135,11 @@ export function ProjectWorkflowProvider({
   return <WorkflowContext.Provider value={value}>{children}</WorkflowContext.Provider>;
 }
 
+/** The view when a provider is mounted above, else null (panel chrome that may render outside one). */
+export function useOptionalProjectWorkflow(): WorkflowView | null {
+  return useContext(WorkflowContext);
+}
+
 export function useProjectWorkflow(): WorkflowView {
   const view = useContext(WorkflowContext);
   if (!view) throw new Error("ProjectWorkflowProvider is required");

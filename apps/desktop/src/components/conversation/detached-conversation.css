@@ -71,3 +71,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Floating controls (the return pill) cover the top strip of the transcript;
+   the first message starts below them and scrolls up underneath. */
+.detached-conversation.has-floating .thread-content,
+.detached-conversation.has-floating .detached-conversation-empty {
+  padding-top: 52px;
+}

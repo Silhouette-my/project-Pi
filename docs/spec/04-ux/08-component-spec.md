@@ -1032,14 +1032,28 @@ terminal surface; agent Bash output remains in the transcript.
 ^ 10px transparent resize hit area on the left edge
 ```
 
-The header is a horizontally scrollable `tablist`. Each open New launcher,
-Review, file, or plugin view is one tab with an icon, an ellipsized label, and a
-close button shown on hover, focus, or the active tab. Middle-click closes a
-tab. The `+` button sits outside the scroller and remains visible when tabs
-overflow. Clicking it creates and activates a unique New launcher tab. The
-launcher body contains host-owned Review followed by every in-scope
-`contributes.views` entry as buttons; Files and Browser are not hardcoded in
-the renderer (ADR 0104). The header reserves a tokenized 44px right-side safe
+The header is a Chrome-like `tablist`. Each open New launcher, Review, file,
+plugin view, side chat or project conversation is one tab with an icon, an
+ellipsized label and a close button. The `+` button sits right after the last
+tab and sticks to the strip's right edge once the strip overflows; clicking it
+creates and activates a unique New launcher tab (in a project context it opens a
+small menu that brings back the project Agent). Tabs share the strip evenly up
+to 170px each; as they get narrower the active tab is protected down to 104px
+(icon, title and close button) while inactive tabs shrink first and turn
+icon-only at 36px before the strip scrolls. An icon-only tab shows its close
+button over the icon on hover. Overflow scrolls horizontally with an edge fade
+on the sides that have more tabs, and the active tab is kept in view. Middle
+click closes a tab from anywhere on it; after a close button press the other
+tabs' widths are held until the pointer leaves the strip, so the next close
+button stays under the pointer. Closing the active tab activates its right
+neighbour, else the left one. Tabs drag to reorder. While focus is inside the
+panel, Cmd/Ctrl+W closes the active tab and Ctrl+Tab / Ctrl+Shift+Tab cycle
+tabs (no global binding is spent). Tab tooltips carry what a header used to say
+(`Side chat - About: ...`, `Side chat - From <workstream>`, `Project Agent -
+discussion only, no execution`). The width rules are pure
+(`lib/work-panel-strip.ts`). The launcher body contains host-owned Review
+followed by every in-scope `contributes.views` entry as buttons; Files and
+Browser are not hardcoded in the renderer (ADR 0104). The header reserves a tokenized 44px right-side safe
 lane for the viewport-fixed work-panel toggle: the 28px control, its 12px
 viewport inset, and the header's own 4px control gap
 (`--ds-work-panel-control-gap`). That one gap spaces the whole row — the tab
@@ -1071,10 +1085,10 @@ singleton without duplicating it:
 
 - Panel body uses quiet inset paper (`#fafafa`); the 46px header band and tool
   chrome (review toolbar, browser chrome, file viewer header) stay white
-- The 46px header is a clipped tab strip plus a tight `+` trigger. Tabs keep a
-  stable `92px–180px` width and a visible gap, so labels do not shrink into
-  each other; only the strip scrolls when there are more tabs than the panel
-  can show. The trigger is outside it and never scrolls away. A New launcher
+- The 46px header is a clipped tab strip with its `+` trigger inside it, sticky
+  at the right edge. Tabs are up to `170px`, shrink evenly, and inactive tabs
+  fall back to their icon (never under `36px`) before the strip scrolls (see
+  the tab strip rules in 5.2). A New launcher
   tab carries the concise **New** title and the same data-driven tool rows as
   the former entry point. Shortcut labels are rendered only for real bindings.
 - Tab close uses a hover/focus/active `×` affordance and middle-click. The
