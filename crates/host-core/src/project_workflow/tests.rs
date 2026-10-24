@@ -1,3 +1,5 @@
+#[path = "return_tests.rs"]
+mod return_tests;
 #[path = "tree_tests.rs"]
 mod tree_tests;
 use super::*;

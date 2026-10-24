@@ -128,6 +128,8 @@ pub(super) fn command(value: &Value) -> Result<()> {
         "workstream.create" => "workstream:workstream",
         "workstream.update" => "projectId:id workstreamId:id patch:patch",
         "conversation.link" => "conversation:conversation",
+        "conversation.policy" => "projectId:id workstreamId:id sessionId:id returnPolicy:none|proposal|delivery",
+        "conversation.return" => "projectId:id workstreamId:id sessionId:id recordId:id title:id text:text createdAt:id",
         "resource.put" => "resource:resource",
         "decision.propose" => "decision:decision",
         "decision.resolve" => "projectId:id workstreamId:id decisionId:id resolution:adopt|dismiss|alternative source:source",

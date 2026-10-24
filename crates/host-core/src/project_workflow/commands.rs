@@ -85,10 +85,15 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             }
             Ok(())
         }
-        "folder.create" | "folder.update" | "folder.remove" | "navigation.move"
-        | "navigation.update" | "navigation.expand" | "conversation.link" => {
-            organization::apply(db, value, command)
-        }
+        "folder.create"
+        | "folder.update"
+        | "folder.remove"
+        | "navigation.move"
+        | "navigation.update"
+        | "navigation.expand"
+        | "conversation.link"
+        | "conversation.policy"
+        | "conversation.return" => organization::apply(db, value, command),
         "run.start"
         | "run.observe"
         | "delivery.publish"

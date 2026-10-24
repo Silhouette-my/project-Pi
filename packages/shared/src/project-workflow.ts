@@ -162,6 +162,11 @@ export const ProjectWorkflowUserCommandSchema = Type.Union([
     currentCandidateId: Type.Optional(Type.Union([id, Type.Null()])), mainSessionId: optionalId,
   }) }),
   command("conversation.link", { conversation: WorkflowConversationSchema }),
+  // Return policy is the one conversation field that stays user-editable after
+  // linking; context and ancestry remain immutable (ADR conversation-return-policy-mutable).
+  command("conversation.policy", { ...scope, sessionId: id, returnPolicy: WorkflowConversationSchema.properties.returnPolicy }),
+  // "Return to conversation": the host records a proposal or a report per the stored policy.
+  command("conversation.return", { ...scope, sessionId: id, recordId: id, title: id, text, createdAt: id }),
   command("resource.put", { resource: WorkflowResourceSchema }),
   command("decision.propose", { decision: WorkflowDecisionSchema }),
   command("decision.resolve", { ...scope, decisionId: id, resolution: literals("adopt", "dismiss", "alternative"), source: WorkflowSourceSchema }),
