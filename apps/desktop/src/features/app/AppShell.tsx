@@ -3,7 +3,6 @@ import { ConversationTopbar } from "../../components/ConversationTopbar";
 import { ExtensionPromptHost } from "../../components/ExtensionPromptDialog";
 import { PluginRendererHost } from "../../plugins/renderer-host/PluginRendererHost";
 import {
-  IconNewSession,
   IconPanel,
   IconPanelOpen,
 } from "../../components/icons";

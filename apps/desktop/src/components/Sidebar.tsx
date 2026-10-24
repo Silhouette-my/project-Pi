@@ -124,6 +124,7 @@ import {
   IconChevronDown,
   IconCopy,
   IconNewSession,
+  IconPlus,
   IconFolder,
   IconMore,
   IconNewProject,
@@ -2795,7 +2796,7 @@ export function Sidebar({
                 openSectionMenu("category", event.clientX, event.clientY);
               }}
             >
-              <IconNewSession size={15} />
+              <IconPlus size={15} />
             </TooltipButton>
           ) : null}
           {onTogglePin ? (

@@ -24,7 +24,7 @@ import {
   IconChat,
   IconChevronLeft,
   IconSidebar,
-  IconNewSession,
+  IconPlus,
 } from "./icons";
 import { TooltipButton } from "./ui";
 
@@ -149,7 +149,7 @@ export function ConversationTopbar({
             data-nav="new-task"
             onClick={onNewTask}
           >
-            <IconNewSession size={15} />
+            <IconPlus size={15} />
           </TooltipButton>
         </div>
         {scheduledSession ? (
