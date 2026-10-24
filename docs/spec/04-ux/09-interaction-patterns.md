@@ -1503,19 +1503,46 @@ Project drag/drop follows these patterns:
   visible conversation, then the reply streams in the panel; while the parent
   runs or is read-only the first Send is disabled with a visible reason and
   recovers when the parent is idle. A fork that succeeded but whose send failed
-  keeps the child for the retry. A compact **Return to main thread** radiogroup
-  in the header picks what goes back: **None** (default, nothing returns),
-  **Summary** or **Everything**; the **Return to main thread** action is disabled
-  with a reason while the mode is None, before a child exists and while the side
-  chat is running. Summary sends a visible summary request in the side chat,
-  shows progress on the button, waits for that turn (timeout and error shown in
-  the header) and quotes the answer under a Summary label (4000-character cap).
-  Everything quotes the post-anchor user and assistant text with role labels
-  (12000-character cap, a note names the omitted earlier messages). Both append
-  to the parent composer draft as a `> ` quote with the "Quoted from"
-  attribution, keep typed text and never send.
-  **Open as a conversation** closes the tab and selects the child. Closing a tab
-  removes only the tab and its draft.
+  keeps the child for the retry. There is no header bar, divider or second line:
+  a 28px **Return: <mode>** pill floats at the top-left of the transcript on a
+  translucent panel plate (the transcript reserves a top strip so the first
+  message is never covered) and changes the mode at any time, like model or
+  effort: **None** (default, nothing returns), **Summary** or **All**. A ghost
+  **Return to conversation** button floats at the top-right only while the mode
+  is not None, disabled with a tooltip reason before a child exists, while the
+  side chat is running and with nothing to return. What the header used to say
+  (the anchored excerpt, "side chat about ...") lives in the tab tooltip.
+  Summary sends a visible summary request in the side chat, shows progress on
+  the button, waits for that turn (timeout and error as a toast) and quotes the
+  answer under a Summary label (4000-character cap). All quotes the post-anchor
+  user and assistant text with role labels (12000-character cap, a note names
+  the omitted earlier messages). Both append to the parent composer draft as a
+  `> ` quote with the "Quoted from" attribution, keep typed text and never send.
+  **Open as a conversation** (an icon beside the return button) closes the tab
+  and selects the child. Closing a tab removes only the tab and its draft.
+- New side chat (conversation topbar, top-right): opens a side chat about the
+  whole conversation (anchored at its last message, a new tab every press),
+  reveals the panel and focuses the side composer. It is disabled with the
+  tooltip "Conversation is empty" while the conversation has no message; the
+  per-message hover entry stays.
+- Project side conversation (work-panel `project-side` tab): the same floating
+  control with the Host return policy as its modes: **None**, **Propose**,
+  **Deliver output**, editable at any time (`conversation.policy`; ADR
+  conversation-return-policy-mutable). **Return to conversation** records its
+  newest answer through `conversation.return`: a proposed decision visible in
+  the project's Context tab with the source "From side chat: <title>", or a
+  report output of the workstream. Nothing is sent to a conversation.
+- Project Agent (work-panel `project-agent` tab): the same control. Its menu
+  holds the modes None / Summary / All and a **Target conversation** section
+  (workstream mains, project chats and side conversations; the default is the
+  conversation the user last came from in this project, else the first
+  workstream main). The pill reads "Return: Summary -> <target>". **Return to
+  conversation** appends a blockquote, a blank line and "Quoted from project
+  Agent - <project>" to the target's composer draft and never sends. The former
+  Send-to-conversation and Bring-in dialogs are gone (reading a conversation
+  into the Agent is an @-mention in the composer). The Agent tab is added again
+  on every entry to the project home; inside a project conversation a closed
+  Agent tab stays closed for that conversation.
 - A delegation tab uses the same single-body scroll owner as the work panel.
   It renders the delegate's conversation — each `Task` call's prompt as a user
   row followed by the delegate's live thinking, tool, and answer rows — in

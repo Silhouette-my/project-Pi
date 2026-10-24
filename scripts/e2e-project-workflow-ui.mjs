@@ -184,25 +184,41 @@ try {
   await page.evaluate(`document.querySelector('.workflow-conversation-bar button').click()`);
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "return before work creation");
 
-  // Send to conversation: the user hands the Agent's latest answer to a project chat from the
-  // Agent tab. The target receives a prompt; the console stays the visible page.
-  await until(() => openAgentDock(), "project Agent tab before sending to a conversation");
-  const requestsBeforeSend = modelRequests.length;
-  assert.ok(await page.evaluate(`(() => { const button=document.querySelector('[data-project-send-open]'); if(!button) return false; button.click(); return true })()`), "Send to conversation entry in the Agent tab");
-  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-send-dialog"]')`), "Send to conversation dialog");
-  await until(() => selectControl('[data-project-send-target]', setup.sessionId), "project chat offered as a target");
-  await until(() => page.evaluate(`document.querySelector('[data-project-send-preview]')?.value.includes('PROJECT_AGENT_REPLY_2')`), "latest Agent answer previewed");
-  assert.match(await page.evaluate(`document.querySelector('[data-project-send-preview]').value`), /^来自项目 Agent：/, "preview carries the attribution line");
-  await capture("renderer-send-to-conversation.png");
-  assert.ok(await fillControl('[data-project-send-preview]', (await page.evaluate(`document.querySelector('[data-project-send-preview]').value`)) + "\nSEND_TO_CONVERSATION_EDIT"));
-  assert.ok(await page.evaluate(`(() => { const button=document.querySelector('[data-project-send-submit]'); if(!button || button.disabled) return false; button.click(); return true })()`));
-  await until(() => page.evaluate(`!document.querySelector('[data-workflow="project-send-dialog"]')`), "Send to conversation dialog closed after sending");
-  await until(() => modelRequests.length > requestsBeforeSend, "target conversation received the forwarded prompt");
-  const forwarded = JSON.stringify(modelRequests.at(-1).messages);
-  assert.ok(forwarded.includes("PROJECT_AGENT_REPLY_2") && forwarded.includes("SEND_TO_CONVERSATION_EDIT"), "forwarded prompt carries the edited Agent answer");
-  assert.ok(await page.evaluate(`!!document.querySelector('[data-workflow="console"]') && !document.querySelector('.workflow-conversation-bar')`), "sending to a conversation keeps the console as the visible page");
-  assert.equal((await snapshot()).runs.length, 0, "forwarding starts no workflow run");
-  coverage.push("Sent the Agent's latest answer from the Agent tab to a project chat through the Send to conversation dialog: attributed, editable, the target received the prompt, and the console stayed the visible page");
+  // Return to conversation: the Agent's floating pill chooses a mode and a target; the return
+  // quotes the discussion into the target's composer draft and never sends. The console stays
+  // the visible page.
+  await until(() => openAgentDock(), "project Agent tab before returning to a conversation");
+  const requestsBeforeReturn = modelRequests.length;
+  const pill = `${agentTabSelector()} [data-return-pill]`;
+  const pillLabel = () => page.evaluate(`document.querySelector(${json(pill)})?.innerText.trim() ?? ''`);
+  const pickOption = async (option) => {
+    assert.ok(await page.evaluate(`(() => { const pill=document.querySelector(${json(pill)}); if(!pill) return false; pill.click(); return true })()`), "Agent return pill");
+    await until(() => page.evaluate(`!!document.querySelector('[data-return-option="${option}"]')`), `menu option ${option}`);
+    await page.evaluate(`document.querySelector('[data-return-option="${option}"]').click()`);
+  };
+  assert.match(await pillLabel(), /回传：不回传/, "the Agent return pill defaults to None");
+  assert.equal(await page.evaluate(`!!document.querySelector(${json(agentTabSelector() + " [data-return-action]")})`), false, "no return button while the mode is None");
+  assert.equal(await page.evaluate(`document.querySelector('[data-work-panel-tab-id="project-agent:${projectId}"] [role=tab], [data-work-panel-tab-id="project-agent:${projectId}"] button')?.title`), "项目 Agent · 仅讨论，不执行", "the removed discussion-only hint is the tab tooltip");
+  await pickOption("mode:full");
+  await pickOption(`target:${setup.sessionId}`);
+  await until(async () => /回传：全部 → /.test(await pillLabel()), "the pill names the mode and the target");
+  await capture("renderer-agent-return-pill.png");
+  const action = `${agentTabSelector()} [data-return-action]`;
+  await until(() => page.evaluate(`(() => { const button=document.querySelector(${json(action)}); if(!button || button.disabled) return false; button.click(); return true })()`), "Return to conversation enabled and pressed");
+  await sleep(500);
+  assert.equal(modelRequests.length, requestsBeforeReturn, "returning the whole discussion sends nothing");
+  assert.ok(await page.evaluate(`!!document.querySelector('[data-workflow="console"]') && !document.querySelector('.workflow-conversation-bar')`), "returning keeps the console as the visible page");
+  assert.equal((await snapshot()).runs.length, 0, "returning starts no workflow run");
+  const openSetupChatForDraft = () => page.evaluate(`(() => { const button=document.querySelector('[data-sidebar-session-row="${setup.sessionId}"] .thread-item-main'); if(!button) return false; button.click(); return true })()`);
+  await until(() => openSetupChatForDraft(), "project chat row in the sidebar");
+  await until(() => page.evaluate(`(document.querySelector('.composer-input')?.textContent ?? '').includes('PROJECT_AGENT_REPLY_2')`), "the target's draft holds the quoted discussion");
+  const draft = await page.evaluate(`document.querySelector('.composer-input').textContent`);
+  assert.ok(draft.includes("> ") && /引用自 项目 Agent · /.test(draft), "the draft is a blockquote with the attribution line");
+  assert.ok(/引用自 项目 Agent · [^\n]+$/.test(draft.trimEnd()), "the attribution is the last line");
+  assert.equal(modelRequests.length, requestsBeforeReturn, "the draft was never sent");
+  coverage.push("The project Agent's floating return pill picks a mode and a target conversation; Return to conversation quotes the discussion into the target's composer draft as a blockquote plus an attribution line, sends nothing, and the console stayed the visible page");
+  assert.ok(await clickText("项目首页"));
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "console after the return check");
 
   // A project chat shows the Agent tab by default; closing it keeps it closed for that chat.
   const openSetupChat = () => page.evaluate(`(() => { const button=document.querySelector('[data-sidebar-session-row="${setup.sessionId}"] .thread-item-main'); if(!button) return false; button.click(); return true })()`);
@@ -251,6 +267,52 @@ try {
   const created = await snapshot();
   assert.ok(created.workstreams.some(item => item.title === "UI-created workstream"));
   coverage.push("Created a workstream with title, goal, acceptance, owner, and next action through rendered controls");
+
+  // Project side conversation: the floating pill edits the Host return policy at any time, and
+  // Return to conversation records a proposal (Context tab) or an output, as the policy says.
+  assert.ok(await clickText("侧聊", ".workflow-actions button"), "new side conversation control");
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="side-editor"]')`), "side conversation editor");
+  assert.ok(await fillControl('[data-workflow="side-editor"] textarea', "SIDE_RETURN_QUESTION: is the row spacing fine?"));
+  assert.ok(await submitForm('[data-workflow="side-editor"]'));
+  const sideTab = ".work-panel [data-project-side-tab]";
+  await until(() => page.evaluate(`!!document.querySelector(${json(sideTab)})`), "the side conversation opens as a work-panel tab", 30000);
+  const side = (await snapshot()).conversations.find(item => item.purpose === "ask" && item.relation === "child");
+  assert.ok(side, "a project side conversation was linked");
+  assert.equal(side.returnPolicy, "none", "an Ask side conversation starts with None");
+  await until(() => page.evaluate(`document.querySelector(${json(sideTab)})?.innerText.includes('PROJECT_AGENT_REPLY')`), "the side conversation answered", 30000);
+  const sidePill = `${sideTab} [data-return-pill]`, sideAction = `${sideTab} [data-return-action]`;
+  const sideLabel = () => page.evaluate(`document.querySelector(${json(sidePill)})?.innerText.trim() ?? ''`);
+  const pickSide = async (policy) => {
+    assert.ok(await page.evaluate(`(() => { const pill=document.querySelector(${json(sidePill)}); if(!pill) return false; pill.click(); return true })()`), "side return pill");
+    await until(() => page.evaluate(`!!document.querySelector('[data-return-option="mode:${policy}"]')`), `side option ${policy}`);
+    await page.evaluate(`document.querySelector('[data-return-option="mode:${policy}"]').click()`);
+  };
+  const hostPolicy = async () => (await snapshot()).conversations.find(item => item.sessionId === side.sessionId).returnPolicy;
+  assert.match(await sideLabel(), /回传：不回传/);
+  assert.equal(await page.evaluate(`!!document.querySelector(${json(sideAction)})`), false, "no return button under None");
+  await pickSide("proposal");
+  await until(async () => (await hostPolicy()) === "proposal", "the Host stored the proposal policy");
+  await until(async () => /回传：提议/.test(await sideLabel()), "the pill follows the stored policy");
+  await capture("renderer-project-side-pill.png");
+  const decisionsBefore = (await snapshot()).decisions.length;
+  await until(() => page.evaluate(`(() => { const button=document.querySelector(${json(sideAction)}); if(!button || button.disabled) return false; button.click(); return true })()`), "Return to conversation pressed under Propose");
+  await until(async () => (await snapshot()).decisions.length === decisionsBefore + 1, "a proposal was recorded");
+  const proposal = (await snapshot()).decisions.find(item => item.sources.some(source => source.kind === "session" && source.ref === side.sessionId));
+  assert.equal(proposal.state, "proposed");
+  assert.ok(proposal.statement.includes("PROJECT_AGENT_REPLY"), "the proposal carries the side answer");
+  await pickSide("delivery");
+  await until(async () => (await hostPolicy()) === "delivery", "the Host stored the delivery policy");
+  const artifactsBefore = (await snapshot()).artifacts.length;
+  await until(() => page.evaluate(`(() => { const button=document.querySelector(${json(sideAction)}); if(!button || button.disabled) return false; button.click(); return true })()`), "Return to conversation pressed under Deliver");
+  await until(async () => (await snapshot()).artifacts.length === artifactsBefore + 1, "an output was recorded for the workstream");
+  assert.ok((await snapshot()).artifacts.some(item => item.kind === "report" && item.source.ref === side.sessionId && item.workstreamId === side.workstreamId));
+  await pickSide("none");
+  await until(async () => (await hostPolicy()) === "none", "the policy returns to None");
+  assert.equal(await page.evaluate(`!!document.querySelector(${json(sideAction)})`), false, "the return button leaves with None");
+  // Context is immutable: the Host kept ancestry and read context through every change.
+  const after = (await snapshot()).conversations.find(item => item.sessionId === side.sessionId);
+  assert.deepEqual({ ...after, returnPolicy: side.returnPolicy }, side, "only the return policy changed");
+  coverage.push("A project side conversation's floating pill changes the Host return policy (None / Propose / Deliver output) at any time while ancestry and context stay immutable; Return to conversation records a proposed decision sourced from the side conversation, or a report output for the workstream, and disappears under None");
 
   // Search is submitted and selected through visible controls; inspect hit breadcrumbs and focus target.
   assert.ok(await clickAria("搜索此项目"), "project search is available in its header");

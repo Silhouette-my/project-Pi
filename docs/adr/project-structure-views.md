@@ -64,14 +64,18 @@ project side conversations are tabs of the existing right work panel
 - `project-side` (resource: side-conversation session id) shows the purpose, the
   read-only return policy label, the source workstream, an Explore "review
   proposals" link to the Shared context tab and "open as conversation", above a
-  `DetachedConversation`. Creating a side conversation or choosing "Open beside"
+  `DetachedConversation`. (Amended: the header is gone; a floating return pill
+  edits the policy and "Return to conversation" records the result, see ADR
+  conversation-return-policy-mutable.) Creating a side conversation or choosing "Open beside"
   opens this tab through `openProjectPanelTab`.
 - The Agent has no tools and stays discussion-only
   (ADR project-agent-discussion-boundary). Moving words between the Agent and
-  conversation threads is done by the user in the Agent tab: **Send to
-  conversation…** (target thread, latest answer or last 1/3/all exchanges, an
-  editable preview, then Send with an attribution line, or insert into the
-  target's composer draft) and **Bring in a conversation…** (a thread's latest
-  answer as a quoted block in the Agent draft). Neither lets the Agent act.
+  conversation threads is done by the user in the Agent tab. (Amended: the
+  Send-to-conversation and Bring-in dialogs and the direct send are removed.
+  The Agent's floating return pill picks a mode (none / summary / all) and a
+  target project conversation, and "Return to conversation" appends a
+  blockquote plus a "Quoted from project Agent - <project>" line to the
+  target's composer draft; it never sends. Reading a conversation into the
+  Agent is an @-mention in the composer.) Neither lets the Agent act.
 - The console header's `data-project-agent-dock-toggle` button now reveals the
   Agent tab. The old per-project dock state and its CSS are removed.

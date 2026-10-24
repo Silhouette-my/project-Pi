@@ -361,16 +361,16 @@
 }
 .work-panel-tab.is-icon-only .work-panel-tab-close {
   position: absolute;
-  inset: 0;
-  width: auto;
-  height: auto;
-  background: transparent;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
   opacity: 0;
 }
 .work-panel-tab.is-icon-only:hover .work-panel-tab-close,
 .work-panel-tab.is-icon-only .work-panel-tab-close:focus-visible {
   opacity: 1;
-  background: var(--ds-bg-hover);
 }
 .work-panel-tab.is-icon-only:hover .work-panel-tab-button > svg {
   opacity: 0;

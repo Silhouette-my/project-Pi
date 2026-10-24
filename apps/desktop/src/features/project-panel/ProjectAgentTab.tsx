@@ -7,7 +7,10 @@ import { FloatingReturnBar } from "../../components/workpanel/FloatingReturnBar"
 import { useAppStore } from "../../stores/app-store";
 import type { SessionConfigurationInput } from "../../stores/app-state";
 import { normalizeProjectPath } from "../../lib/sidebar-session-groups";
+import { TooltipButton } from "../../components/ui";
+import { IconNewSession } from "../../components/icons";
 import { useProjectAgentDraft } from "../project-workflow/project-agent-draft";
+import { useProjectAgent } from "../project-workflow/useProjectAgent";
 import { useProjectWorkflow } from "../project-workflow/useProjectWorkflow";
 import { useWorkflowProjectGroups } from "../project-workflow/WorkflowNavigation";
 import { listConversationTargets } from "./project-panel-text";
@@ -67,6 +70,7 @@ export function ProjectAgentTab({ projectId }: { projectId: string }) {
     () => listConversationTargets({ snapshot, projectId, sessions, inProject, untitled }),
     [inProject, projectId, sessions, snapshot, untitled],
   );
+  const agent = useProjectAgent(projectId);
   const returnState = useAgentReturnState(projectId);
   const lastConversationId = useLastProjectConversation(projectId);
   const target = resolveReturnTarget(targets, returnState.targetId, lastConversationId);
@@ -157,6 +161,20 @@ export function ProjectAgentTab({ projectId }: { projectId: string }) {
                 : blocked
                   ? t(blocked)
                   : undefined
+            }
+            trailing={
+              <TooltipButton
+                type="button"
+                className="ct-icon-btn"
+                tooltip={agent.error ?? t("sideChat.openAsSession")}
+                ariaLabel={t("sideChat.openAsSession")}
+                data-project-agent={projectId}
+                aria-busy={agent.busy}
+                disabled={agent.busy}
+                onClick={() => void agent.open().catch(() => {})}
+              >
+                <IconNewSession size={14} />
+              </TooltipButton>
             }
             onAction={() => {
               if (!target || !agentSessionId || blocked) return;

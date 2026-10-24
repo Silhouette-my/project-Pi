@@ -359,8 +359,9 @@ function LocalWorkPanel({
   const [panelDragWidth, setPanelDragWidth] = useState<number | null>(null);
   const panelResizeState = useRef<WorkPanelResizeState | null>(null);
   const tabReorderState = useRef<WorkPanelTabReorderState | null>(null);
-  // The sticky "+" and the gaps between tabs come out of the room tabs share.
-  const stripAvailable = stripWidth - NEW_TAB_SLOT_WIDTH - Math.max(0, tabs.length - 1) * TAB_GAP;
+  // The sticky "+" and the gaps between tabs (one more than the tabs: the "+" is an item too)
+  // come out of the room tabs share.
+  const stripAvailable = stripWidth - NEW_TAB_SLOT_WIDTH - tabs.length * TAB_GAP;
   const stripLayout = tabStripLayout(stripAvailable, tabs.length);
   const tabStripRef = useRef<HTMLDivElement | null>(null);
   const suppressedTabClickPointerIdsRef = useRef<Set<number>>(new Set());
@@ -1108,6 +1109,16 @@ function LocalWorkPanel({
                           (dropIndicator.insertAfter ? "is-drop-after" : "is-drop-before"),
                       )}
                       style={{ width: Math.max(width, selected ? ACTIVE_TAB_MIN_WIDTH : 0) }}
+                      onMouseDown={(event) => {
+                        // Middle press would start the platform's autoscroll.
+                        if (event.button === 1) event.preventDefault();
+                      }}
+                      // Middle click closes from anywhere on the tab, its close button included.
+                      onAuxClick={(event) => {
+                        if (event.button !== 1) return;
+                        event.preventDefault();
+                        closeTabAndFocus(tab.id, { holdWidths: true });
+                      }}
                       data-work-panel-tab-id={tab.id}
                       key={tab.id}
                     >
@@ -1127,17 +1138,8 @@ function LocalWorkPanel({
                         className="work-panel-tab-button"
                         title={tabTooltip(tab, label, t, workstreamTitleOf)}
                         onPointerDown={(event) => beginTabReorder(event, tab.id)}
-                        onMouseDown={(event) => {
-                          // Middle press would start the platform's autoscroll.
-                          if (event.button === 1) event.preventDefault();
-                        }}
                         onDragStart={(event) => event.preventDefault()}
                         onClick={() => activateTab(tab.id)}
-                        onAuxClick={(event) => {
-                          if (event.button !== 1) return;
-                          event.preventDefault();
-                          closeTabAndFocus(tab.id, { holdWidths: true });
-                        }}
                         onKeyDown={(event) => onTabKeyDown(event, tab.id)}
                       >
                         <Icon size={14} />
