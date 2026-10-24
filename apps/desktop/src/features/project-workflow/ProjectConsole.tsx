@@ -1,18 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord, ProjectWorkflowSearchHit } from "@pi-desktop/shared";
-import { Badge, Button, Field, Select, TooltipButton } from "../../components/ui";
-import { IconChevronLeft, IconFolder, IconMore, IconPanelOpen, IconPlus, IconSearch } from "../../components/icons";
+import { Button, Select, TooltipButton } from "../../components/ui";
+import { IconChat, IconChevronRight, IconCube, IconMore, IconPanelOpen, IconSearch } from "../../components/icons";
 import { ProjectInstructionsDialog } from "../../components/ProjectInstructionsDialog";
 import { ProjectMemoryDialog } from "../../components/ProjectMemoryDialog";
 import { api } from "../../lib/api";
 import { useAppStore } from "../../stores/app-store";
-import { normalizeAccentPresetId } from "@pi-desktop/shared";
-import { projectAccentStyle } from "../../lib/project-accent";
-import { projectMetaFor } from "../../lib/sidebar-preferences";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import { WorkstreamEditor } from "./WorkstreamEditor";
 import { WorkflowControls } from "./WorkflowControls";
+import { WorkflowAcceptance } from "./WorkflowAcceptance";
 import { WorkflowSearch } from "./WorkflowSearch";
 import { WorkflowArtifacts } from "./WorkflowArtifacts";
 import { WorkstreamEditorDialog } from "./WorkstreamEditorDialog";
@@ -193,15 +191,13 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
       })}
     </div>
   );
-  const projectColor = useAppStore((s) => group ? normalizeAccentPresetId(projectMetaFor(group.primaryPath, s.projectMeta).color) : undefined);
   const project = group ? { name: group.name, path: group.primaryPath, groupId: group.id } : null;
   return (
-    <div className="workflow-console" ref={root} data-workflow="console" data-project-id={projectId}
-      data-project-color={projectColor} style={projectAccentStyle(projectColor)}>
+    <div className="workflow-console" ref={root} data-workflow="console" data-project-id={projectId}>
       <div className="workflow-page">
         <header className="workflow-header">
           <div className="workflow-project-identity">
-            <div className="workflow-project-mark"><IconFolder size={14} /></div>
+            <div className="workflow-project-mark"><IconCube size={18} /></div>
             {/* The path is the title's tooltip, like the sidebar project row (08 §3.9). */}
             <h1 title={group?.primaryPath}>{group?.name ?? projectId}</h1>
           </div>
@@ -250,11 +246,11 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
             /></div>
             <nav className="workflow-tabs" aria-label={t("workflow.console")}>
               <Button variant="ghost" aria-current={tab === "overview" ? "page" : undefined} onClick={() => selectTab("overview")}>{t("workflow.overview")}</Button>
+              <Button variant="ghost" aria-current={tab === "structure" ? "page" : undefined} onClick={() => selectTab("structure")}>{t("projectStructure.structure")}</Button>
+              <Button variant="ghost" aria-current={tab === "context" ? "page" : undefined} onClick={() => selectTab("context")}>{t("workflow.context")}</Button>
               <Button variant="ghost" aria-current={tab === "work" ? "page" : undefined} onClick={() => selectTab("work")}>
                 {t("workflow.workstreams")}
               </Button>
-              <Button variant="ghost" aria-current={tab === "context" ? "page" : undefined} onClick={() => selectTab("context")}>{t("workflow.context")}</Button>
-              <Button variant="ghost" aria-current={tab === "structure" ? "page" : undefined} onClick={() => selectTab("structure")}>{t("projectStructure.structure")}</Button>
             </nav>
             <div className="workflow-content">
             {tab === "overview" ? (
@@ -266,14 +262,12 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
             ) : tab === "context" ? (
               <section className="workflow-context-page" data-workflow-context-page={projectId}>
                 <div className="project-structure-filters">
-                  <Field label={t("workflow.chooseWorkstream")}>
-                    <Select value={selectedId} onChange={(event) => selectWorkstream(event.target.value, false)}>
-                      <option value="">{t("workflow.allWorkstreams")}</option>
-                      {workstreams.map((item) => (
-                        <option key={item.id} value={item.id}>{item.title}</option>
-                      ))}
-                    </Select>
-                  </Field>
+                  <Select aria-label={t("workflow.chooseWorkstream")} value={selectedId} onChange={(event) => selectWorkstream(event.target.value, false)}>
+                    <option value="">{t("workflow.allWorkstreams")}</option>
+                    {workstreams.map((item) => (
+                      <option key={item.id} value={item.id}>{item.title}</option>
+                    ))}
+                  </Select>
                 </div>
                 <WorkflowContext projectId={projectId} workstreamId={selectedId || undefined} onOpenReference={openReference} />
               </section>
@@ -287,16 +281,15 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                   <div className="project-section-label">
                     <h2>{t("workflow.workstreams")}</h2>
                     <span className="project-section-count">{workstreams.length}</span>
-                    <Button variant="ghost" onClick={createWorkstream}><IconPlus size={14} />{t("workflow.newWorkstream")}</Button>
+                    <Button variant="ghost" onClick={createWorkstream}>{t("workflow.newWorkstream")}</Button>
                   </div>
                   {workstreams.length ? workstreamRows(workstreams) : (
-                    <div className="workflow-empty"><strong>{t("workflow.noCurrentWork")}</strong><p>{t("workflow.startWithAgent")}</p>
-                      <Button variant="ghost" onClick={() => openProjectAgentPanel(projectId)}>{t("workflow.agentDockOpen")}</Button></div>
+                    <p className="project-empty-line">{t("workflow.noWorkstreams")}</p>
                   )}
                 </nav>
                 {shown ? (
                   <div className="workflow-work-detail">
-                    <Button variant="ghost" className="workflow-back" onClick={() => selectWorkstream("")}><IconChevronLeft size={14} />{t("workflow.allWorkstreams")}</Button>
+                    <Button variant="ghost" className="workflow-back" onClick={() => selectWorkstream("")}>{t("workflow.allWorkstreams")}</Button>
                     <section className="workflow-detail" data-workstream-id={shown.id} data-workflow-workstream={shown.id}>
                       <div className="workflow-detail-head">
                         <div>
@@ -324,7 +317,11 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                           <span>{t("workflow.resumeWhen", { condition: shown.blocker.resumeWhen })}</span>
                         </div>
                       )}
-                      {candidate && (
+                      {!candidate ? (
+                        <div className="workflow-candidate-summary">
+                          <span className="workflow-muted">{t("workflow.noCandidate")}</span>
+                        </div>
+                      ) : (
                         <div className="workflow-candidate-summary">
                           <div>
                             <h3>{t("workflow.currentCandidate")}</h3>
@@ -342,6 +339,9 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                         {shown.dependencyIds.length > 0 ? (<><dt>{t("workflow.dependencies")}</dt>
                           <dd>{shown.dependencyIds.map((id) => workstreams.find((item) => item.id === id)?.title ?? id).join(", ")}</dd></>) : null}
                       </dl>
+                      <WorkflowAcceptance workstream={shown} />
+                      <section className="workflow-detail-block" aria-label={t("workflow.controls")}>
+                        <div className="project-section-label"><h3>{t("workflow.controls")}</h3></div>
                       <WorkflowControls
                         key={shown.id}
                         workstream={shown}
@@ -357,31 +357,38 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                           }
                         }}
                       />
+                      </section>
                       {(() => {
                         const sides = snapshot.conversations
                           .filter((item) => item.workstreamId === shown.id && item.relation !== "main")
                           .sort((left, right) => left.order - right.order);
-                        return sides.length ? (
+                        return (
                           <section className="workflow-detail-sides" aria-label={t("workflow.sideConversations")}>
                             <div className="project-section-label">
-                              <h2>{t("workflow.sideConversations")}</h2>
+                              <h3>{t("workflow.sideConversations")}</h3>
                               <span className="project-section-count">{sides.length}</span>
                             </div>
-                            {sides.map((item) => (
-                              <div key={item.sessionId} className="workflow-side-row" data-workflow-side-row={item.sessionId}>
-                                <Badge>{t(`workflow.purposes.${item.purpose}`)}</Badge>
-                                <span className="workflow-side-title">
-                                  {sessions.find((session) => session.id === item.sessionId)?.title || t(`workflow.purposes.${item.purpose}`)}
+                            {sides.length ? sides.map((item) => (
+                              <Button key={item.sessionId} variant="ghost" className="workflow-side-row"
+                                data-workflow-side-row={item.sessionId} onClick={() => openSide(item.sessionId)}>
+                                <IconChat size={15} />
+                                <span className="workflow-side-copy">
+                                  <span className="workflow-side-title">
+                                    {sessions.find((session) => session.id === item.sessionId)?.title || t(`workflow.purposes.${item.purpose}`)}
+                                  </span>
+                                  <small>
+                                    {t(`workflow.purposes.${item.purpose}`)}
+                                    {item.archived ? ` · ${t("projectStructure.archived")}` : ""}
+                                  </small>
                                 </span>
-                                {item.archived ? <Badge>{t("projectStructure.archived")}</Badge> : null}
-                                <Button variant="ghost" onClick={() => openSide(item.sessionId)}>{t("workflow.openInPanel")}</Button>
-                              </div>
-                            ))}
+                                <IconChevronRight size={14} />
+                              </Button>
+                            )) : <p className="project-empty-line">{t("workflow.noSides")}</p>}
                           </section>
-                        ) : null;
+                        );
                       })()}
                       <section className="workflow-detail-outputs" aria-label={t("workflow.artifacts")}>
-                        <div className="project-section-label"><h2>{t("workflow.artifacts")}</h2></div>
+                        <div className="project-section-label"><h3>{t("workflow.artifacts")}</h3></div>
                         <WorkflowArtifacts projectId={projectId} workstreamId={shown.id} onOpenReference={openReference} />
                       </section>
                     </section>

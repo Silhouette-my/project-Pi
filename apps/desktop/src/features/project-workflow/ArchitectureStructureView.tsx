@@ -128,10 +128,9 @@ export function ArchitectureStructureView({
       {!snapshot ? (
         <p role="status">{t("workflow.loading")}</p>
       ) : !artifact ? (
-        <div className="workflow-empty">
-          <strong>{t("projectStructure.noArchitecture")}</strong>
-          <p>{t("projectStructure.architectureLocation")}</p>
-        </div>
+        <p className="project-empty-line" title={t("projectStructure.architectureLocation")}>
+          {t("projectStructure.noArchitecture")}
+        </p>
       ) : (
         <>
           <div className="project-architecture-meta">
@@ -141,15 +140,15 @@ export function ArchitectureStructureView({
                 {artifact.relativePath} · {new Date(artifact.modifiedAt).toLocaleString()}
               </small>
             </div>
-            <Badge>
-              {t(
-                revisionState === "unknown"
-                  ? "projectStructure.revisionUnknown"
-                  : revisionState === "stale"
-                    ? "projectStructure.stale"
-                    : "projectStructure.revisionMatches",
-              )}
-            </Badge>
+            {revisionState === "unknown" || revisionState === "stale" ? (
+              <Badge>
+                {t(
+                  revisionState === "unknown"
+                    ? "projectStructure.revisionUnknown"
+                    : "projectStructure.stale",
+                )}
+              </Badge>
+            ) : null}
           </div>
           {artifact.repositoryRevision ? (
             <p className="workflow-muted">
@@ -177,8 +176,7 @@ export function ArchitectureStructureView({
           )}
           {artifact.sources.length ? (
             <section className="project-architecture-sources">
-              <h3>{t("projectStructure.sourceReferences")}</h3>
-              <p className="workflow-muted">{t("projectStructure.currentSourceHint")}</p>
+              <h3 title={t("projectStructure.currentSourceHint")}>{t("projectStructure.sourceReferences")}</h3>
               <div className="project-source-links">
                 {artifact.sources.map((item, index) => (
                   <Button

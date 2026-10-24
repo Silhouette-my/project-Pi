@@ -13,6 +13,7 @@ import {
   Bell,
   BookOpen,
   Bot,
+  Box,
   Camera,
   Check,
   CheckCheck,
@@ -163,6 +164,8 @@ export const IconChat = icon(MessageSquare);
 export const IconNewSession = icon(MessageSquarePlus);
 export const IconFolder = icon(Folder);
 export const IconFolderOpen = icon(FolderOpen);
+/** Project glyph: an outlined cube. */
+export const IconCube = icon(Box);
 export const IconNewProject = icon(FolderPlus);
 export const IconNewFolder = icon(FolderPlus);
 export const IconGripVertical = icon(GripVertical);

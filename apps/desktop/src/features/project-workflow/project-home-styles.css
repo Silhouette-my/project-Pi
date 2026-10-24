@@ -2,21 +2,10 @@
   Project home composition: console, overview cards and the
   workstream list/detail split.
 
-  `--workflow-accent` is the project's accent: a per-project colour when set,
-  otherwise the user's theme colour, otherwise the neutral shell accent. It
-  marks selection, primary actions, focus and the project glyph only; status
-  keeps the semantic success / warning / error / purple vocabulary.
+  The global theme accent (Settings → Appearance) marks the selected tab,
+  primary actions and focus; status keeps the semantic success / warning /
+  error / purple vocabulary. Projects carry no accent of their own.
 */
-/* A project colour arrives as light/dark variants; pick the one for the theme. */
-.workflow-console[data-project-color] {
-  --ds-project-accent: var(--project-accent-light);
-}
-:root[data-theme="dark"] .workflow-console[data-project-color] {
-  --ds-project-accent: var(--project-accent-dark);
-}
-.workflow-console {
-  --workflow-accent: var(--ds-project-accent, var(--ds-theme-accent, var(--ds-accent)));
-}
 .workflow-console {
   position: relative;
   display: flex;
@@ -376,8 +365,6 @@
   margin-top: -8px;
 }
 .workflow-secondary-actions .btn {
-  height: 28px;
-  font-size: var(--text-sm);
   color: var(--ds-text-secondary);
 }
 
@@ -396,10 +383,6 @@
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--ds-text-secondary);
-}
-.workflow-record-heading .btn {
-  height: 28px;
-  font-size: var(--text-sm);
 }
 .workflow-reference {
   min-width: 0;
@@ -432,11 +415,6 @@
   background-color: var(--ds-tile);
   box-shadow: none;
   color: var(--ds-text-muted);
-}
-
-/* Primary actions inside the console use the project accent. */
-.workflow-console .btn-primary {
-  background: var(--workflow-accent);
 }
 
 @container (max-width: 640px) {

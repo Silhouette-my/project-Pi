@@ -125,10 +125,7 @@ export function WorkflowArtifacts({
   const deliveries = snapshot.deliveries.filter(inScope);
   const runs = snapshot.runs.filter(inScope);
   if (!artifacts.length && !deliveries.length && !runs.length) {
-    return <section className="workflow-context-artifacts" aria-label={t("workflowArtifacts.title")}>
-      <h3>{t("workflowArtifacts.title")}</h3>
-      <p className="workflow-record-muted">{t("workflowArtifacts.noCurrentCandidate")}</p>
-    </section>;
+    return <p className="project-empty-line">{t("workflow.noArtifacts")}</p>;
   }
   const workstreamLabel = (id: string) => workstreams.find((item) => item.id === id)?.title ?? id;
   function artifactView(item: WorkflowArtifact, isCurrent: boolean) {
@@ -148,11 +145,7 @@ export function WorkflowArtifacts({
       >
         <div className="workflow-record-heading">
           <strong>{item.label}</strong>
-          <Badge>
-            {isCurrent
-              ? t("workflowArtifacts.currentCandidate")
-              : t(`workflowArtifacts.artifactKinds.${item.kind}`)}
-          </Badge>
+          {isCurrent ? null : <Badge>{t(`workflowArtifacts.artifactKinds.${item.kind}`)}</Badge>}
         </div>
         <p className="workflow-record-muted">{workstreamLabel(item.workstreamId)}</p>
         <dl className="workflow-record-metadata">
@@ -222,7 +215,7 @@ export function WorkflowArtifacts({
             </div>
           ))
         )}
-        <h4>{t("workflowArtifacts.feedback")}</h4>
+        {feedback.length ? <h4>{t("workflowArtifacts.feedback")}</h4> : null}
         {feedback.map((entry) => (
           <div key={entry.id} className="workflow-evidence" data-workflow-feedback={entry.id}>
             <p className="workflow-record-prose">{entry.comment}</p>
@@ -247,22 +240,15 @@ export function WorkflowArtifacts({
   }
   return (
     <section className="workflow-context-artifacts" aria-label={t("workflowArtifacts.title")}>
-      <h3>{t("workflowArtifacts.currentCandidate")}</h3>
-      {!current.length ? (
-        <p className="workflow-record-muted">{t("workflowArtifacts.noCurrentCandidate")}</p>
-      ) : (
-        current.map((item) => artifactView(item, true))
-      )}
+      {current.map((item) => artifactView(item, true))}
       {history.length ? (
         <details className="workflow-record-history">
           <summary><IconChevronRight size={12} className="project-disclosure-icon" />{t("workflowArtifacts.otherArtifacts", { count: history.length })}</summary>
           {history.map((item) => artifactView(item, false))}
         </details>
       ) : null}
-      <h3>{t("workflowArtifacts.deliveries")}</h3>
-      {!deliveries.length ? (
-        <p className="workflow-record-muted">{t("workflowArtifacts.noDeliveries")}</p>
-      ) : (
+      {deliveries.length > 0 && <h4 className="workflow-artifacts-subhead">{t("workflowArtifacts.deliveries")}</h4>}
+      {!deliveries.length ? null : (
         deliveries.map((item) => (
           <WorkflowRecord
             key={item.id}
@@ -311,10 +297,8 @@ export function WorkflowArtifacts({
           </WorkflowRecord>
         ))
       )}
-      <h3>{t("workflowArtifacts.runs")}</h3>
-      {!runs.length ? (
-        <p className="workflow-record-muted">{t("workflowArtifacts.noRuns")}</p>
-      ) : (
+      {runs.length > 0 && <h4 className="workflow-artifacts-subhead">{t("workflowArtifacts.runs")}</h4>}
+      {!runs.length ? null : (
         runs.map((item) => (
           <WorkflowRecord key={item.id} className="workflow-record" data-workflow-run={item.id}>
             <div className="workflow-record-heading">
@@ -351,9 +335,7 @@ export function WorkflowArtifacts({
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="workflow-record-muted">{t("workflowArtifacts.noEffects")}</p>
-            )}
+            ) : null}
           </WorkflowRecord>
         ))
       )}

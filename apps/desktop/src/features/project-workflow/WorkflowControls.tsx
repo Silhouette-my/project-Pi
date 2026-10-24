@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowConversation, WorkflowWorkstream } from "@pi-desktop/shared";
-import { Badge, Button, Checkbox, Field, Input, Select, Textarea } from "../../components/ui";
+import { Button, Checkbox, Field, Input, Select, Textarea } from "../../components/ui";
 import { IconChevronRight } from "../../components/icons";
 import { useProjectWorkflow, type WorkflowAction } from "./useProjectWorkflow";
 import { useAppStore } from "../../stores/app-store";
@@ -117,8 +117,9 @@ export function WorkflowControls({
   return (
     <section className="workflow-controls" aria-label={t("workflow.controls")}>
       <div className="workflow-control-row">
-        <Field label={t("workflow.executionSession")} hint={t("workflow.executionHint")}>
+        <Field label={t("workflow.executionSession")}>
           <Select
+            title={t("workflow.executionHint")}
             value={selectedExecutor?.id ?? ""}
             onChange={(event) => setExecutionSessionId(event.target.value)}
           >
@@ -139,6 +140,7 @@ export function WorkflowControls({
       <div className="workflow-actions workflow-primary-actions">
         <Button
           variant="primary"
+          title={!selectedAuthorization ? t("workflow.authorityRequired") : undefined}
           disabled={
             busy || !selectedAuthorization || !selectedExecutor || workstream.status === "executing"
           }
@@ -207,7 +209,7 @@ export function WorkflowControls({
           {t("workflow.authority")}
         </Button>
       </div>
-      {authorizations.length > 0 ? (
+      {authorizations.length > 1 ? (
         <Field label={t("workflow.selectedAuthority")}>
           <Select
             value={selectedAuthorization?.id ?? ""}
@@ -220,9 +222,7 @@ export function WorkflowControls({
             ))}
           </Select>
         </Field>
-      ) : (
-        <p className="workflow-muted">{t("workflow.authorityRequired")}</p>
-      )}
+      ) : null}
       {selectedAuthorization && (
         <details className="workflow-authority-details">
           <summary><IconChevronRight size={12} className="project-disclosure-icon" />{t("workflow.selectedAuthority")}</summary>
@@ -263,6 +263,7 @@ export function WorkflowControls({
           <div className="workflow-form-grid">
             <Field label={t("workflow.purpose")}>
               <Select
+                title={t(`workflow.policies.${purpose}`)}
                 value={purpose}
                 onChange={(event) => {
                   const next = event.target.value as typeof purpose;
@@ -288,7 +289,6 @@ export function WorkflowControls({
               </Select>
             </Field>
           </div>
-          <p className="workflow-muted">{t(`workflow.policies.${purpose}`)}</p>
           <Field label={t("workflow.assignment")}>
             <Textarea
               autoFocus
@@ -363,7 +363,7 @@ export function WorkflowControls({
         >
           <h3>{t("workflow.authority")}</h3>
           <p className="workflow-muted">{t("workflow.authorityHint")}</p>
-          <Field label={t("workflow.allowedActions")}>
+                    <Field label={t("workflow.allowedActions")}>
             <Textarea
               required
               rows={2}
@@ -410,14 +410,6 @@ export function WorkflowControls({
           </div>
         </form>
       )}
-      <ul className="workflow-acceptance">
-        {workstream.acceptance.map((item) => (
-          <li key={item.id}>
-            <Badge>{t(`workflow.acceptanceStatus.${item.status}`)}</Badge>
-            <span>{item.title}</span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
