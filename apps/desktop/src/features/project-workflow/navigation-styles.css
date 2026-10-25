@@ -60,6 +60,7 @@
 .sidebar .sidebar-category-header:focus-within .sidebar-category-actions,
 .sidebar .sidebar-category-header.is-menu-open .sidebar-category-actions { opacity: 1; }
 .sidebar .sidebar-category-header.is-drop-inside { outline: 1px dashed var(--ds-accent); outline-offset: -1px; }
+.sidebar .sidebar-favorites-header { cursor: default; color: var(--ds-text-secondary); }
 .sidebar .sidebar-category-body { margin-left: var(--sidebar-category-inset); min-width: 0; }
 
 /* ---- rows ---- */

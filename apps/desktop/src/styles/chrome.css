@@ -1220,6 +1220,11 @@
   margin-left: auto;
 }
 
+.sidebar-header-actions [data-nav="favorites"][aria-pressed="true"] {
+  color: var(--ds-text-primary);
+  background: var(--ds-bg-active);
+}
+
 .sidebar-body {
   display: flex;
   min-height: 0;

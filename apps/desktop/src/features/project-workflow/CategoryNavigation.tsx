@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import type { SessionSummary, WorkflowNavigation as NavigationRecord } from "@pi-desktop/shared";
 import { useAppStore } from "../../stores/app-store";
 import { NavigationTree } from "./NavigationTree";
-import { categoryLeaves, sidebarCategories, standaloneSessions } from "./navigation-category-model";
+import { categoryLeaves, favoriteSessions, sidebarCategories, standaloneSessions } from "./navigation-category-model";
+import { useSidebarListView } from "../../lib/sidebar-view-state";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import "./navigation-styles.css";
 
@@ -40,6 +41,7 @@ export function CategoryNavigation({
 }: Props) {
   const workflow = useProjectWorkflow();
   const { t } = useTranslation();
+  const view = useSidebarListView();
   const [creating, setCreating] = useState(false);
   const [creationError, setCreationError] = useState<string | null>(null);
   const snapshot = workflow.snapshot;
@@ -86,6 +88,32 @@ export function CategoryNavigation({
       >
         <div className="workflow-navigation-session">{renderSessions([session])}</div>
       </div>
+    );
+  }
+  if (view === "favorites") {
+    const favorites = favoriteSessions(snapshot, sessions);
+    return (
+      <section
+        className="workflow-navigation sidebar-favorites"
+        aria-label={t("workflowNav.favorites")}
+        data-sidebar-view="favorites"
+      >
+        <div className="sidebar-category-header sidebar-favorites-header">
+          <span className="sidebar-category-title">{t("workflowNav.favorites")}</span>
+        </div>
+        <div className="sidebar-category-body">
+          {favorites.map((session) => (
+            <div key={session.id} className="workflow-tree-node">
+              <div className="workflow-tree-row is-session">
+                <div className="workflow-tree-content">{renderChat(session)}</div>
+              </div>
+            </div>
+          ))}
+          {favorites.length === 0 ? (
+            <div className="workflow-tree-empty">{t("workflowNav.noFavorites")}</div>
+          ) : null}
+        </div>
+      </section>
     );
   }
   return (

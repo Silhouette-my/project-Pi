@@ -98,3 +98,17 @@ export function recentOrder(entries: TreeEntry[]) {
     (a, b) => (a.rank ?? 0) - (b.rank ?? 0) || (b.recency ?? 0) - (a.recency ?? 0) || a.id.localeCompare(b.id),
   );
 }
+
+/**
+ * The Favorites view: favourited conversations, newest activity first. Only
+ * standalone conversations can be favourites; the flag lives on the persisted
+ * navigation record, so nothing here writes data.
+ */
+export function favoriteSessions(snapshot: ProjectWorkflowSnapshot, sessions: SessionSummary[]) {
+  const nav = new Map(snapshot.navigation.map((row) => [row.sessionId, row]));
+  const touched = (session: SessionSummary) =>
+    Math.max(Date.parse(session.updatedAt) || 0, Date.parse(nav.get(session.id)?.lastAccessedAt ?? "") || 0);
+  return standaloneSessions(snapshot, sessions)
+    .filter((session) => nav.get(session.id)?.favorite === true)
+    .sort((a, b) => touched(b) - touched(a) || a.id.localeCompare(b.id));
+}
