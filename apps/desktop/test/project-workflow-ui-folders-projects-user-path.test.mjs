@@ -77,7 +77,10 @@ window.projectNavigationProbe=async()=>{
  check(group.querySelector('[data-sidebar-session-row="completed-side"]'),"Completed execution transcript is unreachable");
  check(!group.querySelector('[data-sidebar-session-row="archived-side"]'),"Archive filter was bypassed");
  check(group.querySelector('[data-sidebar-session-row="unknown-side"]'),"Unknown-effect transcript is unreachable");
- check(!group.querySelector('[data-project-agent]'),"Project Agent lives in the work panel, not on the sidebar project row");
+ const agentAction=group.querySelector('[data-action="project-agent"]');
+ check(agentAction,"Project row lacks the Project Agent hover action: "+group.querySelector(".workflow-tree-actions")?.innerHTML);check(agentAction.getAttribute("aria-label"),"Agent action has no accessible name");
+ const rowActions=[...group.querySelectorAll('.sidebar-project-row .workflow-tree-actions button')];
+ check(rowActions.at(-2)===agentAction,"The Agent action must sit right before the more menu");
  check(![...group.querySelectorAll("button")].some(button=>button.textContent==="Project home"),"The Project home row is gone: the cube opens it");
  flushSync(()=>group.querySelector('button.project-toggle').click());
 	 check(group.querySelector('button.project-toggle').getAttribute("aria-expanded")==="false","Project title did not collapse its children");
@@ -113,6 +116,10 @@ window.projectNavigationProbe=async()=>{
  await drag(row("project","visible-group"),row("folder","cat-a"),.1);
  check(projects.querySelector('.sidebar-category-body > .workflow-tree-node').dataset.workflowTreeNode==="project:visible-group","Mixed project/category order not rendered");
  check(document.querySelectorAll('[data-sidebar-project-group]').length===1,"Project duplicated after recategorization");
+ // The hover action opens the Agent tab in the project's panel context and reveals it.
+ flushSync(()=>document.querySelector('[data-sidebar-project-group="/visible"] [data-action="project-agent"]').click());
+ await until(()=>Object.values(useAppStore.getState().workPanelContexts).some(c=>c.open&&c.tabs.some(t=>t.kind==="project-agent"&&t.resource==="visible-group")),"Agent action did not open the Project Agent tab");
+ check(useAppStore.getState().page==="project"&&useAppStore.getState().projectConsoleId==="visible-group","Agent action did not take the project home page");
  flushSync(()=>rootNode.unmount());return{passed:true};
 };
 `;

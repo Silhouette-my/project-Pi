@@ -1,5 +1,7 @@
 import { CategoryNavigation } from "../features/project-workflow/CategoryNavigation";
-import { IconClock, IconCube, IconSearch } from "./icons";
+import { IconBot, IconClock, IconCube, IconSearch, IconStar } from "./icons";
+import { openProjectAgentPanel } from "../features/project-panel/project-panel-actions";
+import { toggleSidebarFavoritesView, setSidebarListView, useSidebarListView } from "../lib/sidebar-view-state";
 import { WorkflowProjectConversations, useWorkflowProjectGroups } from "../features/project-workflow/WorkflowNavigation";
 import { workflowGroupForPath, workflowProjectEntries } from "../features/project-workflow/navigation-model";
 import { ProjectInstructionsDialog } from "./ProjectInstructionsDialog";
@@ -72,7 +74,14 @@ import {
   ProjectRunCount,
   ProjectRunRail,
 } from "./ProjectRunIndicator";
-import { ErrorCodes, formatSessionLink } from "@pi-desktop/shared";
+import {
+  ErrorCodes,
+  KEYBOARD_SHORTCUTS,
+  formatSessionLink,
+  keybindingDisplayParts,
+  resolveKeybinding,
+  type ShortcutPlatform,
+} from "@pi-desktop/shared";
 import type { SessionSummary } from "@pi-desktop/shared";
 import type {
   ProjectMeta,
@@ -282,6 +291,8 @@ export function Sidebar({
 }) {
   const { t, i18n } = useTranslation();
   const workflow = useProjectWorkflow();
+  const listView = useSidebarListView();
+  const favoritesView = listView === "favorites" && Boolean(workflow.snapshot);
   const sessions = useAppStore((s) => s.sessions);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
   const selectingSessionId = useAppStore((s) => s.selectingSessionId);
@@ -303,6 +314,19 @@ export function Sidebar({
   const canNavBack = useAppStore((s) => s.canNavBack);
   const page = useAppStore((s) => s.page);
   const settings = useAppStore((s) => s.settings);
+  const shortcutPlatform = (
+    typeof window === "undefined" ? "darwin" : window.piDesktop?.platform ?? "darwin"
+  ) as ShortcutPlatform;
+  const searchShortcut = KEYBOARD_SHORTCUTS.find((shortcut) => shortcut.id === "openSearch");
+  const searchBinding = searchShortcut
+    ? resolveKeybinding(searchShortcut, settings?.keybindings, shortcutPlatform)
+    : null;
+  const searchShortcutLabel = keybindingDisplayParts(searchBinding, shortcutPlatform).join(
+    shortcutPlatform === "darwin" ? "" : "+",
+  );
+  const searchTooltip = searchShortcutLabel
+    ? t("nav.actionWithShortcut", { action: t("nav.search"), shortcut: searchShortcutLabel })
+    : t("nav.search");
   // Project headers must answer "is anything running under here?" while the
   // group is collapsed, so both affordances are resolved once per render
   // rather than re-derived per row.
@@ -1876,7 +1900,17 @@ export function Sidebar({
         : undefined;
       return {
         label: t("project.openActions", { name: entry.name }),
+        // Groups, top to bottom: create / context / identity / places / archive / danger.
         items: [
+          sidebarMenuAction({
+            id: "new-project-chat",
+            label: t("workflowNav.newChat"),
+            icon: <IconNewSession size={14} />,
+            onSelect: () => {
+              closeMenus(false);
+              void createProjectSession(entry.path);
+            },
+          }),
           ...(workflowGroup
             ? [
                 sidebarMenuAction({
@@ -1895,18 +1929,10 @@ export function Sidebar({
               ]
             : []),
           sidebarMenuAction({
-            id: "new-project-chat",
-            label: t("workflowNav.newChat"),
-            icon: <IconNewSession size={14} />,
-            onSelect: () => {
-              closeMenus(false);
-              void createProjectSession(entry.path);
-            },
-          }),
-          sidebarMenuAction({
             id: "project-instructions",
             label: t("workflowNav.projectInstructions"),
             icon: <IconFileText size={14} />,
+            separatorBefore: true,
             onSelect: () => {
               closeMenus(false);
               setInstructionsFor(entry);
@@ -1925,17 +1951,11 @@ export function Sidebar({
             id: "edit-project",
             label: t("workflowNav.renameProject"),
             icon: <IconPencil size={14} />,
+            separatorBefore: true,
             onSelect: () => {
               closeMenus(false);
               setEditProjectFor(entry);
             },
-          }),
-          sidebarMenuAction({
-            id: "open-project-folder",
-            label: t("project.openFolder", { defaultValue: "Open folder" }),
-            icon: <IconFolder size={14} />,
-            separatorBefore: true,
-            onSelect: () => void openProjectFolder(entry),
           }),
           sidebarMenuAction({
             id: "toggle-project-pin",
@@ -1944,12 +1964,11 @@ export function Sidebar({
             onSelect: () => toggleProjectPin(entry),
           }),
           sidebarMenuAction({
-            id: "toggle-project-archive",
-            label: archived
-              ? t("project.restore", { defaultValue: "Restore project" })
-              : t("project.archive", { defaultValue: "Archive project" }),
-            icon: archived ? <IconArchiveRestore size={14} /> : <IconArchive size={14} />,
-            onSelect: () => void archiveProject(entry),
+            id: "open-project-folder",
+            label: t("project.openFolder", { defaultValue: "Open folder" }),
+            icon: <IconFolder size={14} />,
+            separatorBefore: true,
+            onSelect: () => void openProjectFolder(entry),
           }),
           sidebarMenuSubmenu({
             id: "project-copy",
@@ -1976,10 +1995,20 @@ export function Sidebar({
             icon: <IconBranch size={14} />,
             items: projectIsolationItems,
           }),
+          sidebarMenuAction({
+            id: "toggle-project-archive",
+            label: archived
+              ? t("project.restore", { defaultValue: "Restore project" })
+              : t("project.archive", { defaultValue: "Archive project" }),
+            icon: archived ? <IconArchiveRestore size={14} /> : <IconArchive size={14} />,
+            separatorBefore: true,
+            onSelect: () => void archiveProject(entry),
+          }),
           sidebarMenuSubmenu({
             id: "project-danger",
             label: t("nav.dangerZone", { defaultValue: "Danger zone" }),
             icon: <IconTrash size={14} />,
+            separatorBefore: true,
             items: [
               sidebarMenuAction({
                 id: "delete-project",
@@ -2590,6 +2619,23 @@ export function Sidebar({
                 <IconNewFolder size={13} />
               </TooltipButton>
             ) : null}
+            {workflowGroup ? (
+              <TooltipButton
+                type="button"
+                className="sidebar-row-action"
+                data-action="project-agent"
+                data-project-agent={workflowGroup.id}
+                tooltip={t("workflow.agentTitle")}
+                ariaLabel={t("workflow.agentTitle")}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openProjectAgentPanel(workflowGroup.id);
+                  if (!home) setPage("project", { projectId: workflowGroup.id });
+                }}
+              >
+                <IconBot size={13} />
+              </TooltipButton>
+            ) : null}
             <TooltipButton
               type="button"
               className="sidebar-row-action thread-item-more project-more"
@@ -2754,6 +2800,22 @@ export function Sidebar({
       aria-label={t("nav.sidebarRegion")}
       data-window-blur={windowFocused ? undefined : "true"}
       onAnimationEnd={onAnimationEnd}
+      onKeyDown={(event) => {
+        // Esc leaves the Favorites view unless a menu, dialog or field is using it.
+        if (
+          event.key !== "Escape" ||
+          event.defaultPrevented ||
+          !favoritesView ||
+          sessionMenu ||
+          projectMenu ||
+          sectionMenu ||
+          sortOpen ||
+          (event.target as HTMLElement).closest?.("input, textarea, [contenteditable=true], [role=dialog]")
+        )
+          return;
+        event.preventDefault();
+        setSidebarListView("tree");
+      }}
       {...edgePanel}
     >
       <div className="sidebar-header">
@@ -2773,12 +2835,25 @@ export function Sidebar({
             <TooltipButton
               type="button"
               className="icon-btn icon-btn-square"
-              tooltip={t("nav.search")}
+              tooltip={searchTooltip}
               ariaLabel={t("nav.search")}
               data-nav="search"
               onClick={onOpenSearch}
             >
               <IconSearch size={15} />
+            </TooltipButton>
+          ) : null}
+          {workflow.snapshot ? (
+            <TooltipButton
+              type="button"
+              className="icon-btn icon-btn-square"
+              tooltip={t("workflowNav.favorites")}
+              ariaLabel={t("workflowNav.favorites")}
+              aria-pressed={favoritesView}
+              data-nav="favorites"
+              onClick={toggleSidebarFavoritesView}
+            >
+              <IconStar size={15} />
             </TooltipButton>
           ) : null}
           {onNewTask ? (
@@ -2974,12 +3049,16 @@ export function Sidebar({
                 }] : [];
               })}
             />
-            {projectEntries.filter(entry => !workflowGroupForPath(workflowGroups.groups, entry.path)).map(renderProjectGroup)}
-            <RemoteProjectGroups groups={remoteProjectGroups}
-              renderSessions={(sessions) => renderSessionRows(sessions, {
-                temporary: false,
-                showLastReplyDate: settings?.sidebarSessionTime === true,
-              })} />
+            {favoritesView ? null : (
+              <>
+                {projectEntries.filter(entry => !workflowGroupForPath(workflowGroups.groups, entry.path)).map(renderProjectGroup)}
+                <RemoteProjectGroups groups={remoteProjectGroups}
+                  renderSessions={(sessions) => renderSessionRows(sessions, {
+                    temporary: false,
+                    showLastReplyDate: settings?.sidebarSessionTime === true,
+                  })} />
+              </>
+            )}
           </div>
         ) : (
           <>

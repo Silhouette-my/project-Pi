@@ -64,6 +64,16 @@ test("conversation topbar tooltips reflect configured shortcuts", () => {
   assert.match(topbarSource, /ariaLabel=\{t\("nav\.newTask"\)\}/);
 });
 
+test("sidebar search tooltip reflects the configured shortcut", () => {
+  const sidebarSource = source("components/Sidebar.tsx");
+  assert.match(sidebarSource, /settings\?\.keybindings/);
+  assert.match(sidebarSource, /resolveKeybinding\(searchShortcut, settings\?\.keybindings, shortcutPlatform\)/);
+  assert.match(sidebarSource, /keybindingDisplayParts\(searchBinding, shortcutPlatform\)/);
+  assert.match(sidebarSource, /searchTooltip = searchShortcutLabel[\s\S]*?t\("nav\.actionWithShortcut"[\s\S]*?: t\("nav\.search"\)/);
+  assert.match(sidebarSource, /tooltip=\{searchTooltip\}/);
+  assert.match(sidebarSource, /ariaLabel=\{t\("nav\.search"\)\}/);
+});
+
 // A tooltip that survives its trigger is the reported "sometimes it never goes
 // away" failure: the anchor unmounts (a row leaves the list, a menu closes),
 // the window loses focus, or the pointer leaves the window without a matching

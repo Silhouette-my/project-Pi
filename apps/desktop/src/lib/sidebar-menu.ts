@@ -68,6 +68,7 @@ export type SidebarMenuSubmenuItem = {
   icon?: React.ReactNode;
   items: SidebarMenuActionItem[];
   notes?: SidebarMenuNote[];
+  separatorBefore?: boolean;
 };
 
 

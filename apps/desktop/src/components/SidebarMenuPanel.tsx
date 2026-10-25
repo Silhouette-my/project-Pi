@@ -247,8 +247,9 @@ export function SidebarMenuPanel({
     if (item.kind === "submenu") {
       const expanded = openSubmenuId === item.id;
       return (
+        <Fragment key={item.id}>
+        {item.separatorBefore ? <div className="sidebar-menu-separator" role="separator" /> : null}
         <button
-          key={item.id}
           ref={takeFirstItemRef()}
           type="button"
           role="menuitem"
@@ -266,6 +267,7 @@ export function SidebarMenuPanel({
           <span className="sidebar-menu-label">{item.label}</span>
           <IconChevronRight size={13} className="sidebar-menu-submenu-chevron" aria-hidden />
         </button>
+        </Fragment>
       );
     }
     if (item.kind === "group") {
