@@ -445,17 +445,15 @@ export function createSessionLaunchRuntime({
     // pi-compatible SYSTEM.md / APPEND_SYSTEM.md (issue #542): resolved once
     // per launch; a change retires the runtime through the reuse match.
     const customSystemPrompt = await loadCustomSystemPrompt(localInstructionRoot);
-    // ChatGPT chat mode replaces the desktop agent prompt with a per-session
-    // chat instruction preset (spec 03-runtime/11). A preset id that no longer
-    // resolves falls back to the built-in chat persona silently; a change
+    // The session's chat instruction preset (spec 03-runtime/11): ChatGPT chat
+    // mode replaces the desktop agent prompt with it, every other provider
+    // appends it to the agent prompt. A preset id that no longer resolves
+    // falls back to the built-in chat persona (ChatGPT) or nothing; a change
     // retires the runtime through the reuse match.
-    const chatInstructions =
-      apiStyle === "chatgpt_conversation"
-        ? await resolveChatInstructions(
-            localInstructionRoot,
-            typeof session.promptPreset === "string" ? session.promptPreset : undefined,
-          )
-        : undefined;
+    const chatInstructions = await resolveChatInstructions(
+      localInstructionRoot,
+      typeof session.promptPreset === "string" ? session.promptPreset : undefined,
+    );
     let projectMemory: string | undefined;
     if (projectPath) {
       try {

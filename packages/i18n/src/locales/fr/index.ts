@@ -361,6 +361,8 @@ export const fr = {
     chatInstructions: "Consignes de chat",
     chatInstructionsDefault: "Par défaut",
     chatInstructionsNone: "Aucune",
+    chatInstructionsUnavailableRemote: "Indisponible pour les sessions distantes",
+    chatInstructionsUnavailableNative: "Indisponible pour les sessions importées en lecture seule",
     chatModeCasual: "Discussion libre",
     chatModeExploration: "Exploration",
     chatModeQA: "Questions et réponses",

@@ -6,8 +6,10 @@ import { SessionPane } from "../SessionPane";
 import { useAppStore } from "../../stores/app-store";
 import type { SessionConfigurationInput } from "../../stores/app-state";
 import { messageHasTranscriptContent } from "../../lib/chat-launch-error";
-import { sessionAllows } from "../../lib/remote-session-safety";
+import { isRemoteSession, sessionAllows } from "../../lib/remote-session-safety";
 import { ComposerModelPicker } from "../../features/chat/composer/ComposerModelPicker";
+import { ComposerChatInstructionPicker } from "../../features/chat/composer/ComposerChatInstructionPicker";
+import { useChatInstructionMenu } from "../../features/chat/composer/hooks/useChatInstructionMenu";
 import { useTextareaMention } from "../../features/chat/mention/useTextareaMention";
 import { useComposerModelMenu } from "../../features/chat/composer/hooks/useComposerModelMenu";
 import { useSessionModelSelection } from "../../features/chat/composer/hooks/useSessionModelSelection";
@@ -202,9 +204,10 @@ export function DetachedConversation({
 }
 
 /**
- * The chat Composer's model × reasoning picker, bound to one named session
- * instead of the active one. Before the session exists the choice is held as
- * a pending configuration for the caller to apply on creation.
+ * The chat Composer's model × reasoning and chat-instruction pickers, bound
+ * to one named session instead of the active one. Before the session exists
+ * the choices are held as a pending configuration for the caller to apply on
+ * creation.
  */
 function DetachedModelPicker({
   sessionId,
@@ -227,6 +230,10 @@ function DetachedModelPicker({
     t,
   });
   const controlsBlocked = Boolean(session && !sessionAllows(session, "canConfigureModel"));
+  const configureActiveSession = async (configuration: SessionConfigurationInput) => {
+    if (sessionId) await configureSession(sessionId, configuration);
+    else onPendingChange({ ...pending, ...configuration });
+  };
   const controller = useComposerModelMenu({
     mode,
     activeSessionId: sessionId,
@@ -235,10 +242,7 @@ function DetachedModelPicker({
     thinkingProvider,
     thinkingLevel,
     controlsBlocked,
-    configureActiveSession: async (configuration) => {
-      if (sessionId) await configureSession(sessionId, configuration);
-      else onPendingChange({ ...pending, ...configuration });
-    },
+    configureActiveSession,
   });
   // Detached surfaces can mount before any chat page has loaded the provider
   // catalog (e.g. the project console); load it once so the picker resolves.
@@ -247,17 +251,38 @@ function DetachedModelPicker({
   useEffect(() => {
     if (!providersLoaded) void refreshProviders().catch(() => {});
   }, [providersLoaded, refreshProviders]);
+  const instructionMenu = useChatInstructionMenu({
+    remote: isRemoteSession(session),
+    native: session?.source === "pi-native",
+    apiStyle: provider?.apiStyle,
+    session,
+    draft: pending,
+    mode,
+    providerId: provider?.id,
+    modelId,
+    thinkingLevel,
+    controlsBlocked,
+    configureActiveSession,
+  });
   return (
-    <ComposerModelPicker
-      t={t}
-      controller={controller}
-      modelLabel={modelLabel}
-      thinkingLabel={thinkingLevel}
-      thinkingLevel={thinkingLevel}
-      selectedProviderId={provider?.id}
-      selectedModelId={modelId}
-      controlsBlocked={controlsBlocked || (blocked && !sessionId)}
-      onCloseOtherMenus={() => {}}
-    />
+    <>
+      <ComposerChatInstructionPicker
+        t={t}
+        controller={instructionMenu}
+        controlsBlocked={controlsBlocked || (blocked && !sessionId)}
+        onCloseOtherMenus={() => controller.setOpen(false)}
+      />
+      <ComposerModelPicker
+        t={t}
+        controller={controller}
+        modelLabel={modelLabel}
+        thinkingLabel={thinkingLevel}
+        thinkingLevel={thinkingLevel}
+        selectedProviderId={provider?.id}
+        selectedModelId={modelId}
+        controlsBlocked={controlsBlocked || (blocked && !sessionId)}
+        onCloseOtherMenus={() => instructionMenu.setOpen(false)}
+      />
+    </>
   );
 }

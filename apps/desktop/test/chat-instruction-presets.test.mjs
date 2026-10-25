@@ -61,14 +61,15 @@ test("preset discovery uses file stems, workspace first, and never the reserved 
   }
 });
 
-test("main resolves chat instructions only for chatgpt_conversation launches", () => {
+test("main resolves chat instructions for every launch, not only chatgpt_conversation", () => {
   const launch = readFileSync(
     new URL("../electron/main/runtime/session-launch.ts", import.meta.url),
     "utf8",
   );
-  assert.match(
+  assert.match(launch, /const chatInstructions = await resolveChatInstructions\(/);
+  assert.doesNotMatch(
     launch,
-    /apiStyle === "chatgpt_conversation"[\s\S]*resolveChatInstructions\(/,
+    /apiStyle === "chatgpt_conversation"\s*\?\s*await resolveChatInstructions/,
   );
   assert.match(launch, /chatInstructions !== undefined \? \{ chatInstructions \}/);
 });

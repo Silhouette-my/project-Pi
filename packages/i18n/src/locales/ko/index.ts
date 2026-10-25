@@ -370,6 +370,8 @@ export const ko = {
     chatInstructions: "채팅 지침",
     chatInstructionsDefault: "기본",
     chatInstructionsNone: "없음",
+    chatInstructionsUnavailableRemote: "원격 세션에서는 사용할 수 없습니다",
+    chatInstructionsUnavailableNative: "가져온 읽기 전용 세션에서는 사용할 수 없습니다",
     chatModeCasual: "일상 대화",
     chatModeExploration: "탐색",
     chatModeQA: "질문과 답변",

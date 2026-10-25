@@ -361,6 +361,8 @@ export const de = {
     chatInstructions: "Chat-Anweisungen",
     chatInstructionsDefault: "Standard",
     chatInstructionsNone: "Keine",
+    chatInstructionsUnavailableRemote: "Für Remote-Sitzungen nicht verfügbar",
+    chatInstructionsUnavailableNative: "Für importierte schreibgeschützte Sitzungen nicht verfügbar",
     chatModeCasual: "Plaudern",
     chatModeExploration: "Erkunden",
     chatModeQA: "Fragen und Antworten",

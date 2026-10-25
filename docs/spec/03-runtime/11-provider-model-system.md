@@ -101,25 +101,43 @@ The renderer can invoke status/login/logout and the explicit previous-Pi login i
 as ChatGPT tools; account-side connectors execute on the service and appear
 as activity in the transcript.
 
-Chat mode never sends the desktop agent system prompt. Its system prompt comes
-from a per-session chat instruction preset. The composer shows a **Chat
-instructions** chip next to the model picker, only for `chatgpt_conversation`
-models on local sessions: **Default** selects the built-in chat persona
-(answer in the user's language; concise, direct, actionable — no tool rules),
-**None** sends no system prompt at all. Casual chat, Exploration, Q&A, and
-Technical discussion are bundled with the application, so a fresh installation
-does not depend on files from a development profile. Their ids are `casual-chat`,
-`exploration`, `q-and-a`, and `technical-discussion`; their labels are localized.
+Chat instructions are a per-session setting available in every conversation
+and side chat, whatever the provider (D671, ADR `chat-instructions-all-sessions`).
+The composer shows a **Chat instructions** chip next to the model picker; the
+detached composers of side chats, project side conversations and the project
+Agent show the same chip bound to their own session (before a side chat exists
+the pick is held as pending configuration and applied when the first send
+creates it). A new conversation, and a new side chat even when its parent has
+an instruction, starts on **None**, which adds no instruction. Choosing a
+preset has two effects by provider. For `chatgpt_conversation` models, which
+have no local tools, the preset **replaces** the desktop agent system prompt
+(chat mode never sends it); **Default** (the built-in chat persona: answer in
+the user's language; concise, direct, actionable, no tool rules) is offered only
+there and is what a session stored before D671 with no preset keeps, and **None**
+there sends no system prompt at all. For every other provider the preset is
+**appended** to the agent system prompt as a last section, so tools, project
+instructions and memory keep working; **None** appends nothing. The chip stays
+visible but disabled, with the reason as its tooltip, for remote-host sessions
+(the RACP `session/configure` carries no instruction and the run happens on the
+other machine) and imported read-only pi-native sessions. Project Agent
+discussions accept instructions too: the preset is appended to the discussion
+prompt and the host workflow snapshot stays separate reference data. Casual
+chat, Exploration, Q&A, and Technical discussion are bundled with the
+application, so a fresh installation does not depend on files from a
+development profile. Their ids are `casual-chat`, `exploration`, `q-and-a`, and
+`technical-discussion`; their labels are localized.
 Additional presets are listed by id. Presets are Markdown files in `<workspace>/.pi/chat-instructions/` and
 `~/.pi/agent/chat-instructions/`; the id is the file stem, a workspace file
 shadows a global file with the same id; either overrides a bundled mode with
 that id. The reserved id `none` is never
 offered as a file. The selection persists as the session's `promptPreset`
-value through `session.configure` (null resets it to Default); a preset id
-that no longer resolves falls back to the built-in persona silently. Electron
-main resolves the id to content at launch and passes it to the sidecar as
-`chatInstructions` (`undefined` = built-in persona, `""` = no system prompt,
-any other string = the preset content verbatim); changing it retires the
+value through `session.configure` (null resets a ChatGPT session to Default);
+`session.create` stores `none` for new sessions, while sessions stored earlier
+keep their NULL. A preset id that no longer resolves falls back to the built-in
+persona (ChatGPT) or adds nothing. Electron main resolves the id to content at
+launch for every provider and passes it to the sidecar as `chatInstructions`
+(`undefined` = built-in persona for ChatGPT / nothing elsewhere, `""` = no
+instruction, any other string = the preset content verbatim); changing it retires the
 reusable runtime so the next turn recomposes. The preset list channel returns
 ids only; file content never reaches the renderer. Before a session exists,
 the chip displays the draft selection and retains it across model changes.

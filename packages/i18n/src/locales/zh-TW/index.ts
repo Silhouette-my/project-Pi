@@ -363,6 +363,8 @@ export const zhTW = {
     chatInstructions: "聊天指令",
     chatInstructionsDefault: "預設",
     chatInstructionsNone: "無",
+    chatInstructionsUnavailableRemote: "遠端工作階段不支援聊天指令",
+    chatInstructionsUnavailableNative: "匯入的唯讀工作階段不支援聊天指令",
     chatModeCasual: "閒聊",
     chatModeExploration: "探索",
     chatModeQA: "問答",

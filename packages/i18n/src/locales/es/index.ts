@@ -361,6 +361,8 @@ export const es = {
     chatInstructions: "Instrucciones de chat",
     chatInstructionsDefault: "Predeterminadas",
     chatInstructionsNone: "Ninguna",
+    chatInstructionsUnavailableRemote: "No disponible en sesiones remotas",
+    chatInstructionsUnavailableNative: "No disponible en sesiones importadas de solo lectura",
     chatModeCasual: "Charla",
     chatModeExploration: "Exploración",
     chatModeQA: "Preguntas y respuestas",

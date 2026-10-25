@@ -360,6 +360,8 @@ export const ptBR = {
     chatInstructions: "Instruções de chat",
     chatInstructionsDefault: "Padrão",
     chatInstructionsNone: "Nenhuma",
+    chatInstructionsUnavailableRemote: "Indisponível em sessões remotas",
+    chatInstructionsUnavailableNative: "Indisponível em sessões importadas somente leitura",
     chatModeCasual: "Conversa casual",
     chatModeExploration: "Exploração",
     chatModeQA: "Perguntas e respostas",

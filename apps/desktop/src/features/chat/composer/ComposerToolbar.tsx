@@ -55,7 +55,6 @@ export type ComposerToolbarProps = {
   modelMenu: ModelMenuController;
   /** Present only for ChatGPT conversation models on local sessions. */
   chatInstructionMenu?: ChatInstructionMenuController;
-  chatInstructionPreset?: string | null;
   modelLabel: string;
   thinkingLabel: string;
   contextUsage: ContextUsage | null;
@@ -99,7 +98,6 @@ export function ComposerToolbar({
   showToast,
   modelMenu,
   chatInstructionMenu,
-  chatInstructionPreset,
   modelLabel,
   thinkingLabel,
   contextUsage,
@@ -198,11 +196,10 @@ export function ComposerToolbar({
       <div className="composer-right">
         {localToolsAllowed ? <ComposerControlSlots side="right" /> : null}
         {contextUsage ? <ContextUsageInspector {...contextUsage} /> : null}
-        {chatInstructionMenu?.enabled ? (
+        {chatInstructionMenu ? (
           <ComposerChatInstructionPicker
             t={t}
             controller={chatInstructionMenu}
-            currentPreset={chatInstructionPreset}
             controlsBlocked={controlsBlocked}
             onCloseOtherMenus={() => {
               modelMenu.setOpen(false);

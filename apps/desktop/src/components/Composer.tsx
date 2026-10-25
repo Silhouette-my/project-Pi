@@ -353,10 +353,10 @@ export function Composer({
     thinkingLevel,
     controlsBlocked,
   });
-  // ChatGPT chat-mode instruction presets (spec 03-runtime/11) are a
-  // per-session setting on local sessions only.
+  // Chat instructions (spec 03-runtime/11) are a per-session setting.
   const chatInstructionMenu = useChatInstructionMenu({
-    enabled: !nativeSession && !remoteSession && provider?.apiStyle === "chatgpt_conversation",
+    remote: remoteSession, native: nativeSession, apiStyle: provider?.apiStyle,
+    session: activeSession, draft: draftConfiguration,
     mode,
     providerId: provider?.id,
     modelId,
@@ -590,7 +590,6 @@ export function Composer({
             showToast={showToast}
             modelMenu={modelMenu}
             chatInstructionMenu={chatInstructionMenu}
-            chatInstructionPreset={(activeSession ?? draftConfiguration)?.promptPreset ?? null}
             modelLabel={modelLabel}
             thinkingLabel={thinkingLabel}
             contextUsage={composerContextUsage ?? null}

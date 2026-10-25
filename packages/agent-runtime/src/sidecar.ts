@@ -142,8 +142,9 @@ type RuntimeParams = {
    * ChatGPT chat-mode system prompt content (spec 03-runtime/11). Encoding:
    * `undefined` = built-in chat persona (also the fallback for a stale preset
    * id); `""` = the "None" selection, send no system prompt at all; any other
-   * string = that preset's file content. Only consulted for
-   * `apiStyle: "chatgpt_conversation"` providers.
+   * string = that preset's file content. `chatgpt_conversation` providers use
+   * it as the whole system prompt; every other provider appends a non-empty
+   * value to the agent prompt (`undefined` and `""` add nothing).
    */
   chatInstructions?: string;
   /** Host-selected project workflow reference data; not repository instructions. */

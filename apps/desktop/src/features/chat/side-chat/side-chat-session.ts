@@ -11,7 +11,7 @@ import i18n from "i18next";
 import { useAppStore } from "../../../stores/app-store";
 import { insertIntoComposerDraft } from "../../../lib/composer-draft-insert";
 import type { WorkPanelTab } from "../../../lib/work-panel-tabs";
-import type { UiMessage } from "@pi-desktop/shared";
+import { CHAT_INSTRUCTION_NONE_ID, type SessionSummary, type UiMessage } from "@pi-desktop/shared";
 import {
   buildSummaryQuote,
   buildTranscriptQuote,
@@ -96,6 +96,21 @@ export function useSideChatDraft(tabId: string) {
   ] as const;
 }
 
+function sideChatConfiguration(
+  child: SessionSummary | undefined,
+  configuration: SessionConfigurationInput | undefined,
+): SessionConfigurationInput | undefined {
+  if (!child) return configuration;
+  return {
+    mode: child.mode,
+    providerId: child.providerId,
+    modelId: child.modelId,
+    thinkingLevel: child.thinkingLevel,
+    promptPreset: CHAT_INSTRUCTION_NONE_ID,
+    ...configuration,
+  };
+}
+
 /** Send the draft. The first Send forks the child; later Sends reuse it. */
 export async function sendSideChatMessage(
   tab: WorkPanelTab,
@@ -118,7 +133,12 @@ export async function sendSideChatMessage(
         }),
       attach: (childId) => useAppStore.getState().attachSessionTranscript(childId),
       send: async (childId, value) => {
-        await applyPendingConfiguration(childId, configuration);
+        // A side chat starts without a chat instruction even when its parent
+        // has one (the fork copies it); a pick made before the first send wins.
+        await applyPendingConfiguration(
+          childId,
+          sideChatConfiguration(useAppStore.getState().sessions.find((item) => item.id === childId), configuration),
+        );
         // The child's transcript now holds exactly the copied parent prefix.
         const current = useAppStore.getState();
         if (current.sideChatReturn[tab.id]?.prefixCount === undefined) {

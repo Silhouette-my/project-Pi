@@ -157,6 +157,7 @@ import type {
 } from "./pi-runtime-types.js";
 import {
   initialSystemTranscript,
+  CHAT_INSTRUCTION_SECTION,
   CONTEXT_BUDGET_SECTION,
   syncSystemSections,
   systemTranscriptCheckpoint,
@@ -2482,7 +2483,8 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     // ChatGPT chat mode has no local tools, so the desktop agent prompt
     // (persona, tool rules, skills, project context) is replaced entirely by
     // the selected chat instruction, the built-in chat persona, or nothing
-    // (spec 03-runtime/11). Non-chat providers compose unchanged.
+    // (spec 03-runtime/11). Other providers keep the agent prompt and append
+    // the selected instruction as a last section.
     if (this.provider.apiStyle === "chatgpt_conversation") {
       const chat = chatSystemPromptContent(this.chatInstructions);
       this.composedSections = chat ? { runtime: chat } : {};
@@ -2511,6 +2513,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
         ...(memoryPrompt ? [memoryPrompt] : []),
         ...(resumablePrompt ? [resumablePrompt] : []),
       ].join("\n\n")),
+      ...(this.chatInstructions ? { [CHAT_INSTRUCTION_SECTION]: this.chatInstructions } : {}),
     };
     const composed = Object.values(this.composedSections).filter(Boolean).join("\n\n");
     this.composedSystemPrompt = composed;

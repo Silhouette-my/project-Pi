@@ -1452,8 +1452,8 @@ pub fn create_session_with_options(
         .prepare_cached(
             "INSERT INTO sessions (
                 id, title, project_id, provider_id, model_id, mode, thinking_level,
-                permission_mode, title_source, created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
+                permission_mode, prompt_preset, title_source, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)",
         )?
         .execute(params![
             id,
@@ -1464,6 +1464,7 @@ pub fn create_session_with_options(
             mode,
             thinking_level,
             permission_mode,
+            DEFAULT_NEW_SESSION_PROMPT_PRESET,
             title_source,
             now
         ])?;
@@ -1477,8 +1478,8 @@ pub fn create_session_with_options(
         mode,
         thinking_level,
         permission_mode,
-        // A new session starts on the built-in chat persona (no preset).
-        prompt_preset: None,
+        // A new session starts with no chat instruction (spec 03-runtime/11).
+        prompt_preset: Some(DEFAULT_NEW_SESSION_PROMPT_PRESET.to_string()),
         updated_at: ms_to_ts(now),
         created_at: ms_to_ts(now),
         // The run row that owns this transcript is written after creation.
@@ -1883,6 +1884,10 @@ pub fn configure_session(
 /// A chat instruction preset id is a Markdown file stem discovered at launch,
 /// so the host cannot enumerate valid ids. It still rejects shapes that could
 /// escape the preset directories or bloat the row.
+/// Chat instruction a new session starts with: the reserved "none" id, which
+/// adds no instruction. Sessions stored before this default keep a NULL value.
+pub const DEFAULT_NEW_SESSION_PROMPT_PRESET: &str = "none";
+
 pub fn is_valid_prompt_preset(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 200
@@ -4818,12 +4823,12 @@ mod tests {
     fn configure_prompt_preset_is_tristate_and_persisted() {
         let db = test_db();
         let session = create_session(&db, None, None, None, None, None).unwrap();
-        // A new session has no preset: the wire omits the field entirely.
-        assert_eq!(session.prompt_preset, None);
-        assert!(serde_json::to_value(&session)
-            .unwrap()
-            .get("promptPreset")
-            .is_none());
+        // A new session starts on the reserved "none" instruction.
+        assert_eq!(session.prompt_preset.as_deref(), Some("none"));
+        assert_eq!(
+            serde_json::to_value(&session).unwrap()["promptPreset"],
+            "none"
+        );
 
         // Selecting a preset id persists it and returns it on the wire.
         let selected = configure_session_with_thinking(

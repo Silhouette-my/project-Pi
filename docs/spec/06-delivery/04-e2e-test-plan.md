@@ -18816,3 +18816,20 @@ host-created files. The full app's file-preview viewer is covered separately.
   keying, default open, close memory).
 - **Specs:** `04-ux/01-ui-ia.md` §3.6; ADR project-structure-views, ADR 0033
   amendments.
+
+### E2E-CHAT-instructions-all-sessions
+
+- **Journey:** A non-ChatGPT local session (OpenAI-compatible loopback model)
+  shows the Chat instructions chip on **None**; a request sent with None carries
+  the agent prompt and no instruction text. Choosing Q&A persists it on the
+  session, and the next request carries the Q&A text appended to the unchanged
+  agent prompt with tools still declared. A chat side chat shows the chip on
+  None although its parent uses Q&A; a preset picked before the first send
+  creates no session and is applied to the forked child (its request carries it,
+  not the parent's); a side chat with no pick sends no instruction.
+- **Coverage:** `scripts/e2e-chat-instructions.mjs`;
+  `composer-chat-instructions.test.mjs` (gating, default, disabled reasons,
+  detached binding), `chat-instruction-presets.test.mjs`, agent-runtime
+  `chat-instructions-runtime.test.ts`, host `configure_prompt_preset_is_tristate_and_persisted`.
+- **Specs:** `03-runtime/11-provider-model-system.md`, D671, ADR
+  `chat-instructions-all-sessions`.

@@ -91,19 +91,28 @@ HTTP 429 以账号限流错误呈现并附带服务端给出的重试等待时�
 或发生了自动 reasoning 切换时，assistant 消息附带 `chatgpt.model_route` 诊断，
 但不因此失败轮次。
 
-聊天模式不发送桌面 agent 系统提示词，其系统提示词来自按会话选择的聊天指令
-预设。仅当本地会话使用 `chatgpt_conversation` 模型时，输入框在模型选择旁显示
-「聊天指令」按钮：**默认**使用内置聊天人格（以用户语言回答，简洁、直接、可执行，
-不含工具规则），**无**表示完全不发送系统提示词。应用自带「闲聊」「探索」「问答」
-和「技术讨论」四种模式，分别使用 `casual-chat`、`exploration`、`q-and-a`、
-`technical-discussion` 标识，不再依赖开发验收目录中的文件。内置模式显示本地化名称，
+聊天指令是按会话设置的，适用于所有对话和侧聊，与提供商无关（D671，ADR
+`chat-instructions-all-sessions`）。输入框在模型选择旁显示「聊天指令」按钮；侧聊、
+项目侧边对话和项目 Agent 的独立输入框显示同一按钮并绑定各自的会话（侧聊尚未创建时，
+选择先作为待应用配置保存，首次发送创建会话时应用）。新对话以及新侧聊（即使其父对话
+设置了指令）默认为**无**，即不追加任何指令。预设的作用因提供商而异：`chatgpt_conversation`
+模型没有本地工具，预设**替换**桌面 agent 系统提示词（聊天模式从不发送它）；**默认**
+（内置聊天人格：以用户语言回答，简洁、直接、可执行，不含工具规则）只在此类会话提供，
+也是 D671 之前保存、未设置预设的会话沿用的值，其「无」表示完全不发送系统提示词。
+其他提供商的预设**追加**到 agent 系统提示词末尾，工具、项目指令与记忆照常工作，「无」
+不追加任何内容。远程主机会话（RACP `session/configure` 不携带指令，且在另一台机器上运行）
+和导入的只读 pi-native 会话中，按钮保持可见但禁用，原因显示在提示中。项目 Agent 讨论同样
+接受聊天指令：预设追加到讨论提示词，主机工作流快照仍是独立的参考数据。应用自带「闲聊」
+「探索」「问答」和「技术讨论」四种模式，分别使用 `casual-chat`、`exploration`、
+`q-and-a`、`technical-discussion` 标识，不再依赖开发验收目录中的文件。内置模式显示本地化名称，
 用户增加的模式按 id 显示；工作区和全局同名文件可以覆盖内置模式。
 预设是 `<workspace>/.pi/chat-instructions/` 与 `~/.pi/agent/chat-instructions/`
 中的 Markdown 文件；id 即文件名（不含扩展名），同名时工作区文件覆盖全局文件，
 保留 id `none` 不作为文件提供。选择通过 `session.configure` 持久化为会话的
-`promptPreset`（null 恢复默认）；预设文件被删除后静默回退内置人格。
-Electron Main 在启动时把 id 解析为内容并以 `chatInstructions` 传给 sidecar
-（`undefined` = 内置人格，`""` = 不发送系统提示词，其他字符串 = 预设内容原文）；
+`promptPreset`（null 使 ChatGPT 会话恢复默认）；`session.create` 为新会话保存 `none`，
+更早保存的会话保持 NULL；预设文件被删除后静默回退内置人格（ChatGPT）或不追加内容。
+Electron Main 在启动时为所有提供商把 id 解析为内容并以 `chatInstructions` 传给 sidecar
+（`undefined` = ChatGPT 的内置人格 / 其他提供商无内容，`""` = 无指令，其他字符串 = 预设内容原文）；
 更改会使可复用 runtime 失效，下一轮重新组装。预设列表通道只返回 id，
 文件内容不进入渲染层。
 

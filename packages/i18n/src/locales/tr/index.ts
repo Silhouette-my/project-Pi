@@ -370,6 +370,8 @@ export const tr = {
     chatInstructions: "Sohbet talimatları",
     chatInstructionsDefault: "Varsayılan",
     chatInstructionsNone: "Yok",
+    chatInstructionsUnavailableRemote: "Uzak oturumlarda kullanılamaz",
+    chatInstructionsUnavailableNative: "İçe aktarılan salt okunur oturumlarda kullanılamaz",
     chatModeCasual: "Sohbet",
     chatModeExploration: "Keşif",
     chatModeQA: "Soru ve cevap",

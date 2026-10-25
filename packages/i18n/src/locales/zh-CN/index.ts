@@ -363,6 +363,8 @@ export const zhCN = {
     chatInstructions: "聊天指令",
     chatInstructionsDefault: "默认",
     chatInstructionsNone: "无",
+    chatInstructionsUnavailableRemote: "远程会话不支持聊天指令",
+    chatInstructionsUnavailableNative: "导入的只读会话不支持聊天指令",
     chatModeCasual: "闲聊",
     chatModeExploration: "探索",
     chatModeQA: "问答",
