@@ -86,3 +86,16 @@ not Host data). The persisted flag covers three kinds of row:
   tools cannot star anything.
 
 The earlier note that Favorites left the UI is superseded.
+
+## Amendment: category order
+
+Every category, built-ins included, is draggable. Custom categories already carry
+`order`, but the virtual built-ins cannot be edited, so the display order lives in
+one optional snapshot field `categoryOrder: string[]` (category ids, built-ins
+included) written only by the user command `category.reorder { categoryIds }`.
+The Host validates that every id names a category, that ids are unique and that
+there are at most 1000. When the field is absent (all existing snapshots) or an
+id is missing from it, the default applies: built-ins first, then custom
+categories by `order`; ids missing from the list sort after the listed ones.
+`category.remove` drops the id from the list. Nothing else changes; the field is
+additive, so older snapshots load unchanged.

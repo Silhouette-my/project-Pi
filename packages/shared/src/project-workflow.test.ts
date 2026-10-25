@@ -27,9 +27,12 @@ describe("project workflow boundary", () => {
       { kind: "category.create", category: { id: "k2", name: "Archive", order: 1 } },
       { kind: "category.update", category: { id: "k1", name: "Renamed", order: 0 } },
       { kind: "category.remove", categoryId: "k1" },
+      { kind: "category.reorder", categoryIds: ["projects", "k1", "chats"] },
       { kind: "tree.move", target: { kind: "project", id: "p" }, scope: "chats", categoryId: "k1", order: 0 },
     ]) expect(isProjectWorkflowUserCommand({ commandId: "c", expectedRevision: 0, ...body })).toBe(true);
     expect(isProjectWorkflowUserCommand({ commandId: "c", expectedRevision: 0, kind: "category.remove" })).toBe(false);
+    expect(Value.Check(ProjectWorkflowSnapshotSchema, { ...snapshot, categoryOrder: ["projects", "chats", "k1"] })).toBe(true);
+    expect(Value.Check(ProjectWorkflowSnapshotSchema, { ...snapshot, categoryOrder: [1] })).toBe(false);
   });
   it("treats the project favourite flag as optional and the command as user-owned", () => {
     const base = emptyProjectWorkflowSnapshot();

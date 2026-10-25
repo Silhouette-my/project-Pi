@@ -91,6 +91,7 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
         | "category.create"
         | "category.update"
         | "category.remove"
+        | "category.reorder"
         | "navigation.move"
         | "navigation.update"
         | "navigation.expand"

@@ -135,6 +135,8 @@ export const ProjectWorkflowSnapshotSchema = object({
   projectAgents: Type.Optional(Type.Array(ProjectAgentSchema)),
   projectNavigation: Type.Optional(Type.Array(WorkflowProjectNavigationSchema)),
   categories: Type.Optional(Type.Array(WorkflowCategorySchema)),
+  /** Display order of every category id, built-ins included; absent = default order. */
+  categoryOrder: Type.Optional(strings),
   folders: Type.Array(WorkflowFolderSchema), navigation: Type.Array(WorkflowNavigationSchema),
   expandedIds: strings, workstreams: Type.Array(WorkflowWorkstreamSchema),
   conversations: Type.Array(WorkflowConversationSchema), resources: Type.Array(WorkflowResourceSchema),
@@ -158,6 +160,7 @@ export const ProjectWorkflowUserCommandSchema = Type.Union([
   command("category.create", { category: WorkflowCategorySchema }),
   command("category.update", { category: WorkflowCategorySchema }),
   command("category.remove", { categoryId: id }),
+  command("category.reorder", { categoryIds: Type.Array(id, { maxItems: 1000 }) }),
   command("navigation.move", { sessionIds: strings, folderId: optionalId, categoryId: optionalId }),
   command("navigation.update", { navigation: WorkflowNavigationSchema }),
   command("navigation.expand", { expandedIds: strings }),

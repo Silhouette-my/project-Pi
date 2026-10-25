@@ -124,6 +124,7 @@ pub(super) fn command(value: &Value) -> Result<()> {
         "folder.remove" => "folderId:id",
         "category.create" | "category.update" => "category:category",
         "category.remove" => "categoryId:id",
+        "category.reorder" => "categoryIds:ids",
         "navigation.move" => "sessionIds:ids folderId?:id categoryId?:id",
         "navigation.update" => "navigation:navigation",
         "navigation.expand" => "expandedIds:ids",

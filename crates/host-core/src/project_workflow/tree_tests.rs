@@ -307,3 +307,30 @@ fn project_favourite_rejects_unknown_projects_and_bad_flags() {
     }
     assert_eq!(snapshot(&f.db, &json!({})).unwrap(), before);
 }
+
+#[test]
+fn categories_reorder_including_built_ins_and_removal_prunes_the_order() {
+    let f = Fixture::new();
+    f.execute(
+        "category.create",
+        json!({"category":{"id":"k","name":"Reading","order":0}}),
+    );
+    assert!(snapshot(&f.db, &json!({}))
+        .unwrap()
+        .get("categoryOrder")
+        .is_none());
+    let state = f.execute(
+        "category.reorder",
+        json!({"categoryIds":["k","projects","chats"]}),
+    );
+    assert_eq!(state["categoryOrder"], json!(["k", "projects", "chats"]));
+    let unknown = f.command("category.reorder", json!({"categoryIds":["k","missing"]}));
+    assert_eq!(mutate(&f.db, &unknown).unwrap_err().code, "NOT_FOUND");
+    let duplicate = f.command("category.reorder", json!({"categoryIds":["k","k"]}));
+    assert_eq!(
+        mutate(&f.db, &duplicate).unwrap_err().code,
+        "INVALID_ARGUMENT"
+    );
+    let removed = f.execute("category.remove", json!({"categoryId":"k"}));
+    assert_eq!(removed["categoryOrder"], json!(["projects", "chats"]));
+}

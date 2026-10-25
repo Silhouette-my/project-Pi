@@ -120,6 +120,26 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                 }
             }
             rows_mut(value, "expandedIds").retain(|expanded| expanded != id);
+            if let Some(order) = value.get_mut("categoryOrder").and_then(Value::as_array_mut) {
+                order.retain(|entry| entry != id);
+            }
+            Ok(())
+        }
+        // Display order of every sidebar category, built-ins included. Absent
+        // means the default: built-ins first, then custom categories by `order`.
+        "category.reorder" => {
+            let ids = command["categoryIds"].as_array().unwrap();
+            if ids.len() > 1000 {
+                return Err(Error::invalid("too many categories"));
+            }
+            let mut seen = std::collections::HashSet::new();
+            for id in ids {
+                navigation_tree::check_category(value, id)?;
+                if !seen.insert(id.to_string()) {
+                    return Err(Error::invalid("duplicate category in order"));
+                }
+            }
+            value["categoryOrder"] = json!(ids);
             Ok(())
         }
         "navigation.move" => {
