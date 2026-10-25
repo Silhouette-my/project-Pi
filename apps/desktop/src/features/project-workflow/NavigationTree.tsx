@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { WORKFLOW_CHATS_CATEGORY, WORKFLOW_PROJECTS_CATEGORY, type WorkflowFolder } from "@pi-desktop/shared";
 import { Button, TooltipButton } from "../../components/ui";
 import {
+  IconArrowDown,
+  IconArrowUp,
   IconChevronDown,
   IconArrowUpDown,
   IconClock,
@@ -15,11 +17,12 @@ import {
   IconPencil,
   IconTrash,
 } from "../../components/icons";
+import { setSidebarDragImage } from "../../lib/sidebar-drag-image";
 import { setSidebarGroupCollapsed, useSidebarCollapsedGroups } from "../../lib/sidebar-category-state";
 import { sidebarMenuAction, type SidebarMenuPanelContent } from "../../lib/sidebar-menu";
 import { openFolderDialog } from "./folder-dialog-store";
 import { NavigationTreeDialog } from "./NavigationTreeDialog";
-import { recentOrder } from "./navigation-category-model";
+import { recentOrder, reorderedCategoryIds, steppedCategoryIds } from "./navigation-category-model";
 import { useRowMenu } from "./useRowMenu";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import {
@@ -38,6 +41,7 @@ import {
 import "./navigation-styles.css";
 
 const MIME = "application/x-pi-navigation-tree";
+const CATEGORY_MIME = "application/x-pi-navigation-category";
 const RECENT_GROUP = "recent";
 
 export type NavigationCategory = { id: string; name: string; builtin: boolean };
@@ -77,6 +81,14 @@ export function NavigationTree({
   const collapsedGroups = useSidebarCollapsedGroups();
   const [dragging, setDragging] = useState<TreeEntry | null>(null);
   const [drop, setDrop] = useState<{ key: string; position: DropPosition } | null>(null);
+  const [draggingCategory, setDraggingCategory] = useState<string | null>(null);
+  const [categoryDrop, setCategoryDrop] = useState<{ id: string; after: boolean } | null>(null);
+  // Script-owned hover for category headers: :hover goes stale after a native drag.
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+  const categoryIds = categories?.map((item) => item.id) ?? [];
+  const reorderCategories = (ids: string[] | null) => {
+    if (ids) void workflow.mutate({ kind: "category.reorder", categoryIds: ids });
+  };
   const folders = snapshot ? treeFolders(snapshot, context) : [];
   const parentOf = (folder: WorkflowFolder) =>
     folder.parentId ?? (categories ? categoryRoot(folderCategory(folder)) : undefined);
@@ -131,8 +143,34 @@ export function NavigationTree({
     };
   });
   const categoryMenu = useRowMenu((id): SidebarMenuPanelContent | null => {
-    const category = categories?.find((item) => item.id === id && !item.builtin);
+    const category = categories?.find((item) => item.id === id);
     if (!category) return null;
+    // The keyboard path for ordering; dragging a header is the pointer path.
+    const step = (direction: -1 | 1) => {
+      const ids = steppedCategoryIds(categoryIds, category.id, direction);
+      return {
+        disabled: workflow.busy || !ids,
+        onSelect: () => {
+          categoryMenu.close(false);
+          reorderCategories(ids);
+        },
+      };
+    };
+    const move = [
+      sidebarMenuAction({
+        id: "move-category-up",
+        label: t("workflowNav.moveCategoryUp"),
+        icon: <IconArrowUp size={14} />,
+        ...step(-1),
+      }),
+      sidebarMenuAction({
+        id: "move-category-down",
+        label: t("workflowNav.moveCategoryDown"),
+        icon: <IconArrowDown size={14} />,
+        ...step(1),
+      }),
+    ];
+    if (category.builtin) return { label: t("workflowNav.categoryActions"), items: move };
     return {
       label: t("workflowNav.categoryActions"),
       items: [
@@ -145,6 +183,7 @@ export function NavigationTree({
             openFolderDialog({ mode: "category-rename", context, categoryId: category.id });
           },
         }),
+        ...move,
         // No confirmation: contents fall back to the built-in categories.
         sidebarMenuAction({
           id: "delete-category",
@@ -243,6 +282,30 @@ export function NavigationTree({
     void move(dragging, entry, entry ? position : "after", rootId);
     setDragging(null);
     setDrop(null);
+    setHoveredCategory(null);
+  }
+
+  function overCategory(event: DragEvent, id: string) {
+    if (!draggingCategory || !event.dataTransfer.types.includes(CATEGORY_MIME)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const after = event.clientY > rect.top + rect.height / 2;
+    const changed = reorderedCategoryIds(categoryIds, draggingCategory, id, after);
+    event.dataTransfer.dropEffect = changed ? "move" : "none";
+    setCategoryDrop(changed ? { id, after } : null);
+  }
+  function dropCategory(event: DragEvent, id: string) {
+    if (!draggingCategory || !event.dataTransfer.types.includes(CATEGORY_MIME)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    reorderCategories(
+      reorderedCategoryIds(categoryIds, draggingCategory, id, event.clientY > rect.top + rect.height / 2),
+    );
+    setDraggingCategory(null);
+    setCategoryDrop(null);
+    setHoveredCategory(null);
   }
 
   const actionButton = (
@@ -326,8 +389,16 @@ export function NavigationTree({
             }
             event.stopPropagation();
             setDragging(entry);
+            setHoveredCategory(null);
             event.dataTransfer.effectAllowed = "move";
             event.dataTransfer.setData(MIME, key(entry));
+            setSidebarDragImage(
+              event,
+              entry.label,
+              event.currentTarget.querySelector(
+                entry.kind === "folder" ? ".workflow-tree-folder svg" : entry.kind === "project" ? ".sidebar-project-cube svg" : ":not(*)",
+              ),
+            );
           }}
           onDragEnd={() => {
             setDragging(null);
@@ -387,15 +458,35 @@ export function NavigationTree({
     return (
       <section
         key={category.id}
-        className="sidebar-category"
+        className={`sidebar-category${draggingCategory === category.id ? " is-dragging" : ""}${categoryDrop?.id === category.id ? ` is-drop-${categoryDrop.after ? "after" : "before"}` : ""}`}
         data-sidebar-category={category.id}
         aria-label={category.name}
+        onDragOver={(event) => overCategory(event, category.id)}
+        onDrop={(event) => dropCategory(event, category.id)}
       >
         <div
-          className={`sidebar-category-header${drop?.key === groupId ? " is-drop-inside" : ""}${categoryMenu.openId === category.id ? " is-menu-open" : ""}`}
+          className={`sidebar-category-header${drop?.key === groupId ? " is-drop-inside" : ""}${categoryMenu.openId === category.id ? " is-menu-open" : ""}${hoveredCategory === category.id ? " is-hovered" : ""}`}
+          draggable={!workflow.busy}
+          onPointerEnter={(event) => {
+            if (event.buttons === 0 && !dragging && !draggingCategory) setHoveredCategory(category.id);
+          }}
+          onPointerLeave={() => setHoveredCategory((current) => (current === category.id ? null : current))}
+          onDragStart={(event) => {
+            if ((event.target as Element) !== event.currentTarget) return;
+            event.stopPropagation();
+            setDraggingCategory(category.id);
+            setHoveredCategory(null);
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData(CATEGORY_MIME, category.id);
+            setSidebarDragImage(event, category.name);
+          }}
+          onDragEnd={() => {
+            setDraggingCategory(null);
+            setCategoryDrop(null);
+            setHoveredCategory(null);
+          }}
           onClick={() => setSidebarGroupCollapsed(groupId, open)}
           onContextMenu={(event) => {
-            if (category.builtin) return;
             event.preventDefault();
             event.stopPropagation();
             categoryMenu.open(category.id, null, { x: event.clientX, y: event.clientY });

@@ -37,8 +37,12 @@
   cursor: pointer;
   user-select: none;
 }
-.sidebar .sidebar-category-header:hover,
-.sidebar .sidebar-category-header:focus-within,
+/* Header actions follow one rule: the pointer is over THIS header (the
+   `is-hovered` class is owned by script and cleared on drag start/end/drop,
+   because :hover goes stale after a native drag), keyboard focus is visible
+   inside it, or its menu is open. Body, other rows and clicks never count. */
+.sidebar .sidebar-category-header.is-hovered,
+.sidebar .sidebar-category-header:has(:focus-visible),
 .sidebar .sidebar-category-header.is-menu-open { color: var(--ds-text-secondary); }
 .sidebar .sidebar-category-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar .sidebar-category-chevron,
@@ -55,12 +59,10 @@
 .sidebar .sidebar-category-chevron:hover,
 .sidebar .sidebar-chevron-button:hover { background: var(--ds-bg-active); }
 .sidebar .sidebar-category-spacer { flex: 1; }
-.sidebar .sidebar-category-actions { display: flex; align-items: center; gap: 2px; opacity: 0; }
-.sidebar .sidebar-category-header:hover .sidebar-category-actions,
-.sidebar .sidebar-category-header:focus-within .sidebar-category-actions,
-.sidebar .sidebar-category-header.is-menu-open .sidebar-category-actions { opacity: 1; }
-.sidebar .sidebar-category-header.is-drop-inside,
-.sidebar .sidebar-category-body.is-drop-inside { outline: 1px dashed var(--ds-accent); outline-offset: -1px; }
+.sidebar .sidebar-category-actions { display: flex; align-items: center; gap: 2px; opacity: 0; pointer-events: none; }
+.sidebar .sidebar-category-header.is-hovered .sidebar-category-actions,
+.sidebar .sidebar-category-header:has(:focus-visible) .sidebar-category-actions,
+.sidebar .sidebar-category-header.is-menu-open .sidebar-category-actions { opacity: 1; pointer-events: auto; }
 .sidebar .sidebar-favorites-header { cursor: default; color: var(--ds-text-secondary); }
 .sidebar .sidebar-favorite-origin {
   /* Aligns with the title of the row above (icon-less row, title inset). */
@@ -107,7 +109,6 @@
 .sidebar .workflow-tree-folder span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar .workflow-tree-content { min-width: 0; flex: 1; }
 .sidebar .workflow-tree-content > .project-group { margin: 0; }
-.sidebar .workflow-tree-node.is-dragging > .workflow-tree-row { opacity: 0.5; }
 
 /* Row actions: quiet until the row is hovered, focused or its menu is open. */
 .sidebar .workflow-tree-actions { display: none; align-items: center; gap: 0; margin-left: auto; flex: 0 0 auto; }
@@ -153,22 +154,69 @@
 }
 .sidebar .workflow-tree-node.is-block .thread-item.active { background: var(--ds-bg-active); }
 
-/* ---- drop feedback ---- */
+/* ---- drag and drop feedback ---- */
+/* Into: a soft accent tint. Between: a 2px accent line with rounded ends. All
+   indicators are overlays or colour changes, so nothing shifts during a drag. */
+.sidebar .workflow-tree-row,
+.sidebar .sidebar-category-header,
+.sidebar .sidebar-category-body {
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard), opacity var(--motion-duration-fast) var(--motion-ease-standard);
+}
 .sidebar .workflow-tree-row.is-drop-before::before,
-.sidebar .workflow-tree-row.is-drop-after::after {
+.sidebar .workflow-tree-row.is-drop-after::after,
+.sidebar .sidebar-category.is-drop-before::before,
+.sidebar .sidebar-category.is-drop-after::after {
   content: "";
   position: absolute;
   z-index: 2;
   left: 3px;
   right: 3px;
   height: 2px;
+  border-radius: var(--radius-full);
   background: var(--ds-accent);
   pointer-events: none;
 }
 .sidebar .workflow-tree-row.is-drop-before::before { top: 0; }
 .sidebar .workflow-tree-row.is-drop-after::after { bottom: 0; }
+.sidebar .sidebar-category { position: relative; }
+.sidebar .sidebar-category.is-drop-before::before { top: -1px; }
+.sidebar .sidebar-category.is-drop-after::after { bottom: -1px; }
 .sidebar .workflow-tree-row.is-drop-inside,
-.sidebar .workflow-tree-root-target.is-drop-inside { outline: 1px solid var(--ds-accent); background: var(--ds-bg-active); }
+.sidebar .sidebar-category-header.is-drop-inside,
+.sidebar .sidebar-category-body.is-drop-inside,
+.sidebar .workflow-tree-root-target.is-drop-inside {
+  background: color-mix(in oklab, var(--ds-accent) 14%, transparent);
+  border-radius: var(--radius-xs);
+}
+.sidebar .workflow-tree-node.is-dragging > .workflow-tree-row,
+.sidebar .sidebar-category.is-dragging > .sidebar-category-header { opacity: 0.5; }
+.sidebar .sidebar-category.is-dragging > .sidebar-category-body { opacity: 0.5; }
+@media (prefers-reduced-motion: reduce) {
+  .sidebar .workflow-tree-row,
+  .sidebar .sidebar-category-header,
+  .sidebar .sidebar-category-body { transition: none; }
+}
+/* Offscreen element used as the native drag image (see lib/sidebar-drag-image). */
+.sidebar-drag-pill {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 5px 10px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ds-bg-elevated-opaque);
+  box-shadow: var(--ds-raised-shadow);
+  color: var(--ds-text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-compact);
+  pointer-events: none;
+}
+.sidebar-drag-pill-icon { display: grid; flex: 0 0 auto; place-items: center; color: var(--ds-text-muted); }
+.sidebar-drag-pill-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar .workflow-tree-root-hint { min-height: 8px; color: var(--ds-text-muted); font-size: var(--text-sm); padding: 0 6px; }
 
 /* ---- projects ---- */

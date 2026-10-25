@@ -631,7 +631,10 @@
 .sidebar .sidebar-category-scroll {
   padding-top: 4px;
   gap: 0;
+  /* Scrolls by wheel, trackpad and keyboard without a visible bar. */
+  scrollbar-width: none;
 }
+.sidebar .sidebar-category-scroll::-webkit-scrollbar { display: none; }
 
 /* The sidebar header rule separates the toolbar from the list. */
 .sidebar .sidebar-header {

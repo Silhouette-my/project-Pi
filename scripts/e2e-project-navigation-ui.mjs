@@ -375,7 +375,7 @@ try {
   // Deleting a custom category keeps everything: contents fall back to the built-in categories.
   assert.ok(await clickSelector(`${section} [data-action="category-menu"]`));
   await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu [data-action=\"delete-category\"]')"), "category menu");
-  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action]')].map(el=>el.dataset.action)"), ["rename-category","delete-category"]);
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action]')].map(el=>el.dataset.action)"), ["rename-category","move-category-up","move-category-down","delete-category"]);
   await clickMenuAction("delete-category");
   await until(async () => !(await snapshot()).categories?.length, "category removed without confirmation");
   const afterDelete = await snapshot();

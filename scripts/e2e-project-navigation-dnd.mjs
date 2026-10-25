@@ -113,15 +113,19 @@ async function folderMenuAction(folderId, action) {
 /** Real pointer drag: Chromium hit-tests the press, starts a native drag, and the drag events
  * are dispatched at real coordinates, so the draggable ancestor, dataTransfer and drop target
  * resolution are the ones a user gets. `grab` is where the user presses (defaults to the source). */
-async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName } = {}) {
+async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName, inspect } = {}) {
   const point = async (selector, x = .5, y = .5) => {
     await page.evaluate(`document.querySelector(${json(selector)})?.scrollIntoView({block:'nearest'})`);
     const r = await rectOf(selector); assert.ok(r && r.width > 0 && r.height > 0, `visible ${selector}`);
     return { x: r.left + r.width * x, y: r.top + r.height * y };
   };
   // The tree locks dragging while a Host mutation is in flight.
-  await until(() => page.evaluate(`document.querySelector(${json(grab)})?.closest(".workflow-tree-row")?.draggable===true`), `draggable ${grab}`, 8000);
+  await until(() => page.evaluate(`document.querySelector(${json(grab)})?.closest(".workflow-tree-row, .sidebar-category-header")?.draggable===true`), `draggable ${grab}`, 8000);
   const from = await point(grab);
+  // Records every native drag image the app sets, and the section geometry before the drag.
+  await page.evaluate(`(() => { if (!window.__dragImages) { window.__dragImages = []; const set = DataTransfer.prototype.setDragImage; DataTransfer.prototype.setDragImage = function (el, x, y) { const cs = getComputedStyle(el), r = el.getBoundingClientRect(); window.__dragImages.push({ className: el.className, text: el.textContent, width: r.width, height: r.height, shadow: cs.boxShadow, radius: cs.borderRadius, background: cs.backgroundColor, inDocument: document.body.contains(el) }); return set.call(this, el, x, y); }; } window.__dragImages.length = 0; })()`);
+  const tops = () => page.evaluate(`(() => { const t=[...document.querySelectorAll('[data-sidebar-category]')].map(el=>el.getBoundingClientRect().top); return t.map(v=>Math.round(v-t[0])) })()`);
+  const topsBefore = await tops();
   const intercepted = new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`no native drag started from ${grab}`)), 12000);
     const onMessage = ({ data }) => { const msg = JSON.parse(String(data)); if (msg.method === "Input.dragIntercepted") { clearTimeout(timer); page.ws.removeEventListener("message", onMessage); resolve(msg.params.data); } };
@@ -136,6 +140,10 @@ async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName
     const to = await point(target, fx, fy);
     for (const type of ["dragEnter", "dragOver", "dragOver"]) await page.call("Input.dispatchDragEvent", { type, x: to.x, y: to.y, data: dragData });
     if (indicator) await until(() => page.evaluate(`!!document.querySelector(${json(indicator)})`), `drop indicator ${indicator}`, 4000);
+    await sleep(250);
+    const report = await page.evaluate(`(() => { const q = sel => document.querySelector(sel); const dim = q('.workflow-tree-node.is-dragging > .workflow-tree-row, .sidebar-category.is-dragging > .sidebar-category-header'); const el = ${json(indicator ?? "")} ? q(${json(indicator ?? "")}) : null; const cs = el && getComputedStyle(el); const before = el && getComputedStyle(el, '::before'), after = el && getComputedStyle(el, '::after'); return { dimOpacity: dim ? Number(getComputedStyle(dim).opacity) : null, dragImage: window.__dragImages.at(-1) ?? null, imagesLeft: document.querySelectorAll('.sidebar-drag-pill').length, background: cs?.backgroundColor, outlineStyle: cs?.outlineStyle, lineBefore: before && { height: before.height, radius: before.borderRadius, content: before.content }, lineAfter: after && { height: after.height, radius: after.borderRadius, content: after.content } } })()`);
+    assert.deepEqual(await tops(), topsBefore, "no layout shift while dragging");
+    inspect?.(report);
     if (captureName) await capture(captureName);
     await page.call("Input.dispatchDragEvent", { type: "drop", x: to.x, y: to.y, data: dragData });
     await page.call("Input.dispatchMouseEvent", { type: "mouseReleased", x: to.x, y: to.y, button: "left", buttons: 0, clickCount: 1 });
@@ -201,6 +209,94 @@ try {
   await until(async () => (await sessionRow(chat.sessionId))?.folderId === folderA.id, "chat moved into the custom folder");
   await realDrag(sessionHandle(chat.sessionId), row("folder", folderA.id), { fy: .1, indicator: ".is-drop-before" });
   await until(async () => !(await sessionRow(chat.sessionId))?.folderId, "chat dropped before the folder at the category root");
+
+  // ---- Drag preview and drop feedback (light and dark) ----
+  const sectionOf = id => `[data-sidebar-category="${id}"]`, headerOf = id => `${sectionOf(id)} .sidebar-category-header`;
+  const order = () => page.evaluate("[...document.querySelectorAll('[data-sidebar-category]')].map(el=>el.dataset.sidebarCategory)");
+  const checkInto = (title) => report => {
+    assert.ok(report.dragImage, "a custom drag image is set");
+    assert.match(report.dragImage.className, /sidebar-drag-pill/);
+    assert.equal(report.dragImage.text, title, "pill shows the dragged title");
+    assert.ok(report.dragImage.width <= 220 && report.dragImage.inDocument, `compact pill (${report.dragImage.width}px)`);
+    assert.notEqual(report.dragImage.shadow, "none", "pill has a shadow"); assert.notEqual(report.dragImage.radius, "0px", "pill is rounded");
+    assert.equal(report.imagesLeft, 0, "offscreen pill is removed after dragstart");
+    assert.ok(report.dimOpacity !== null && report.dimOpacity <= .55, `source dims (${report.dimOpacity})`);
+    assert.notEqual(report.background, "rgba(0, 0, 0, 0)", "into-target has a soft tint"); assert.equal(report.outlineStyle, "none", "no dashed outline");
+  };
+  await setTheme("light");
+  await realDrag(projectHandle(projectId), headerOf("projects"), { indicator: `${headerOf("projects")}.is-drop-inside`, captureName: "drag-into-light.png", inspect: checkInto("Project navigation") });
+  await projectIn("category:projects");
+  await setTheme("dark");
+  await realDrag(projectHandle(projectId), header, { indicator: `${header}.is-drop-inside`, captureName: "drag-into-dark.png", inspect: checkInto("Project navigation") });
+  await projectIn(`category:${category.id}`);
+  const lineChecked = which => report => {
+    const line = report[which];
+    assert.ok(line && line.content !== "none" && line.height === "2px" && line.radius !== "0px", `2px rounded insertion line (${json(line)})`);
+    assert.equal(report.dimOpacity <= .55, true, "dragged category dims");
+  };
+
+  // ---- Categories reorder by drag, built-ins included; order persists ----
+  assert.deepEqual(await order(), ["chats", "projects", category.id]);
+  await setTheme("light");
+  await realDrag(`${header} .sidebar-category-title`, sectionOf("chats"), { fy: .1, indicator: ".sidebar-category.is-drop-before", captureName: "drag-reorder-light.png", inspect: lineChecked("lineBefore") });
+  await until(async () => (await snapshot()).categoryOrder?.join() === [category.id, "chats", "projects"].join(), "custom category moved before 对话");
+  assert.deepEqual(await order(), [category.id, "chats", "projects"]);
+  await setTheme("dark");
+  await realDrag(`${headerOf("chats")} .sidebar-category-title`, sectionOf("projects"), { fy: .9, indicator: ".sidebar-category.is-drop-after", captureName: "drag-reorder-dark.png", inspect: lineChecked("lineAfter") });
+  await until(async () => (await snapshot()).categoryOrder?.join() === [category.id, "projects", "chats"].join(), "built-in 对话 moved after 项目");
+  assert.deepEqual(await order(), [category.id, "projects", "chats"]);
+  await setTheme("light");
+  // Keyboard path: the custom category's menu, and the built-in header's context menu.
+  assert.ok(await clickSelector(`${section} [data-action="category-menu"]`), "custom category menu");
+  await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu [data-action=\"move-category-down\"]')"), "category menu");
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action]')].map(el=>el.dataset.action)"), ["rename-category", "move-category-up", "move-category-down", "delete-category"]);
+  assert.equal(await page.evaluate("document.querySelector('.sidebar-row-menu [data-action=\"move-category-up\"]').disabled"), true, "first category cannot move up");
+  await clickMenuAction("move-category-down");
+  await until(async () => (await snapshot()).categoryOrder?.join() === ["projects", category.id, "chats"].join(), "menu moved the category down");
+  assert.ok(await contextMenuAt(headerOf("chats")), "context menu on a built-in header");
+  await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu [data-action=\"move-category-up\"]')"), "built-in menu");
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action]')].map(el=>el.dataset.action)"), ["move-category-up", "move-category-down"]);
+  assert.equal(await page.evaluate("document.querySelector('.sidebar-row-menu [data-action=\"move-category-down\"]').disabled"), true, "last category cannot move down");
+  await clickMenuAction("move-category-up");
+  await until(async () => (await snapshot()).categoryOrder?.join() === ["projects", "chats", category.id].join(), "built-in menu moved 对话 up");
+  await stopApp(); await startApp();
+  assert.deepEqual((await snapshot()).categoryOrder, ["projects", "chats", category.id], "order persists in the Host");
+  await until(async () => (await order()).join() === ["projects", "chats", category.id].join(), "order restored after restart");
+
+  // ---- Header icons: only the pointer over THAT header, visible focus inside it, or its open menu ----
+  const opacityOf = id => page.evaluate(`Number(getComputedStyle(document.querySelector(${json(sectionOf(id) + " .sidebar-category-actions")})).opacity)`);
+  const moveTo = async (selector, fx = .5, fy = .5) => { const r = await rectOf(selector); await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: r.left + r.width * fx, y: r.top + r.height * fy }); await sleep(250); };
+  await page.evaluate("document.documentElement.dataset.theme='light'");
+  await moveTo("body", .9, .98);
+  for (const id of ["chats", "projects", category.id]) assert.equal(await opacityOf(id), 0, `${id} actions hidden when the pointer is elsewhere`);
+  await moveTo(`${headerOf(category.id)} .sidebar-category-title`);
+  assert.equal(await opacityOf(category.id), 1, "hovered header shows its actions"); assert.equal(await opacityOf("chats"), 0); assert.equal(await opacityOf("projects"), 0);
+  await moveTo(`${sectionOf(category.id)} .sidebar-category-body`, .5, .5);
+  assert.equal(await opacityOf(category.id), 0, "hovering the category body does not show header actions");
+  await moveTo(`${headerOf("chats")} .sidebar-category-title`);
+  assert.equal(await opacityOf("chats"), 1); assert.equal(await opacityOf(category.id), 0);
+  // Collapsed: same rule, and a chevron click leaves no lingering focus state.
+  const chevron = `${headerOf(category.id)} .sidebar-category-chevron`;
+  await moveTo(chevron); await page.call("Input.dispatchMouseEvent", { type: "mousePressed", ...(await (async r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 }))(await rectOf(chevron))), button: "left", buttons: 1, clickCount: 1 });
+  await page.call("Input.dispatchMouseEvent", { type: "mouseReleased", ...(await (async r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 }))(await rectOf(chevron))), button: "left", buttons: 0, clickCount: 1 });
+  await until(() => page.evaluate(`document.querySelector(${json(chevron)}).getAttribute('aria-expanded')==='false'`), "category collapsed");
+  assert.equal(await opacityOf(category.id), 1, "collapsed header shows actions while hovered");
+  await moveTo(`${headerOf("projects")} .sidebar-category-title`);
+  assert.equal(await opacityOf(category.id), 0, "collapsed header hides actions once the pointer leaves (no lingering focus)");
+  assert.equal(await opacityOf("projects"), 1);
+  await moveTo("body", .9, .98);
+  // After a drag/drop that ends over a header, nothing lingers until the pointer moves again.
+  await realDrag(`${headerOf(category.id)} .sidebar-category-title`, sectionOf("chats"), { fy: .1, indicator: ".sidebar-category.is-drop-before" });
+  await until(async () => (await snapshot()).categoryOrder?.join() === ["projects", category.id, "chats"].join(), "collapsed category moved by drag");
+  await sleep(250);
+  for (const id of ["chats", "projects", category.id]) assert.equal(await opacityOf(id), 0, `${id} actions hidden right after a drop`);
+  await moveTo(`${headerOf("projects")} .sidebar-category-title`);
+  assert.equal(await opacityOf("projects"), 1, "hover works again after the drop");
+  // Reopen the collapsed category and check the scroller hides its scrollbar.
+  assert.ok(await clickSelector(chevron));
+  const scroller = await page.evaluate(`(() => { const el=document.querySelector('.sidebar-category-scroll'); return { width: getComputedStyle(el).scrollbarWidth, webkit: getComputedStyle(el,'::-webkit-scrollbar').display, gutter: el.offsetWidth - el.clientWidth } })()`);
+  assert.deepEqual(scroller, { width: "none", webkit: "none", gutter: 0 }, "sidebar list shows no scrollbar");
+  await capture("sidebar-after-drops.png");
   await writeFile(join(output, "result.json"), json({ ok: true, sourceCommitAtRun, sourceChangesAtRun, interaction: "real pointer drag via CDP Input.dispatchDragEvent" }));
   await Promise.all(["failure.txt", "failure.png"].map(name => rm(join(output, name), { force: true })));
 } catch (error) {
