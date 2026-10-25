@@ -67,3 +67,22 @@ derives from folder scope, or from the default for rows).
 - Interaction changes: folder menus are Rename, New folder, Remove folder (no
   confirmation, never deletes chats); folders move by drag; Favorites left the
   UI (the field is kept); the Project Agent no longer has a sidebar icon.
+
+## Amendment: favourites for projects and project conversations
+
+Favourites return as a sidebar view (a per-window preference in local storage,
+not Host data). The persisted flag covers three kinds of row:
+
+- Standalone and project conversations keep the existing `navigation.favorite`
+  flag, written by `navigation.update`; a project chat needs no new field.
+- `projectNavigation` rows gain an optional `favorite` boolean. Absent means
+  false, so snapshots written before this amendment load unchanged and no
+  migration or schema bump is needed.
+- A new user command `project.favorite { projectId, favorite, order? }` sets the
+  flag. The Host validates the project exists and the field types; it creates
+  the `projectNavigation` row at the supplied `order` (default 0) when none
+  exists, and never alters the placement of an existing row. Rejected commands
+  leave the snapshot unchanged. The command is user-only: agents and workflow
+  tools cannot star anything.
+
+The earlier note that Favorites left the UI is superseded.

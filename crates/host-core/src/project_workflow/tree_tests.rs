@@ -255,3 +255,55 @@ fn legacy_trees_without_categories_load_and_keep_their_placement() {
     assert_eq!(state["navigation"][0]["folderId"], "old");
     assert_eq!(state["projectNavigation"][0]["folderId"], "old");
 }
+
+#[test]
+fn favourites_of_projects_and_project_chats_persist_and_reload_unchanged() {
+    let f = Fixture::new();
+    // Rows written before the flag existed carry no `favorite` and read as not favourite.
+    let placed = f.execute(
+        "tree.move",
+        json!({"target":{"kind":"project","id":f.project},"scope":"projects","order":4}),
+    );
+    assert!(placed["projectNavigation"][0].get("favorite").is_none());
+    let starred = f.execute(
+        "project.favorite",
+        json!({"projectId":f.project,"favorite":true}),
+    );
+    assert_eq!(starred["projectNavigation"][0]["favorite"], true);
+    assert_eq!(starred["projectNavigation"][0]["order"], 4, "order is kept");
+    let cleared = f.execute(
+        "project.favorite",
+        json!({"projectId":f.project,"favorite":false}),
+    );
+    assert_eq!(cleared["projectNavigation"][0]["favorite"], false);
+    // A project with no row yet gets one at the order the caller saw.
+    let again = f.execute(
+        "project.favorite",
+        json!({"projectId":f.project,"favorite":true,"order":2}),
+    );
+    assert_eq!(again["projectNavigation"].as_array().unwrap().len(), 1);
+    // A project chat's favourite is the existing navigation row flag.
+    let chat = f.execute(
+        "navigation.update",
+        json!({"navigation":{"sessionId":f.session,"order":0,"favorite":true}}),
+    );
+    assert_eq!(chat["navigation"][0]["favorite"], true);
+    check_session_scope(&f.db, &json!(f.session), &json!(f.project)).unwrap();
+    let db = Database::open(&f._dir.path().join("pi.sqlite")).unwrap();
+    assert_eq!(snapshot(&db, &json!({})).unwrap(), chat);
+}
+
+#[test]
+fn project_favourite_rejects_unknown_projects_and_bad_flags() {
+    let f = Fixture::new();
+    let before = snapshot(&f.db, &json!({})).unwrap();
+    for fields in [
+        json!({"projectId":"missing","favorite":true}),
+        json!({"projectId":f.project,"favorite":"yes"}),
+        json!({"projectId":f.project}),
+    ] {
+        let command = f.command("project.favorite", fields);
+        assert!(mutate(&f.db, &command).is_err());
+    }
+    assert_eq!(snapshot(&f.db, &json!({})).unwrap(), before);
+}

@@ -47,7 +47,9 @@ export type WorkflowCategory = Type.Static<typeof WorkflowCategorySchema>;
 export const WorkflowFolderSchema = object({ id, name: id, parentId: optionalId, order: Type.Number(),
   scope: Type.Optional(WorkflowTreeScopeSchema), projectId: optionalId, categoryId: optionalId });
 export type WorkflowFolder = Type.Static<typeof WorkflowFolderSchema>;
-export const WorkflowProjectNavigationSchema = object({ projectId: id, folderId: optionalId, order: Type.Number(), categoryId: optionalId });
+export const WorkflowProjectNavigationSchema = object({ projectId: id, folderId: optionalId, order: Type.Number(), categoryId: optionalId,
+  /** Absent means not a favourite, so rows written before the flag load unchanged. */
+  favorite: Type.Optional(Type.Boolean()) });
 export type WorkflowProjectNavigation = Type.Static<typeof WorkflowProjectNavigationSchema>;
 export const WorkflowConversationSchema = object({
   sessionId: id, projectId: id, workstreamId: id,
@@ -159,6 +161,7 @@ export const ProjectWorkflowUserCommandSchema = Type.Union([
   command("navigation.move", { sessionIds: strings, folderId: optionalId, categoryId: optionalId }),
   command("navigation.update", { navigation: WorkflowNavigationSchema }),
   command("navigation.expand", { expandedIds: strings }),
+  command("project.favorite", { projectId: id, favorite: Type.Boolean(), order: Type.Optional(Type.Number()) }),
   command("tree.move", { target: treeTarget,
     scope: WorkflowTreeScopeSchema, projectId: optionalId, folderId: optionalId, categoryId: optionalId, order: Type.Number(),
     siblingOrder: Type.Optional(Type.Array(treeTarget, { maxItems: 1000 })) }),

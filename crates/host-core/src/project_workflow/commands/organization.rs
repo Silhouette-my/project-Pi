@@ -195,6 +195,26 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             }
             Ok(())
         }
+        // The project's favourite flag lives on its navigation row; absent means
+        // not a favourite, so rows written before this command load unchanged.
+        "project.favorite" => {
+            let id = &command["projectId"];
+            check_project(db, id)?;
+            if value.get("projectNavigation").is_none() {
+                value["projectNavigation"] = json!([]);
+            }
+            let i = rows(value, "projectNavigation")
+                .iter()
+                .position(|row| row["projectId"] == *id)
+                .unwrap_or_else(|| {
+                    let order = command.get("order").cloned().unwrap_or(json!(0));
+                    rows_mut(value, "projectNavigation")
+                        .push(json!({"projectId":id,"order":order}));
+                    rows(value, "projectNavigation").len() - 1
+                });
+            value["projectNavigation"][i]["favorite"] = command["favorite"].clone();
+            Ok(())
+        }
         "navigation.expand" => {
             value["expandedIds"] = command["expandedIds"].clone();
             Ok(())

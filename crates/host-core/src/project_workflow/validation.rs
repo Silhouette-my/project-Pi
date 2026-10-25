@@ -127,6 +127,7 @@ pub(super) fn command(value: &Value) -> Result<()> {
         "navigation.move" => "sessionIds:ids folderId?:id categoryId?:id",
         "navigation.update" => "navigation:navigation",
         "navigation.expand" => "expandedIds:ids",
+        "project.favorite" => "projectId:id favorite:bool order?:number",
         "tree.move" => "target:treeTarget scope:chats|projects|project projectId?:id folderId?:id categoryId?:id order:number siblingOrder?:[treeTarget]",
         "workstream.create" => "workstream:workstream",
         "workstream.update" => "projectId:id workstreamId:id patch:patch",

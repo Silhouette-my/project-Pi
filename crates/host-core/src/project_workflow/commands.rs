@@ -94,6 +94,7 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
         | "navigation.move"
         | "navigation.update"
         | "navigation.expand"
+        | "project.favorite"
         | "conversation.link"
         | "conversation.policy"
         | "conversation.return" => organization::apply(db, value, command),

@@ -31,6 +31,17 @@ describe("project workflow boundary", () => {
     ]) expect(isProjectWorkflowUserCommand({ commandId: "c", expectedRevision: 0, ...body })).toBe(true);
     expect(isProjectWorkflowUserCommand({ commandId: "c", expectedRevision: 0, kind: "category.remove" })).toBe(false);
   });
+  it("treats the project favourite flag as optional and the command as user-owned", () => {
+    const base = emptyProjectWorkflowSnapshot();
+    for (const row of [{ projectId: "p", order: 0 }, { projectId: "p", order: 0, favorite: true }])
+      expect(Value.Check(ProjectWorkflowSnapshotSchema, { ...base, projectNavigation: [row] })).toBe(true);
+    expect(Value.Check(ProjectWorkflowSnapshotSchema, { ...base, projectNavigation: [{ projectId: "p", order: 0, favorite: "yes" }] })).toBe(false);
+    const star = { kind: "project.favorite", commandId: "c", expectedRevision: 0, projectId: "p", favorite: true };
+    expect(isProjectWorkflowUserCommand(star)).toBe(true);
+    expect(isProjectWorkflowUserCommand({ ...star, order: 3 })).toBe(true);
+    expect(isProjectWorkflowUserCommand({ ...star, favorite: "yes" })).toBe(false);
+    expect(isProjectWorkflowUserCommand({ ...star, projectId: undefined })).toBe(false);
+  });
   it("starts at revision zero and validates representative records", () => {
     expect(emptyProjectWorkflowSnapshot().revision).toBe(0);
     expect(Value.Check(ProjectWorkflowSnapshotSchema, projectWorkflowFixture())).toBe(true);
