@@ -18,6 +18,28 @@ import { getActiveRemoteHostsBoot, setActiveRemoteHostsBoot } from "./remote-hos
 import type { LiveCallService } from "../live-voice/call-service";
 
 const QUIT_TURN_SETTLE_BUDGET_MS = 2_000;
+/**
+ * Upper bound for the whole graceful shutdown. Every step below has its own
+ * budget; this is the backstop for a step that has none (a host or child that
+ * never answers) so the process still reaches `app.quit()` and Electron tears
+ * the children down, instead of staying alive forever.
+ */
+export const QUIT_SHUTDOWN_HARD_TIMEOUT_MS = 15_000;
+/** Signals that mean "terminate", not "a person pressed Quit". */
+const TERMINATION_SIGNALS = ["SIGTERM", "SIGINT", "SIGHUP"] as const;
+
+/**
+ * True when the environment asks for quits without the confirmation dialog:
+ * automation (E2E, probes, capture) has nobody to click it.
+ */
+export function quitConfirmationDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (
+    env.PI_DESKTOP_BOOT_PROBE === "1" ||
+    env.PI_DESKTOP_SUPERVISION_PROBE === "1" ||
+    env.PI_DESKTOP_CAPTURE === "1" ||
+    env.PI_DESKTOP_SKIP_QUIT_CONFIRM === "1"
+  );
+}
 
 export type ShutdownState = {
   shutdownComplete: boolean;
@@ -84,6 +106,31 @@ export function registerShutdownHandlers({
   disposeProjectWorkflow,
 }: ShutdownDependencies): void {
   let quitConfirmationPending = false;
+  // SIGTERM/SIGINT/SIGHUP are the OS or a supervisor asking the process to end.
+  // Chromium turns them into `before-quit`, where the confirmation dialog would
+  // wait for a person who did not ask to quit and keep the app alive forever.
+  // Treat them as already confirmed; a repeated signal during shutdown means
+  // "now", and ends the process without waiting for the remaining steps.
+  // The listeners go in once the app is ready: a Node signal listener installed
+  // while the main script loads is replaced by Chromium's own handler when the
+  // browser process starts, and would never run.
+  if (hasSingleInstanceLock) {
+    const onTerminationSignal = (signal: NodeJS.Signals) => {
+      if (state.shutdownPromise && !state.shutdownComplete) {
+        logger.app("lifecycle", "warn", "repeated termination signal; exiting without waiting", {
+          data: signal,
+        });
+        app.exit(0);
+        return;
+      }
+      logger.app("lifecycle", "info", "termination signal received", { data: signal });
+      state.quitConfirmed = true;
+      app.quit();
+    };
+    void app.whenReady?.().then(() => {
+      for (const signal of TERMINATION_SIGNALS) process.on(signal, onTerminationSignal);
+    });
+  }
   app.on("window-all-closed", () => {
     // The D216 tray is resident on every platform, so its presence says nothing
     // about whether the app should survive a closed window — the user's close
@@ -105,20 +152,23 @@ export function registerShutdownHandlers({
     if (state.shutdownPromise || quitConfirmationPending) return;
 
     // Show a confirmation dialog on the first explicit quit (Cmd+Q, tray quit,
-    // application-menu Quit). The data-saving shutdown runs after confirmation.
+    // application-menu Quit) while a turn is running. The data-saving shutdown
+    // runs after confirmation.
     // Skip confirmation in automated probe/capture modes where no human is
     // present to interact with the dialog.
-    const isAutomatedMode =
-      process.env.PI_DESKTOP_BOOT_PROBE === "1" ||
-      process.env.PI_DESKTOP_SUPERVISION_PROBE === "1" ||
-      process.env.PI_DESKTOP_CAPTURE === "1";
+    const isAutomatedMode = quitConfirmationDisabled();
     // Skip confirmation for the quit that an in-app update performs. The
     // installer for that update was already spawned before app.quit(), and it
     // aborts once the app stays alive for a few seconds, so deferring this quit
     // behind a dialog fails the update. There is no decision left either: the
     // user chose "restart to update" to get here.
     const isUpdateRestart = updater.isInstallingUpdate();
-    if (!state.quitConfirmed && !isAutomatedMode && !isUpdateRestart) {
+    // The dialog warns that running sessions will be stopped. With no turn in
+    // flight there is nothing to warn about, and asking anyway makes every quit
+    // from a script, a supervisor or AppleScript wait for a click that nobody
+    // is there to give (the dialog has no timeout once it falls back to native).
+    const hasRunningWork = activeTurns.size > 0;
+    if (!state.quitConfirmed && !isAutomatedMode && !isUpdateRestart && hasRunningWork) {
       state.quitConfirmed = true;
       quitConfirmationPending = true;
       void confirmQuitDialog().then(
@@ -242,6 +292,16 @@ export function registerShutdownHandlers({
       app.quit();
     };
     void state.shutdownPromise.then(releaseQuit, releaseQuit);
+    // Backstop for a step that never settles; the normal path above wins and
+    // the timer is released with the process.
+    const hardTimer = setTimeout(() => {
+      if (state.shutdownComplete) return;
+      logger.app("lifecycle", "warn", "shutdown exceeded its time budget; quitting anyway", {
+        data: `${QUIT_SHUTDOWN_HARD_TIMEOUT_MS}ms`,
+      });
+      releaseQuit();
+    }, QUIT_SHUTDOWN_HARD_TIMEOUT_MS);
+    hardTimer.unref?.();
   });
 }
 

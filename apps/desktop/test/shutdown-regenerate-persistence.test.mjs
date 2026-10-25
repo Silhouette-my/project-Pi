@@ -169,7 +169,7 @@ test("a repeated before-quit cannot bypass the pending renderer confirmation", a
     getHost: () => null,
     getSidecar: () => null,
     getMcpControl: () => null,
-    activeTurns: new Map(),
+    activeTurns: new Map([["session", "turn"]]),
     persistenceOutbox: { flush: async () => {}, size: () => 0 },
     inflightCheckpointer: { flushAll: async () => {}, dispose },
     flushEventPersistence: async () => {},
