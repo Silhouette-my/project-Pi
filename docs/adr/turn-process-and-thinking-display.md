@@ -30,29 +30,45 @@ boundaries.
 One turn renders exactly one process disclosure. Every row the turn produced
 before its answer lives inside it — the activity groups and the `Bash` run rows
 alike — so a long turn collapses in one gesture instead of leaving a column of
-sibling disclosures above the answer. The answer itself stays outside it.
+sibling disclosures above the answer. The answer itself stays outside it. An
+untouched process closes when the turn completes, so only the final answer
+remains; when the turn produced no final text, the process header and its error
+or pending-action surfaces remain visible.
 
-Inside that disclosure, non-Bash activity forms ordinary activity groups: one
-contiguous tool/search/thinking segment between progress paragraphs or run rows,
-appearing only when at least two items are visible under the current thinking
-preference. A singleton uses its item disclosure directly; hidden thinking does
-not create a redundant wrapper. Existing Task topology remains its segment's
-container and is not duplicated inside an ordinary activity group.
+Inside that disclosure, the display mode decides how activity is grouped.
+`AppSettings.transcriptDisplayMode` is one of `flat`, `command-first`, or
+`fully-folded`; an absent or unknown value resolves to `fully-folded`, the
+layout released in v0.20.0. Every mode renders exactly one outer disclosure.
 
-Whether a run row sits *inside* its group or *beside* it is the
-`keepCommandsExpanded` preference, which defaults to on. When on, `Bash` and run
-aliases are lifted out of the groups they ran among: each becomes its own row at
-the disclosure's top level, adjacent calls stay separate, and the row's detail
-stays closed until the user opens it. When off, a run row keeps its place in the
-flow, so a command reads as another line of the group around it — the layout
-before commands were separated. The preference never changes how many
-disclosures a turn renders: both values render exactly one.
+- In `fully-folded`, contiguous activity forms ordinary activity groups: one
+  contiguous tool/search/thinking/Bash segment between ordinary assistant
+  progress paragraphs. A `Bash`/run row stays inside the group around it, so a
+  command reads as another line of that group. Existing Task topology remains
+  its segment's container and is not duplicated inside an ordinary activity
+  group.
+- In `command-first`, ordinary activity groups still render, but every
+  `Bash`/run alias is lifted out as a standalone row beside them: adjacent calls
+  stay separate and a row's detail stays closed until the user opens it. A
+  normal assistant progress message and a command both end the current group.
+- In `flat`, no nested activity groups render at all. The outer disclosure lists
+  active tools, commands, thinking and progress rows in transcript order, with
+  tool details collapsed.
 
-Group folding defaults are unified and do not depend on either preference. The
-ordinary activity group that owns the active execution segment starts open, then
-closes on completion only while untouched. Other completed groups start closed.
-An untouched active group containing any recorded failed or denied tool stays
-open through later recovery and closes on turn completion if still untouched.
+In `command-first` and `fully-folded`, a group appears only when at least two
+items are visible under the current thinking preference. A singleton uses its
+item disclosure directly, and hidden thinking does not create a redundant
+wrapper.
+
+`keepCommandsExpanded` is deprecated. It is retained only so persisted settings
+still load, is no longer exposed in Settings, and is not read for rendering; new
+writes store `transcriptDisplayMode`.
+
+Group folding defaults are unified across modes and do not depend on the
+thinking preference. Where a group renders, the group that owns the active
+execution segment starts open, then closes on completion only while untouched.
+Other completed groups start closed. An untouched active group containing any
+recorded failed or denied tool stays open through later recovery and closes on
+turn completion if still untouched.
 
 The turn's disclosure header states the turn's outcome and never echoes the item
 it is working on, because a shell command or search query can be arbitrarily
@@ -71,18 +87,25 @@ The disclosure and the levels it reveals share one left edge. Hierarchy is
 carried by type size and colour, not by indentation, so a nested group header and
 a run row start exactly where the turn header does.
 
-The thinking preference is a boolean `showThinking`. When it is false, the live
-thinking indicator stays visible, while completed thinking rows and excerpts are
-hidden and empty thinking-only containers are omitted; the stored reasoning is
-retained, so turning the preference back on restores the completed rows and
-excerpts. Hidden thinking never creates an empty group wrapper.
+The thinking preference is a boolean `showThinking`. With it on, `flat` and
+`command-first` expand every Thinking row by default and let the user collapse
+them; an expanded row shows the full reasoning markdown, while a collapsed row
+shows only the Thinking indicator with no summary or excerpt. `fully-folded`
+keeps the released exception: earlier Thinking rows stay collapsed, and the last
+active Thinking row opens only while it is the live step, so completed rows
+collapse. With the preference off, no completed reasoning row renders; only a
+live whole-run `TextShimmer` `Thinking` indicator remains while reasoning is
+actively streaming. The shimmer is a 1.2s linear sweep with a 220ms fade — no
+spinner, pulsing dot, or per-character animation — and stays static under
+reduced motion. The stored reasoning is retained, so turning the preference back
+on restores the rows. Hidden thinking never creates an empty group wrapper.
 
 The leaf default that an earlier decision first introduced was later removed.
-Item payloads never open themselves: a tool-call, hosted-search or plan row
-stays a header row until the user opens it, wherever it sits in the group, and
-this holds regardless of the thinking preference. Group defaults are unchanged,
-and opening a closed ancestor still exposes the retained item choices without
-opening all descendants.
+Except for the display-mode Thinking defaults above, item payloads never open
+themselves: a tool-call, hosted-search or plan row stays a header row until the
+user opens it, wherever it sits in the group, and this holds regardless of the
+thinking preference. Group defaults are unchanged, and opening a closed ancestor
+still exposes the retained item choices without opening all descendants.
 
 Each header toggles only its own level. Parent and child states are independent:
 closing a parent preserves descendant choices, reopening restores them, and
@@ -95,8 +118,9 @@ Pane eviction, session deletion, or renderer restart releases this presentation
 memory; it is not stored in messages or host settings.
 
 Search/navigation reveals the ancestor path its target needs: the turn process
-and the activity group that own the named message. Item-level targeting is not
-part of this change, so each row's own details stay behind its own disclosure.
+and, where one exists, the activity group that own the named message. Item-level
+targeting is not part of this change, so each row's own details stay behind its
+own disclosure.
 Replaying the same request does not repeatedly override a later manual close.
 Reasoning hidden by the preference stays hidden until the user turns
 `showThinking` on. Assistant errors, stopped trailing partial answers,
@@ -104,34 +128,45 @@ permission/question/plan/goal decisions, and any other pending action surface
 remain outside hidden process content and reachable without expanding it.
 
 Settings → AI → Defaults exposes a `Show thinking` boolean that persists as the
-optional `showThinking` `AppSettings` field. Absent and non-boolean values fall
-back to the legacy `thinkingDisplayMode` field: an explicit `compact` hides
-reasoning while `detailed`, an unknown value, or an absent field shows it. The
-legacy field is retained for persisted-settings compatibility and is no longer
-exposed in the UI. The preference changes presentation only; it does not alter
-provider thinking levels, runtime/model context, stored reasoning, export,
-permissions, execution, or copy payloads, and it does not control turn-process
-or activity-group folding. Process headers use recorded timing, direct tool/search
-counts, running state, and issue counts; they do not double-count delegated child
-work or treat a failed child as a failed assistant turn.
+optional `showThinking` `AppSettings` field, and a `Transcript display`
+segmented control with the labels `Flat`, `Commands first`, and `Fully folded`
+that persists the optional `transcriptDisplayMode` field. Absent and invalid
+`transcriptDisplayMode` values resolve to `fully-folded` in both the renderer and
+main-process settings normalizers. Absent and non-boolean values for
+`showThinking` fall back to the legacy `thinkingDisplayMode` field: an explicit
+`compact` hides reasoning while `detailed`, an unknown value, or an absent field
+shows it. The legacy `thinkingDisplayMode` and deprecated
+`keepCommandsExpanded` fields are retained for persisted-settings compatibility
+and are no longer exposed in the UI. `keepCommandsExpanded` is also no longer
+read for rendering. These preferences change presentation only; they do not
+alter provider thinking levels, runtime/model context, stored reasoning, export,
+permissions, execution, or copy payloads, and the thinking preference does not
+control turn-process or activity-group folding. Process headers use recorded
+timing, direct tool/search counts, running state, and issue counts; they do not
+double-count delegated child work or treat a failed child as a failed assistant
+turn.
 
 ## Consequences
 
 - One disclosure per turn keeps the final answer and actionable interruptions
   reachable, and makes a long turn collapsible in a single gesture.
-- Group folding defaults are unified: active work stays visible, untouched
-  completed groups fold by default, and explicit disclosure choices are preserved
-  regardless of the thinking preference. Closing the turn's disclosure closes the
-  groups under it, and reopening restores the groups the user had opened.
-- When `showThinking` is false, the live indicator stays visible while completed
-  reasoning rows and excerpts are hidden. The stored reasoning is retained and
-  reappears when the preference is turned back on.
-- With `keepCommandsExpanded` on (the default), run aliases render as their own
-  rows so shell-heavy turns stay scannable; turning it off restores the older
-  layout where a command reads as another line of its group. Neither value
-  changes the number of disclosures, and because the preference is read while
-  rendering rather than while building entries, toggling it repaints the
-  transcript immediately instead of waiting for new messages.
+- Group folding defaults are unified across display modes: active work stays
+  visible, untouched completed groups fold by default, and explicit disclosure
+  choices are preserved regardless of the thinking preference. Closing the
+  turn's disclosure closes the groups under it, and reopening restores the groups
+  the user had opened.
+- With `showThinking` off, no completed reasoning row renders; only the live
+  whole-run TextShimmer `Thinking` indicator remains while reasoning streams.
+  Stored reasoning is retained and reappears when the preference is turned back
+  on.
+- `transcriptDisplayMode` keeps the three layouts available and defaults to the
+  released `fully-folded` layout. `flat` removes nested groups, `command-first`
+  lifts commands to standalone rows, and `fully-folded` keeps commands in their
+  groups; all three render exactly one disclosure, and reading the mode while
+  rendering repaints the transcript immediately instead of waiting for new
+  messages.
+- With `showThinking` on, Thinking rows default expanded in `flat` and
+  `command-first`; `fully-folded` keeps the live-only auto-open exception.
 - The header answers "how did this turn end up" in one short line. Echoing the
   current command was removed: it pushed the counts off the row and duplicated
   what opening the item already shows.
@@ -157,8 +192,13 @@ the i18n catalog tests cover the new `settings.showThinking` copy. The UI,
 resolver, and E2E scenarios are validated on the integration candidate; see
 E2E-CHAT-turn-process-and-thinking-display for the synchronized scenario text.
 For the 2026-10-21 amendment, `apps/desktop/test/turn-process.test.mjs` covers
-one-disclosure segmentation, command-folding on and off, and header phase
-precedence; `apps/desktop/test/transcript-style.test.mjs` covers the shared left
-edge and the removed live item echo. The interactive transcript probes cover the
-rendered disclosure count, command placement, and header labels. See
+mode segmentation, including `flat`, `command-first` and `fully-folded`, and
+header phase precedence. `apps/desktop/test/transcript-display-modes-ui.test.mjs`
+covers the renderer wiring for distinct mode segmentation, Thinking-row defaults
+and the whole-run `TextShimmer` used for a collapsed or hidden Thinking
+indicator.
+`apps/desktop/test/transcript-display-mode-settings.test.mjs` covers the
+Settings row label and search indexing, and
+`apps/desktop/test/settings-roundtrip.test.mjs` covers normalization, write
+validation and the `fully-folded` default. See
 E2E-CHAT-turn-process-and-thinking-display for the synchronized scenario text.

@@ -415,12 +415,17 @@ reasoning visibility. It is a portable application preference and synchronizes
 across devices like the legacy field. Missing values fall back to the legacy
 `thinkingDisplayMode` field (`compact` hides, `detailed`/unknown/absent shows),
 which is retained only for persisted-settings compatibility and as that
-fallback. The app settings JSON optionally stores `keepCommandsExpanded`
-(boolean) for command-row placement inside a turn's process disclosure: absent
-means on, so `Bash` and run aliases stay on their own rows beside the activity
-groups; `false` folds them into their groups. It is a portable application
-preference and changes presentation only. These additive display preferences
-neither rewrite stored reasoning nor change the database schema.
+fallback. The app settings JSON also optionally stores `transcriptDisplayMode`
+(`flat` | `command-first` | `fully-folded`) for transcript process grouping:
+`flat` renders no nested activity groups, `command-first` renders `Bash`/run rows
+as standalone rows beside activity groups, and `fully-folded` keeps each command
+inside the group around it. Missing or unknown values normalize to
+`fully-folded` in both the renderer and main-process settings normalizers. It is
+a portable application preference and changes presentation only. The deprecated
+`keepCommandsExpanded` boolean is retained only for persisted-settings
+compatibility; it is no longer exposed in Settings and no longer read for
+rendering. These additive display preferences neither rewrite stored reasoning
+nor change the database schema.
 
 The settings blob may still contain legacy prompt-enhancement keys from an
 earlier release. They are retained for rollback and downgrade compatibility,

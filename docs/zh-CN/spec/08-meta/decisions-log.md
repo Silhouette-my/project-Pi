@@ -335,7 +335,8 @@
 | D602 | 崩溃转储留在数据目录 | **Electron 的 Crashpad 报告器在 `ready` 之前以本地模式启动（`uploadToServer: false`）。转储放在 `<data_dir>/crash-dumps`，而不是 Electron 默认的 `userData` crashDumps 路径，因此 `PI_DESKTOP_DATA_DIR` profile 不会与其它安装共用转储。下一次持有单实例锁的启动会为新于 `crash-dumps.json` 的转储写一条 `diagnostics` 记录，按 Crashpad `ptype` 分类：任一新转储属于 browser/main 进程则为 `error`，已恢复的 renderer/GPU/utility 崩溃为 `warn`。host-core 与 sidecar 崩溃仍走监督器路径。不上传，不改 IPC，不改 schema。** | 崩溃留下的 minidump 无人读取。Crashpad 也会记录已恢复的渲染进程崩溃，因此下次启动用 `error` 声称上次运行已死是错的；而数据目录之外的转储会逃出 `PI_DESKTOP_DATA_DIR` 隔离。 |
 | D619 | 复制公式得到的是它的 TeX 源码 | **仅渲染层：当选区覆盖到渲染出来的公式时，`text/plain` 从 MathML `annotation` 写出——行内 `$…$`，块级 `$$…$$` 独占行，也就是 `lib/latex-math.ts` 把 `\(…\)` 和 `\[…\]` 归一到的那组定界符，且每组定界符都像代码段的围栏那样加长到盖过公式内部出现的最长同字符串——而不是 KaTeX 画的那两棵树。落在公式内部的切口会扩展成整个公式。只有公式被改写：归约后的克隆经由 `Selection.toString()`——复制自己跑的那个序列化器——读回，因此同处一个选区的正文、列表、表格和代码块保留平台自己的读法，包括 `innerText` 会写出、而复制本就会略过的 `user-select: none` 界面零件。不含公式的选区，以及在选区所在位置之外触发的复制，整份交回平台。只写一种 flavour：`text/plain`。接管事件同时丢掉了平台的 `text/html`，且不再写回——归约后的克隆是应用自己的标记，写回去会带上文本读法已略过的 `user-select: none` 界面零件；而改为携带渲染结果则会把每个公式粘贴两遍，因为隐藏 MathML 树的只有 KaTeX 自己的样式表，样式表不会随剪贴板一起走。只有一个由外壳持有的文档级 `copy` 监听器，记录区的右键复制经由同一个模块读取同一个选区。** | 公式粘出来是它的字形，而且每棵渲染树各一份，无法带进 LaTeX 文档或别的 Markdown 编辑器（issue #414）。ADR 0268 当年移除「引用」的理由正是 OS 剪贴板可以替代，那剪贴板就得真的装着源码。 |
 | D620 | pi-ai 内置的 API-key 服务成为命名预设 | **向 `NAMED_ENDPOINT_PRESETS` 新增十五条命名预设——Ant Ling、Baseten、Cerebras、Hugging Face、Meta（`responses`）、MiniMax（国际）、Moonshot AI（国际）、NVIDIA、OpenCode Zen、Vercel AI Gateway、Qwen Token 套餐（`alibaba-token-plan`）、Qwen Token 套餐（中国）、小米 Token 套餐（中国/欧洲/新加坡）——各自使用官方主机名；models.dev 键与 pi-ai 提供方 id 不同的那几条，把 pi-ai id 保留为别名。八个内置提供方仍作例外并写明原因：Amazon Bedrock、Azure OpenAI、Cloudflare AI Gateway、Cloudflare Workers AI、Google Vertex AI（URL 里带账户或区域），GitHub Copilot 与 OpenAI Codex（以厂商账号行提供），以及 Radius（这里的 `pi_messages` 仅限账号）。pi-ai 升级后若某提供方既未被覆盖也不在例外中，`packages/agent-runtime/src/pi-ai-provider-sync.test.ts` 会失败。不改协议、存储或 IPC。** | pi-ai 其他能力本就可达，但服务目录的 API-key 一半靠手工维护，已经跟库自带的提供方列表脱节（ADR 0307）。 |
-| D668 | 每回合一个过程披露，并提供命令折叠偏好 | **修订 D661 / `turn-process-and-thinking-display` ADR：每个回合渲染一个顶层过程披露，包含回答前的全部行，`Bash`／run 行也不例外；回答留在披露之外。`Bash` 与 run 别名不再被排除在所有折叠容器之外。可选的布尔值 `AppSettings.keepCommandsExpanded`（缺失即开启）决定命令行是放在其运行所在的组旁，还是留在组内；两种取值都只渲染一个披露。该偏好在渲染时读取，而不是在构建转录条目时读取，因此切换后立即重绘——投影缓存只以消息和压缩为键。披露标题按失败／停止／执行中／已完成的优先级报告，且绝不回显当前条目；披露与它展开的层级共用一条左边缘。`keepCommandsExpanded` 加入可移植应用字段。无 Host 协议、持久化 schema、权限或插件契约变更。见修订后的 ADR、`04-ux/06-settings-ia.md`、`04-ux/08-component-spec.md`、`04-ux/09-interaction-patterns.md` 与 E2E-CHAT-turn-process-and-thinking-display。** | 按时间顺序的分段把同一回合拆成答案上方多个并列披露，而始终可见的命令行也无法被偏好旧分组布局的读者关闭；一个披露加上仅影响展示的偏好同时满足两种需求，且不改变工具收到的内容或持久化内容。 |
+| D668 | 每回合一个过程披露，并提供三种转录显示模式 | **修订 D661 / `turn-process-and-thinking-display` ADR：每个回合渲染一个顶层过程披露，包含回答前的全部行；回答留在披露之外。`AppSettings.transcriptDisplayMode` 选择布局：`flat` 不渲染嵌套活动组，`command-first` 将 `Bash`／run 行作为活动组旁的独立行，`fully-folded`（缺失或无效值的默认）让命令留在所属组内，且只有普通助手进度文字会拆分活动组。该模式在渲染时读取，因此切换后立即重绘——投影缓存只以消息和压缩为键。披露标题按失败／停止／执行中／已完成的优先级报告，且绝不回显当前条目；披露与它展开的层级共用一条左边缘。`transcriptDisplayMode` 加入可移植应用字段；`keepCommandsExpanded` 已弃用，仅为持久化设置兼容性保留，不再暴露，也不再参与渲染读取。无 Host 协议、持久化 schema、权限或插件契约变更。见修订后的 ADR、`04-ux/06-settings-ia.md`、`04-ux/08-component-spec.md`、`04-ux/09-interaction-patterns.md` 与 E2E-CHAT-turn-process-and-thinking-display。** | 按时间顺序的分段把同一回合拆成答案上方多个并列披露，而布尔命令折叠偏好只能表达两种布局；三种模式覆盖平铺、命令优先与已发布的分组视图，且不改变工具收到的内容或持久化内容。 |
+| D669 | `@` 查询越过被截断的文件索引 | **修订 D124：8000 条的 `fs/index` 快照被截断时，非空的 `@` 查询会在输入停顿后，通过只读的 Electron 通道 `pi-desktop/fs/search` 在该根目录的完整清单中搜索，最好的 50 行与本地匹配合并。完整的索引从不搜索。远程会话保持使用快照。不改变主机 RPC、存储或 schema。** |
 
 ## M0. 模型目录决策
 
@@ -5490,24 +5491,47 @@ Markdown 源码，不是 `text/html` 负载；对禁用行内 HTML 的外部编�
   schema 或迁移。设置读取通过渲染层 API 规范化应用这些默认值。见
   `04-ux/01-ui-ia.md`、`04-ux/06-settings-ia.md` 与 E2E-266。
 
-## 2026-10-21 —— 每回合一个过程披露与命令折叠偏好（D668）
+## 2026-10-21 —— 每回合一个过程披露与三种转录显示模式（D668）
 
 - D668 修订 D661 / `turn-process-and-thinking-display` ADR：每个回合现在渲染一个顶层
-  过程披露，包含回答前的全部行，`Bash`／run 行也不例外。命令行不再是披露的同级；末尾
-  回答、助手错误、中止后的末尾文字和待处理操作面留在披露之外。
-- `AppSettings.keepCommandsExpanded`（缺失即开启）决定命令行是提取到其运行所在的组旁，
-  还是留在组内。该偏好在渲染时读取，而不是在构建转录条目时读取，因此切换后立即重绘；
-  两种取值都只渲染一个披露。
-- 披露标题按失败／停止／执行中／已完成的优先级报告，执行期间压缩上下文与恢复会各自
-  命名，未记录时长时不显示为零，且绝不回显当前条目。披露与它展开的层级共用一条左边缘。
-- `keepCommandsExpanded` 加入可移植应用字段。已由 `apps/desktop/test/turn-process.test.mjs`、
-  `apps/desktop/test/transcript-style.test.mjs` 与交互式转录探针覆盖。见修订后的 ADR、
+  过程披露，包含回答前的全部行。命令行不再是披露的同级；末尾回答、助手错误、中止后的
+  末尾文字和待处理操作面留在披露之外。
+- `AppSettings.transcriptDisplayMode` 选择布局。`flat` 不渲染嵌套活动组，按转录顺序列出
+  各行。`command-first` 保留活动组，但把 `Bash`／run 行提升为独立行，普通进度消息或命令
+  会结束当前组。`fully-folded` 是缺失或无效值的默认，让命令行留在所属组内，只有普通助手
+  进度文字会拆分活动组。该模式在渲染时读取，因此切换后立即重绘。
+- `showThinking` 开启时，`flat` 与 `command-first` 中的思考行默认展开；`fully-folded`
+  保留已发布的例外，只有最后一个活动行在其为当前步骤时展开。关闭偏好时不再渲染任何
+  已完成的推理行，仅在推理流式输出期间保留整段运行的 TextShimmer `Thinking` 指示器。
+- `keepCommandsExpanded` 已弃用，仅为持久化设置兼容性保留；不再暴露，也不再参与渲染
+  读取。披露标题、左边缘与窗格拥有的披露记忆保持不变。
+- 已由 `apps/desktop/test/turn-process.test.mjs`、
+  `apps/desktop/test/transcript-display-modes-ui.test.mjs`、
+  `apps/desktop/test/transcript-display-mode-settings.test.mjs` 与
+  `apps/desktop/test/settings-roundtrip.test.mjs` 覆盖。见修订后的 ADR、
   `04-ux/06-settings-ia.md`、`04-ux/08-component-spec.md`、
   `04-ux/09-interaction-patterns.md` 与 E2E-CHAT-turn-process-and-thinking-display。
 
-## 2026-10-22 —— 用户主题色与按项目着色（D669）
+## 2026-10-19 —— `@` 查询越过被截断的文件索引（D669）
 
-- D669 放宽 2026-07-28 以及 `04-ux/07-ui-design-system.md` 中「仅中性灰强调」的原则：
+- `fs/index` 快照只保留最浅的 8000 个条目，菜单也只在这份快照里模糊过滤。在大项目里
+  ——例如每个资源都带一个 `.meta` 文件的 Unity 项目——藏在几层目录下的脚本根本不在
+  快照中，无论怎么输入都找不到，尽管截断脚注提示用户继续输入（issue #1781）。
+- 快照被截断时，非空查询现在会在输入停顿 150 ms 后同时发给 `fs/search`。主进程用与
+  渲染器相同的打分，在它为索引已经构建好的清单（`git ls-files`）上排序；若索引来自
+  目录遍历，则改为一次更深的遍历（遵守同一忽略集，最多 200,000 个条目或 2 秒），
+  返回最好的 50 行。菜单把它们与本地匹配合并；较早查询的结果会被丢弃。
+- 完整的索引从不搜索，小项目行为不变。列表可能不完整时截断脚注保留。远程会话继续
+  使用快照，因为远程文件协议没有搜索操作。不需要打包原生列文件工具（ripgrep、bfs）：
+  git 本来就能列出整个仓库，搜索 60,000 个路径只需几毫秒。
+- 由 `packages/host-runtime/src/fs-index.test.ts` 与
+  `apps/desktop/test/composer-deep-file-search-user-path.test.mjs` 覆盖。见
+  `03-runtime/01-ipc-protocol.md` §13c、`04-ux/08-component-spec.md` §11.8 与
+  E2E-COMPOSER-deep-file-mentions。
+
+## 2026-10-22 —— 用户主题色与按项目着色（D670）
+
+- D670 放宽 2026-07-28 以及 `04-ux/07-ui-design-system.md` 中「仅中性灰强调」的原则：
   用户可选择全局主题色（七个预设或自定义 `#rrggbb`，默认蓝色），也可为每个项目选择一个预设颜色。
 - 主题色只作用于主要按钮、开关开启态、复选框填充、键盘焦点环和可发送状态的发送按钮。
   文字、链接、边框、侧边栏选中、分段控件和状态颜色保持不变；`--ds-accent` 仍为中性灰。

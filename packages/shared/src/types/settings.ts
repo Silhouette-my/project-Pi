@@ -37,6 +37,8 @@ export type JevKeyCheckResult = {
  */
 export type CloseBehavior = "ask" | "tray" | "quit";
 
+export type TranscriptDisplayMode = "flat" | "command-first" | "fully-folded";
+
 export type AppSettings = {
   imageGeneration?: import("../image-generation.js").ImageGenerationBinding | null;
   /** All models marked for image generation; absent falls back to imageGeneration. */
@@ -114,13 +116,19 @@ export type AppSettings = {
    */
   showThinking?: boolean;
   /**
-   * Keep shell calls (`Bash`, `exec`, `shell`, …) as their own rows instead of
-   * folding them into the surrounding tool group. Absent means `true`, so an
-   * existing install keeps today's scannable command rows.
+   * How the assistant turn's process is grouped in the transcript.
    *
-   * The turn's process disclosure itself is not affected: both values render
-   * exactly one top-level disclosure per turn. This preference only decides
-   * whether a run row sits inside a group or beside it.
+   * - `flat`: one outer process disclosure, no nested activity groups.
+   * - `command-first`: run rows stay standalone; other activity groups.
+   * - `fully-folded`: the v0.20.0 layout; run rows join activity groups.
+   *
+   * Absent means `fully-folded`, preserving the released transcript layout.
+   * This is presentation only and never changes tool execution or stored data.
+   */
+  transcriptDisplayMode?: TranscriptDisplayMode;
+  /**
+   * @deprecated Replaced by `transcriptDisplayMode`. Retained for persisted
+   * settings and older clients; current rendering no longer reads it.
    */
   keepCommandsExpanded?: boolean;
   /**

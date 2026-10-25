@@ -6,7 +6,7 @@ import { en } from "@pi-desktop/i18n";
 import type { AppSettings, UiMessage } from "@pi-desktop/shared";
 import { AssistantTurn } from "../../apps/desktop/src/features/chat/transcript/AssistantTurn";
 import { ShowThinkingRow } from "../../apps/desktop/src/components/settings/ShowThinkingRow";
-import { KeepCommandsExpandedRow } from "../../apps/desktop/src/components/settings/KeepCommandsExpandedRow";
+import { TranscriptDisplayModeRow } from "../../apps/desktop/src/components/settings/TranscriptDisplayModeRow";
 import { buildTranscriptEntries } from "../../apps/desktop/src/lib/assistant-turns";
 import { TranscriptSearchContext } from "../../apps/desktop/src/lib/transcript-search-context";
 import type { TranscriptSearchTarget } from "../../apps/desktop/src/lib/transcript-reading";
@@ -67,6 +67,7 @@ export async function turnProcessProbe() {
     theme: "light",
     enterToSend: true,
     onboardingDismissed: true,
+    transcriptDisplayMode: "command-first",
   };
   const setSettings = (patch: Partial<AppSettings> = {}) =>
     flushSync(() => useAppStore.setState({ settings: { ...baseSettings, ...patch } }));
@@ -511,9 +512,16 @@ export async function turnProcessProbe() {
       Boolean(container.querySelector(".tool-row.thinking")),
       "turning show thinking back on restores the completed reasoning row",
     );
+    click(processHeaders()[0] ?? null);
+    const restoredThinking = container.querySelector<HTMLElement>(
+      ".tool-row.thinking .tool-row-header",
+    );
+    if (restoredThinking?.getAttribute("aria-expanded") !== "true") {
+      click(restoredThinking);
+    }
     check(
       container.textContent?.includes("Reasoning before the answer"),
-      "the restored row shows the retained reasoning text",
+      "the restored row shows the retained reasoning text when opened",
     );
 
     // Search reveal opens the process chunk that owns the named message.
@@ -540,7 +548,7 @@ export async function turnProcessProbe() {
         container.querySelectorAll(".turn-run-row").length === 2,
       "the mounted turn starts with standalone command rows",
     );
-    setSettings({ keepCommandsExpanded: false });
+    setSettings({ transcriptDisplayMode: "fully-folded" });
     check(
       container.querySelectorAll(".turn-process").length === 1 &&
         container.querySelectorAll(".turn-run-row").length === 0,
@@ -575,9 +583,21 @@ export async function turnProcessProbe() {
       "toggling command folding back restores standalone rows without a remount",
     );
 
+    // Flat keeps the outer process but suppresses nested activity groups and
+    // standalone run wrappers.
+    setSettings({ transcriptDisplayMode: "flat" });
+    render(contiguous, false, null, "flat-mode");
+    check(
+      container.querySelector(".turn-process") !== null &&
+        container.querySelectorAll(".process-activity-group").length === 0 &&
+        container.querySelectorAll(".turn-run-row").length === 0,
+      "flat mode renders one outer process with no nested activity groups",
+    );
+    setSettings();
+
     // The active tail may be wrapped in a merged off-mode part; the merged group
     // must still receive the live disclosure defaults.
-    setSettings({ keepCommandsExpanded: false });
+    setSettings({ transcriptDisplayMode: "fully-folded" });
     render(
       [read, grep, run("live-folded-bash", "pnpm test")],
       true,
@@ -630,29 +650,32 @@ export async function turnProcessProbe() {
       "an aborted running Bash row reports the turn stopped",
     );
 
-    // The Settings row is a boolean command-folding toggle, defaulting to on.
-    let foldSaved: Partial<AppSettings> | undefined;
+    // The Settings row is a three-way transcript display mode control.
+    let modeSaved: Partial<AppSettings> | undefined;
     flushSync(() =>
       root.render(
         <I18nextProvider i18n={i18n}>
-          <KeepCommandsExpandedRow
+          <TranscriptDisplayModeRow
             settings={{ ...baseSettings }}
             saveSettings={async (patch) => {
-              foldSaved = patch;
+              modeSaved = patch;
             }}
           />
         </I18nextProvider>,
       ),
     );
-    const foldToggle = container.querySelector<HTMLElement>('[role="switch"]');
-    check(
-      foldToggle?.getAttribute("aria-checked") === "true",
-      "the command-folding row defaults to keeping commands expanded",
+    const modeButtons = Array.from(
+      container.querySelectorAll<HTMLElement>('[role="radiogroup"] button'),
     );
-    click(foldToggle);
     check(
-      foldSaved?.keepCommandsExpanded === false,
-      "the command-folding row saves the boolean preference",
+      modeButtons.length === 3 &&
+        modeButtons[1]?.getAttribute("aria-checked") === "true",
+      "the transcript-display row exposes flat, command-first and fully-folded with command-first selected",
+    );
+    click(modeButtons[2] ?? null);
+    check(
+      modeSaved?.transcriptDisplayMode === "fully-folded",
+      "the transcript-display row saves the selected mode",
     );
 
 

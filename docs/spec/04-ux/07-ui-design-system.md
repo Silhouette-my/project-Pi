@@ -9,7 +9,7 @@
 
 ## Visual baseline (Codex-aligned)
 
-The desktop shell targets a 1:1 visual match with the local Codex desktop client (ChatGPT.app electron-dark): charcoal surfaces (`#181818`), neutral gray scale (not blue-slate), ~275px sidebar, 46px toolbar rhythm, and a floating pill composer. Semantic token names remain stable; values follow the Codex gray system. Shell chrome keeps the **neutral gray accent** (`--ds-accent`); a user-chosen **theme colour** (default blue, D669) is applied only to the small set of primitives listed in the Theme colour section.
+The desktop shell targets a 1:1 visual match with the local Codex desktop client (ChatGPT.app electron-dark): charcoal surfaces (`#181818`), neutral gray scale (not blue-slate), ~275px sidebar, 46px toolbar rhythm, and a floating pill composer. Semantic token names remain stable; values follow the Codex gray system. Shell chrome keeps the **neutral gray accent** (`--ds-accent`); a user-chosen **theme colour** (default blue, D670) is applied only to the small set of primitives listed in the Theme colour section.
 
 ## 2. Non-goals
 
@@ -27,7 +27,7 @@ The desktop shell targets a 1:1 visual match with the local Codex desktop client
 | **Clarity over decoration** | No ornamental borders, gradients, or hero images. Every visual element carries information. |
 | **Developer density** | Compact spacing, small-but-readable type, minimal marketing whitespace. Information-rich, not sparse. |
 | **Dark-base defaults** | Dark theme is the primary theme for a coding agent. Light must be fully supported but is secondary. |
-| **Restraint** | Chrome is neutral gray. The user's theme colour (D669) is one accent family used only on primary actions, switches, checkboxes, focus rings, and the enabled send button; a per-project colour tints only the project glyph and the Project Console accent. No rainbow status colors — success, warning, error, and purple stay semantic and are never replaced by either colour. |
+| **Restraint** | Chrome is neutral gray. The user's theme colour (D670) is one accent family used only on primary actions, switches, checkboxes, focus rings, and the enabled send button; a per-project colour tints only the project glyph and the Project Console accent. No rainbow status colors — success, warning, error, and purple stay semantic and are never replaced by either colour. |
 | **Motion as feedback** | Animations convey state change (streaming, loading, expand/collapse). Never decorative. |
 | **Keyboard-first** | Focus rings, tab order, and shortcut labels are primary UX, not afterthoughts. |
 | **Continuous shell chrome** | Titlebars stay borderless and continuous with their surfaces; reserve faint separators for boundaries that clarify ownership, such as the window-control side seam. |
@@ -221,7 +221,7 @@ actions sit on the `--ds-tile` fill with primary text and no stroke (D297).
 Hover states use the corresponding accent/tile-hover tokens rather than
 opacity-only changes, so actions remain legible in dark and light themes.
 
-#### Theme colour and project colour (D669)
+#### Theme colour and project colour (D670)
 
 `AppSettings.accentColor` is a preset id (`blue` default, `teal`, `green`,
 `amber`, `rose`, `violet`, `graphite`) or a custom `#rrggbb`. The renderer
@@ -842,7 +842,7 @@ are also explicitly suppressed or collapsed to a static state.
 - No parallax
 - No continuous background animations (particles, waves); the bounded
   foreground mascot loop is the explicit empty-home exception
-- No shimmer/skeleton animations longer than 1s loop — use simple fade-in for loading states
+- No shimmer/skeleton animations longer than 1s loop — use simple fade-in for loading states. Exception: the transcript Thinking indicator's whole-run TextShimmer runs 1.2s with a 220ms fade (ADR turn-process-and-thinking-display); it is not a per-glyph loop and becomes static under reduced motion.
 - No bounce effects
 - No multi-second boot theatrical sequences; splash exits as soon as ready (+ min dwell)
 

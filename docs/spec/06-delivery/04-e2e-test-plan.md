@@ -3594,44 +3594,46 @@ identify the platform validation still needed.
   pre-answer row; close it and confirm the groups and run rows close with it, then
   reopen and confirm the group choice returns. 4) Open one completed group and one
   item, copy its output, close and reopen the group, then open a sibling group
-  independently. 5) Toggle `Don't collapse commands` off and on and inspect where
-  the run rows render while the disclosure count stays one. 6) Repeat with a
-  singleton item and with the last activity group's literal final item set to a
-  tool/search, thinking, failed tool, and denied tool. 7) Toggle `Show thinking`
-  off and on and inspect the active-thinking, failure/recovery and completed
-  states. 8) Remount rows within the retained pane, then reload the renderer and
-  reopen the session.
+  independently. 5) Switch `Transcript display` across Flat, Commands first, and
+  Fully folded and inspect the grouping, group boundaries, where the run rows
+  render, and the disclosure count. 6) Repeat with a singleton item and with the
+  last activity group's literal final item set to a tool/search, thinking, failed
+  tool, and denied tool. 7) Toggle `Show thinking` off and on and inspect the
+  active-thinking, failure/recovery and completed states. 8) Remount rows within
+  the retained pane, then reload the renderer and reopen the session.
 - **Expected**: A turn renders exactly one process disclosure containing every
   pre-answer row, the `Bash`/run rows included; the trailing answer, assistant
   errors and stopped trailing text stay outside it, as do pending actions. The
   active group opens, then closes on completion only if untouched; completed
   groups otherwise start closed. Closing the turn's disclosure closes the groups
-  and run rows under it, and reopening restores the user's group choices. With
-  `Don't collapse commands` on (default), run rows render as their own top-level
-  rows beside the groups, adjacent calls stay separate, and a row's detail stays
-  closed until opened; with it off they fold into their groups. Neither value
-  changes the disclosure count. A singleton has no group wrapper. No item payload
-  opens itself: a tool/search row stays a header until the user opens it, while a
-  final thinking item keeps its own leaf default and never selects an earlier
-  tool. The header reports `Running`, `Finished`, `Stopped`, or `Failed` with
-  failure and stop outranking a normal finish, reads `Thinking` while the live
-  step is reasoning, never repeats the current command, and omits the duration
-  when none was recorded. When `Show thinking` is off, the
-  live thinking indicator stays visible while completed reasoning text and excerpts
-  are hidden and empty thinking-only containers are omitted; turning it back on
-  restores them. Parent, child and sibling choices are independent;
-  closing/reopening a parent preserves descendants, and streaming/completion does
-  not override user-owned choices. Retained-pane remounts preserve choices;
-  renderer restart reapplies defaults while tool names, arguments, results and
-  statuses remain restored. Group headers show bounded running and issue summaries
-  without marking the whole turn failed.
+  and run rows under it, and reopening restores the user's group choices. In
+  Fully folded (the default), run rows stay inside their groups and only ordinary
+  assistant progress text splits a group. In Commands first, run rows render as
+  their own rows beside the groups, adjacent calls stay separate, a row's detail
+  stays closed until opened, and a normal assistant progress message or a command
+  ends a group. In Flat, no nested group renders and the rows keep transcript
+  order inside the outer disclosure. Every mode keeps the disclosure count at one.
+  A singleton has no group wrapper. No item payload opens itself except the
+  display mode's Thinking default: a tool/search row stays a header until the user
+  opens it, while a final thinking item never selects an earlier tool. The header
+  reports `Running`, `Finished`, `Stopped`, or `Failed` with failure and stop
+  outranking a normal finish, reads `Thinking` while the live step is reasoning,
+  never repeats the current command, and omits the duration when none was
+  recorded. When `Show thinking` is off, no completed reasoning row renders; only
+  the live TextShimmer `Thinking` indicator remains while reasoning streams, and
+  turning it back on restores the completed rows. Parent, child and sibling
+  choices are independent; closing/reopening a parent preserves descendants, and
+  streaming/completion does not override user-owned choices. Retained-pane
+  remounts preserve choices; renderer restart reapplies defaults while tool names,
+  arguments, results and statuses remain restored. Group headers show bounded
+  running and issue summaries without marking the whole turn failed.
 - **Specs linked**: `04-ux/01-ui-ia.md`,
   `04-ux/07-ui-design-system.md`, `04-ux/08-component-spec.md`,
   `04-ux/09-interaction-patterns.md`
 - **Acceptance**: C (chat stream), E (tools), F (persistence)
 - **Milestone**: M3
-- **Status**: Draft. Unit and style checks cover the one-disclosure,
-  command-folding and header rules; this scenario remains the intended manual
+- **Status**: Draft. Unit and style checks cover the display modes, Thinking
+  defaults and header rules; this scenario remains the intended manual
   transcript-reload behavior.
 
 #### E2E-041: Conversation minimap navigates long transcripts
@@ -8733,6 +8735,7 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
   6. Settings UI updates status to `Ready` with discovered tools, shows localized success toast, and displays `OAuth` badge.
   7. When access token expires, `UserMcpRuntime` transparently uses refresh token to obtain a fresh access token without user prompt.
   8. Moving the server via `mcp.transfer` preserves and re-keys the OAuth token secret under the destination ID.
+- **No-DCR case**: When authorization-server metadata omits `registration_endpoint` and there is no reusable client, Authorize does not open a browser. The error event contains `MCP_OAUTH_DCR_UNAVAILABLE` and Settings shows localized recovery guidance to request a client ID from the server operator or use a DCR-capable server.
 - **Specs linked**: `03-runtime/01-ipc-protocol.md`, ADR 0283, ADR 0142
 - **Acceptance**: E (tools & permissions), Security
 - **Milestone**: M5
@@ -8998,6 +9001,40 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
   (`apps/desktop/test/composer-file-reference-display.test.mjs`); file-mode row
   layout covered by `scripts/e2e-composer-autocomplete.mjs`; full UI journey
   Draft (run only in a capable environment when this surface changes)
+
+#### E2E-COMPOSER-deep-file-mentions: `@` reaches deep files in a large workspace
+
+- **Preconditions**: The app is running with an Agent session in a workspace
+  whose index is truncated (more than 8000 files and directories), with a
+  script several folders below thousands of shallow assets — for example a
+  Unity project's `Assets/_Game/Scripts/Gameplay/Player/FeatureController.cs`.
+  Run once with the workspace under git and once without.
+- **Steps**: 1) Type `@` and inspect the footnote. 2) Type the script's name
+  and pause. 3) Accept the script's row with Enter. 4) Edit the query quickly
+  through several prefixes. 5) Repeat in a small workspace and in a remote
+  session.
+- **Expected**:
+  - The bare `@` lists the index and shows the truncation footnote.
+  - After the pause the deep script appears as a row, ranked like any other
+    match, and the footnote disappears once that search has answered; files
+    excluded by `.gitignore` or the ignore set never appear.
+  - Accepting it inserts the same file chip as any other reference.
+  - Rows never belong to an earlier query. The menu keeps the local matches
+    while a search is pending.
+  - A small workspace issues no search request; a remote session keeps its
+    snapshot and footnote.
+- **Specs linked**: `04-ux/08-component-spec.md` §11.8,
+  `03-runtime/01-ipc-protocol.md` §13c, `08-meta/decisions-log.md` (D124,
+  D669), ADR 0024
+- **Acceptance**: C (conversation & stream), Quality
+- **Milestone**: M5
+- **Status**: Unit-covered (`packages/host-runtime/src/fs-index.test.ts`
+  covers the git and walk listings, ignore rules, directories, and the result
+  limit); the renderer journey — search after the pause, merge, accept, stale
+  answers, the footnote, and the complete-index path — is covered by
+  `apps/desktop/test/composer-deep-file-search-user-path.test.mjs` in a real
+  Electron renderer. The full desktop journey against a large real tree is
+  Draft (run only in a capable environment when this surface changes).
 
 #### E2E-102b: Unanswered Stop restores compact file-reference drafts
 
@@ -10465,6 +10502,7 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 | C / Quality / Security (Conversation MP4 attachments) | E2E-CHAT-mp4-attachment-opens-in-system-player |
 | G — Plugins (Chat file references) | E2E-CHAT-file-ref-opens-the-surface-that-owns-it, E2E-PLUGIN-file-view-collapse-persists |
 | Quality (Chat file references) | E2E-CHAT-shorthand-file-ref-opens-the-matching-file, E2E-CHAT-file-ref-opens-the-surface-that-owns-it, E2E-PLUGIN-file-view-collapse-persists |
+| C / Quality (Composer deep file mentions) | E2E-COMPOSER-deep-file-mentions |
 | G — Plugins (project folder roots) | E2E-PLUGIN-file-view-switches-folder-per-project |
 | Security (project folder roots) | E2E-PLUGIN-file-view-switches-folder-per-project |
 | Quality (project folder roots) | E2E-PLUGIN-file-view-switches-folder-per-project |
@@ -10502,6 +10540,7 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 | M6+ (Windows updater cache) | E2E-260 |
 | M6+ (Independent session communication) | E2E-SESSION-independent-top-level-communication, E2E-SESSION-hover-card-model-and-links |
 | M5 (Chat file references) | E2E-CHAT-shorthand-file-ref-opens-the-matching-file, E2E-CHAT-file-ref-opens-the-surface-that-owns-it |
+| M5 (Composer deep file mentions) | E2E-COMPOSER-deep-file-mentions |
 | M5 (Conversation MP4 attachments) | E2E-CHAT-mp4-attachment-opens-in-system-player |
 | M6+ (Chat file references) | E2E-PLUGIN-file-view-collapse-persists |
 | M6+ (project folder roots) | E2E-PLUGIN-file-view-switches-folder-per-project |
@@ -17474,60 +17513,86 @@ plugin-form fixtures in an isolated temporary directory at runtime.
 
 - **Preconditions:** A turn with progress paragraph A, multiple searches plus
   thinking, progress paragraph B, multiple commands plus thinking, and a final
-  answer; the `Show thinking` preference on and off; the `Don't collapse
-  commands` preference on and off; legacy message-level transcript search
-  targets.
+  answer; the `Show thinking` preference on and off; the `Transcript display`
+  preference at Flat, Commands first, and Fully folded; a restart with saved
+  settings; legacy message-level transcript search targets.
 - **Steps:** Confirm a live active group starts open, let that same turn finish
-  without interacting, and confirm the group collapses. On a second turn,
-  explicitly open a completed group and confirm the choice survives subsequent
-  updates; then close the turn's disclosure and confirm the group closes with it,
-  and reopen to confirm the group choice is restored. Turn `Show thinking` off
-  and confirm the live thinking indicator remains while completed reasoning rows
-  and excerpts disappear and no empty thinking-only container is left; turn it
-  back on and confirm the completed rows return. Turn `Don't collapse commands`
-  off and confirm the run rows fold into their groups while the turn still
-  renders exactly one disclosure, then turn it on and confirm the standalone rows
-  return. Confirm the header reads running, finished, stopped, or failed for each
-  case, names compaction and recovery while those stages are live, omits the
-  duration when none was recorded, and never repeats the current command. Review
-  the nested path, including independent group/item toggles, a singleton segment,
-  literal-final-item leaf selection, failure/denial/recovery, retained-pane
-  remounts, run rows keeping their details closed until opened, and a legacy search
-  reveal.
+  without interacting, and confirm the process closes so only the final answer
+  (and any error or pending-action surface) remains. On a second turn, explicitly
+  open a completed group and confirm the choice survives subsequent updates; then
+  close the turn's disclosure and confirm the group closes with it, and reopen to
+  confirm the group choice is restored. In Fully folded, confirm run rows stay
+  inside their activity groups and that only ordinary assistant progress text
+  splits a group. In Commands first, confirm `Bash`/run rows render as standalone
+  rows beside the groups, that a normal assistant progress message or a command
+  ends the current group, adjacent calls stay separate, and Thinking rows default
+  expanded. In Flat, confirm no nested activity group renders, the outer
+  disclosure lists tools, commands, thinking and progress in transcript order,
+  and tool details stay collapsed. In every mode confirm the turn renders exactly
+  one outer disclosure and that closing it hides, then reopening restores, the
+  rows under it. Turn `Show thinking` off and confirm no completed reasoning row
+  remains and only a live whole-run TextShimmer `Thinking` indicator appears
+  while reasoning streams, with no spinner, pulsing dot or per-character
+  animation and a static presentation under reduced motion; turn it back on and
+  confirm the completed rows return. Select each `Transcript display` value,
+  restart, and confirm it persists; remove the saved value and confirm it
+  defaults to Fully folded. Confirm the header reads running, finished, stopped,
+  or failed for each case, names compaction and recovery while those stages are
+  live, omits the duration when none was recorded, and never repeats the current
+  command. Review the nested path, including independent group/item toggles, a
+  singleton segment, literal-final-item leaf selection, failure/denial/recovery,
+  retained-pane remounts, run rows keeping their details closed until opened, and
+  a legacy search reveal.
 - **Expected:** A turn renders exactly one process disclosure containing every
   pre-answer row, leaving the final answer, assistant errors, stopped trailing
-  text and pending actions outside it. The active group starts open; untouched
-  groups collapse at completion, while explicit user choices persist and are
-  restored when the enclosing disclosure is reopened. These group defaults do not
-  depend on the `Show thinking` preference. With `Don't collapse commands` on,
-  run aliases render as their own rows beside the groups, adjacent rows stay
-  separate and a row's detail stays closed until opened; with it off they fold
-  into their groups. Neither value changes the disclosure count. The header
+  text and pending actions outside it; when no final answer text exists, the
+  process header and those error or pending-action surfaces remain. An untouched
+  process closes at completion. In Flat there are no nested activity groups, and
+  active tools, commands, thinking and progress rows follow transcript order with
+  tool details collapsed. In Commands first, `Bash`/run rows are standalone
+  beside the groups, adjacent calls stay separate, and a normal assistant
+  progress message or a command ends a group, so the middle progress paragraph
+  and each command start a new group. In Fully folded (the default), run rows
+  stay inside their groups and only ordinary assistant progress text splits a
+  group, so the middle progress paragraph ends the preceding group and the
+  following activity starts a new one. A group appears only with at least two
+  visible items; a singleton has no group. Thinking rows default expanded in
+  Flat and Commands first, while Fully folded keeps the released exception:
+  earlier rows stay collapsed and only the last active row opens while it is
+  live, then completed rows collapse.
+  Explicit user choices persist and are restored when the enclosing disclosure is
+  reopened; these group defaults do not depend on `Show thinking`. The header
   reports running, finished, stopped, or failed with failure and stop outranking
   a normal finish, reads `Thinking` while the live step is reasoning, names
   compaction and recovery while those stages are live, omits a duration the
   transcript did not record, and never repeats the current command. Nested group
-  headers and run rows share the turn header's left edge.
-  When `Show thinking` is off, the live thinking indicator stays visible,
-  completed reasoning rows and excerpts are hidden, and empty thinking-only
-  containers are omitted; turning it back on restores them. Singletons have no
-  group. No item payload opens itself: a tool/search row stays closed until the user
-  opens it, while a final thinking item keeps its own leaf default.
+  headers and run rows share the turn header's left edge. When `Show thinking` is
+  off, no completed reasoning row renders, and only the live whole-run TextShimmer
+  `Thinking` indicator remains while reasoning streams; turning it back on
+  restores the rows. No item payload opens itself except the display mode's
+  Thinking default: a tool/search row stays closed until the user opens it.
   Parent/child/sibling states remain independent, pane-owned user choices survive
-  updates, preference changes and remounts, and renderer restart reapplies defaults.
-  Search reveals the turn process and activity group that own the named message
-  once per request; item-level targeting is not part of this change, and reasoning
-  hidden by the preference stays hidden until the user turns `Show thinking` on.
-  Saved `showThinking` survives restart; an absent value falls back to the legacy
+  updates, preference changes and remounts, and renderer restart reapplies
+  defaults. Search reveals the turn process and, where one exists, the activity
+  group that own the named message once per request; item-level targeting is not
+  part of this change, and reasoning hidden by the preference stays hidden until
+  the user turns `Show thinking` on. A saved `transcriptDisplayMode` survives
+  restart and an absent or unknown value resolves to Fully folded; saved
+  `showThinking` survives restart, and an absent value falls back to the legacy
   `thinkingDisplayMode` (`compact` hides, `detailed`/unknown/absent shows).
 - **Validation scope for the 2026-09-20 change:** Nested disclosure and activity
   group presentation only; precise item-level transcript search targeting is out
   of scope and keeps the existing message-level search behavior.
-- **Automation:** `pnpm test:e2e:transcript` covers default and active-to-completed
-  process disclosure behavior; `pnpm test:e2e:transcript-disclosure` verifies
-  manual-open retention and viewport anchoring; `apps/desktop/test/turn-process.test.mjs`
-  covers process defaults and `apps/desktop/test/thinking-visibility.test.mjs`
-  covers the `showThinking`/legacy resolver precedence.
+- **Automation:** `pnpm test:e2e:transcript` covers the command-first and
+  fully-folded layouts and active-to-completed process disclosure behavior;
+  `pnpm test:e2e:transcript-disclosure` verifies manual-open retention and
+  viewport anchoring; `apps/desktop/test/turn-process.test.mjs` covers mode
+  segmentation, `apps/desktop/test/transcript-display-modes-ui.test.mjs` covers
+  the renderer's mode wiring, Thinking defaults and TextShimmer,
+  `apps/desktop/test/transcript-display-mode-settings.test.mjs` covers the
+  Settings row and search indexing, and
+  `apps/desktop/test/settings-roundtrip.test.mjs` covers normalization, write
+  validation and the fully-folded default.
 - **Specs:** 04-ux/06-settings-ia, 04-ux/08-component-spec,
   04-ux/09-interaction-patterns; ADR turn-process-and-thinking-display.
 

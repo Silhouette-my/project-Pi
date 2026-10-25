@@ -5,6 +5,7 @@ import type {
   AssistantTurnPart,
 } from "./assistant-turns";
 import { isStandaloneRunActivity } from "./assistant-turns";
+import type { TranscriptDisplayMode } from "./transcript-display-mode";
 import { isDelegationStartTool } from "./tool-display";
 
 export function isThinkingActive(message: UiMessage, active: boolean): boolean {
@@ -133,48 +134,42 @@ function coalesceProcessActivityParts(
 }
 
 /**
- * Split one turn's process into the order it renders (ADR
- * turn-process-and-thinking-display).
+ * Split one turn's process into the order it renders.
  *
- * With `keepCommandsExpanded` the `Bash` and run aliases are pulled out of the
- * process flow: each is its own `run` segment, rendered as a standalone row
- * beside the nested groups rather than inside one, and adjacent calls stay
- * separate. The remaining tools, thinking, hosted searches and progress text
- * keep their original order and are grouped into `process` chunks between the
- * run calls.
+ * `fully-folded` keeps the released v0.20.0 layout: contiguous activity parts
+ * are coalesced into one rendered group, including Bash/run rows, and progress
+ * text remains the only boundary. `flat` returns the original parts so the
+ * renderer can suppress activity-group wrappers while keeping every row in
+ * order. `command-first` pulls every Bash/run row out as its own segment and
+ * leaves the remaining activity in chronological process chunks.
  *
- * Without it the run rows keep their place in the flow, so a command is just
- * another row of the group it ran among - the layout before commands were
- * separated at all. Because the entry builder keeps every run row in its own
- * activity part, folding coalesces contiguous ordinary parts into one rendered
- * group here, at render time. Progress messages remain paragraph boundaries and
- * a `Task`/delegation group never absorbs ordinary work around it. The
- * coalesced group is a new part whose end is the last source group's end; the
- * source parts and their items are not mutated.
- *
- * Either way the turn renders one top-level disclosure; only the placement of
- * run rows inside it changes. ON-mode segment parts are the same part objects
- * as the input, so downstream reveal and active-tail identity still hold.
+ * Every mode renders one top-level disclosure. Segment parts keep their source
+ * identity so reveal state and active-tail checks still work.
  */
 export function segmentTurnProcess(
   parts: readonly AssistantTurnPart[],
-  keepCommandsExpanded: boolean,
+  mode: TranscriptDisplayMode,
 ): TurnProcessSegment[] {
-  if (!keepCommandsExpanded) {
-    const first = parts[0];
-    if (!first) return [];
-    const key =
-      first.kind === "activity" ? first.items[0].message.id : first.message.id;
+  const first = parts[0];
+  if (!first) return [];
+  const key =
+    first.kind === "activity" ? first.items[0].message.id : first.message.id;
+  if (mode === "fully-folded") {
     return [{ kind: "process", key, parts: coalesceProcessActivityParts(parts) }];
+  }
+  if (mode === "flat") {
+    // One outer process; the flat renderer suppresses every activity-group
+    // wrapper, so keep the original part order and message boundaries.
+    return [{ kind: "process", key, parts: [...parts] }];
   }
   const segments: TurnProcessSegment[] = [];
   let pending: AssistantTurnPart[] = [];
   const flushProcess = () => {
     if (pending.length === 0) return;
-    const first = pending[0];
-    const key =
-      first.kind === "activity" ? first.items[0].message.id : first.message.id;
-    segments.push({ kind: "process", key, parts: pending });
+    const first2 = pending[0];
+    const key2 =
+      first2.kind === "activity" ? first2.items[0].message.id : first2.message.id;
+    segments.push({ kind: "process", key: key2, parts: pending });
     pending = [];
   };
   for (const part of parts) {

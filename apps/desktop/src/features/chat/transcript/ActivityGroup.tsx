@@ -55,6 +55,7 @@ import {
 import { TranscriptSearchContext } from "../../../lib/transcript-search-context";
 import { useAppStore } from "../../../stores/app-store";
 import { resolveShowThinking } from "../../../lib/thinking-visibility";
+import { resolveTranscriptDisplayMode } from "../../../lib/transcript-display-mode";
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -202,6 +203,8 @@ export const ActivityGroup = memo(function ActivityGroup({
 }: ActivityGroupProps) {
   const showThinking = useAppStore((state) => resolveShowThinking(state.settings));
   const hideThinking = !showThinking;
+  const displayMode = useAppStore((state) => resolveTranscriptDisplayMode(state.settings));
+  const thinkingDefaultOpen = displayMode !== "fully-folded";
   const { t } = useTranslation();
   const detailsId = useId();
   const rawDelegateItems = useMemo(() => items.filter(isDelegationActivityItem), [items]);
@@ -318,7 +321,12 @@ export const ActivityGroup = memo(function ActivityGroup({
     delegationStatuses={delegationStatuses}
     delegationTimings={delegationTimings}
     onUserInteraction={claimDisclosure}
+    thinkingDefaultOpen={thinkingDefaultOpen}
   />;
+
+  // Flat mode has one outer process disclosure and no nested group at all.
+  // The rows themselves still keep their own tool/thinking disclosures.
+  if (displayMode === "flat") return <>{renderedItems}</>;
 
   if (!hasSubagentTopology) {
     return (

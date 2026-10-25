@@ -759,7 +759,7 @@ controls.
 | Group root | localized project name; hover and keyboard focus expose the full path in a portaled tooltip plus an accessible description without changing row geometry |
 | Directory disclosure | single full-row target with `aria-expanded` / `aria-controls`; may activate an inactive project before toggling, but never archives |
 | Project pin | presentation priority only; no host row deletion/move |
-| Project color | row-menu submenu (`Project color`) listing `Follow theme color` plus the seven accent presets, each row a small color dot with a check on the current choice (`menuitemradio`); persists as `ProjectMeta.color` (preset id) in sidebar preferences; tints only the folder glyph in the project header and sets `--ds-project-accent` for the Project Console (D669) |
+| Project color | row-menu submenu (`Project color`) listing `Follow theme color` plus the seven accent presets, each row a small color dot with a check on the current choice (`menuitemradio`); persists as `ProjectMeta.color` (preset id) in sidebar preferences; tints only the folder glyph in the project header and sets `--ds-project-accent` for the Project Console (D670) |
 | Project reorder | press-and-move on the title (8px), or ArrowUp/ArrowDown on that title, writes contiguous normalized-path order to sidebar preferences; accent insertion line; no visible grip |
 | Project archive | omitted from default view; restorable from archived view |
 | Project delete | the row-menu danger action always opens a confirmation dialog naming the project and session count; X, Cancel, Escape, and backdrop dismiss without changes; explicit confirmation stops listed running sessions before removing the durable project row, owned sessions/transcripts, and project memory; the folder is never deleted; deleting a root of a stored multi-folder project group is refused until the root is detached through Edit project. Chats on a detached root remain available as a standalone project. A path the host no longer knows is still removed from the list. |
@@ -889,30 +889,34 @@ activity groups and `Bash` run rows alike. A turn therefore renders exactly one
 top-level process disclosure, including a Bash-only turn; no run row is a sibling
 of it, and a long turn collapses in one gesture. The answer, assistant errors,
 stopped trailing partial text and pending action cards remain outside, reachable
-without expanding the process.
+without expanding the process. An untouched process closes on completion, leaving
+the final answer; with no final text, the process header and those surfaces
+remain.
 
-Within the process, an ordinary activity group represents one contiguous
-tool/search/thinking segment between progress paragraphs or run rows. It renders a
-group header only when at least two items are visible under the current thinking
-preference. A singleton uses its item disclosure directly, hidden thinking never
-creates an empty wrapper, and the existing Task topology remains the container for
-delegated work.
-
-`keepCommandsExpanded` decides where a run row sits inside that disclosure and
-defaults to on. When on, `Bash` and run aliases are lifted out of the groups they
-ran among and render as their own rows at the disclosure's top level; adjacent
-calls stay separate and a row's detail stays closed until the user opens it. When
-off, a run row keeps its place in the flow and reads as another line of the group
-around it. Neither value changes the disclosure count, what a tool received, or
-what is stored.
+Within the process, the `Transcript display` mode decides the grouping.
+`fully-folded` (the default; absent or unknown values use it) forms ordinary
+activity groups from contiguous tool/search/thinking segments between ordinary
+assistant progress paragraphs, and keeps `Bash`/run aliases inside the group
+around them. A `Task` delegation keeps its own topology and is not duplicated
+inside an ordinary group. `command-first` keeps those groups but lifts every
+`Bash`/run alias into a standalone row beside them: adjacent calls stay separate,
+a row's detail stays closed until the user opens it, and a normal assistant
+progress message or a command ends the current group. `flat` renders no nested
+activity groups; the outer disclosure lists tools, commands, thinking and
+progress rows in transcript order. In `command-first` and `fully-folded`, a group
+header appears only when at least two items are visible under the current
+thinking preference; a singleton uses its item disclosure directly, and hidden
+thinking never creates an empty wrapper. All three modes render exactly one
+top-level process disclosure and change neither what a tool received nor what is
+stored.
 
 The ordinary group owning the active execution segment starts open while a turn is
 active, then closes on completion only if untouched; other completed groups start
 closed. An untouched active group remains open when any failed or denied tool has
 been recorded, through later successful recovery, and closes on completion if still
-untouched. These group defaults are unified and do not depend on either
-preference. Group headers summarize count, running state and issue count without
-treating a failed child as a failed turn.
+untouched. These group defaults are unified across modes and do not depend on the
+thinking preference. Group headers summarize count, running state and issue count
+without treating a failed child as a failed turn.
 
 The turn disclosure header states the turn's outcome and never echoes the item it
 is working on, because a shell command or search query can be arbitrarily long. It
@@ -926,13 +930,19 @@ beside the label. The disclosure and the levels it reveals share one left edge;
 hierarchy is carried by type size and colour, not by indentation, so a nested
 group header and a run row start exactly where the turn header does.
 
-No item payload opens itself: a tool, hosted-search or plan call stays a header row
-until the user opens its disclosure, including a Bash row, whose detail stays closed
-until the user opens it. The activity groups keep their automatic open defaults, so
-a live turn still shows its work. When the `Show thinking` preference is off, the
-live thinking indicator stays visible while completed reasoning rows and excerpts
-are suppressed and empty thinking-only containers are omitted; the stored reasoning
-is retained and reappears when the preference is turned back on.
+Except for the display mode's Thinking default, no item payload opens itself: a
+tool, hosted-search or plan call stays a header row until the user opens its
+disclosure, including a Bash row, whose detail stays closed until the user opens
+it. The activity groups keep their automatic open defaults, so
+a live turn still shows its work. With `Show thinking` on, Thinking rows expand by
+default in Flat and Commands first and collapse only on user action; Fully folded
+keeps the released exception where earlier rows stay collapsed and only the last
+active row opens while it is live. An expanded Thinking row shows its full
+reasoning markdown; a collapsed one shows only the Thinking indicator, with no
+summary or excerpt. With `Show thinking` off, no completed reasoning row renders;
+only a live whole-run TextShimmer `Thinking` indicator remains while reasoning is
+actively streaming, and empty thinking-only containers are omitted. The stored
+reasoning is retained and reappears when the preference is turned back on.
 
 Group, run row and item are independent controls. Closing an ancestor keeps
 descendant choices and reopening restores them; closing the turn's disclosure hides
@@ -2351,20 +2361,21 @@ Lightweight inline disclosure row showing a semantic tool action, its primary
 argument hint, status, and a readable rendering of the result. It follows D071
 and is intentionally not an elevated card.
 
-The turn's process is one disclosure. Inside it, one contiguous
-tool/search/thinking segment between progress paragraphs or run rows becomes an
-ordinary processing group only when it has two or more visible items under the
-current thinking preference. A singleton uses its item disclosure directly, and
-Task topology keeps its existing container. `Bash` and run aliases stay inside the
-turn's disclosure: with `keepCommandsExpanded` on (the default) each renders as
-its own row beside the groups, and adjacent calls remain separate; with it off a
-run row stays in the flow of its group. A Bash-only turn still has its one
-disclosure. While the turn is active, the ordinary group owning the execution
-segment opens; when it settles, an untouched group closes. These group defaults do
-not depend on the thinking preference. No item payload opens itself: a tool,
-hosted-search or plan row stays a header row until the user opens it, whichever
-item of the group it is, including a Bash row whose detail stays closed until
-opened.
+The turn's process is one disclosure. With `fully-folded` (the default), one
+contiguous tool/search/thinking segment between ordinary progress paragraphs
+becomes an ordinary processing group only when it has two or more visible items
+under the current thinking preference, and `Bash`/run aliases stay inside their
+group. With `command-first`, the groups remain but each `Bash`/run alias renders
+as its own row beside them, and a progress message or command ends a group. With
+`flat`, no group renders and the rows keep transcript order inside the outer
+disclosure. A singleton uses its item disclosure directly, and Task topology
+keeps its existing container. A Bash-only turn still has its one disclosure.
+While the turn is active, the ordinary group owning the execution segment opens;
+when it settles, an untouched group closes. These group defaults do not depend on
+the thinking preference. No item payload opens itself, except the display mode's
+Thinking default: a tool, hosted-search or plan row stays a header row until the
+user opens it, whichever item of the group it is, including a Bash row whose
+detail stays closed until opened.
 
 The group header shows `Processing · 12s` while active or `Processed for 12s`
 after completion, plus bounded item and issue counts. Expanding it reveals the
@@ -2397,15 +2408,15 @@ seconds when non-zero) from one hour onward. Zero-value units are omitted, so
   completion only if untouched; completed groups otherwise start closed. These
   defaults do not depend on the thinking preference. A singleton has no group
   header.
-- Tool/search payloads stay collapsed until the user opens them; no row
-  auto-opens, so a final thinking item never selects an earlier tool. Live
+- Tool/search payloads stay collapsed until the user opens them; no tool/search
+  row auto-opens, so a final thinking item never selects an earlier tool. Live
   thinking follows its own indicator/disclosure policy and never opens sibling
   payloads.
-- `Bash` and run rows are revealed by the turn's process disclosure. With
-  `keepCommandsExpanded` on they sit at its top level beside the groups and
-  adjacent rows stay separate; with it off they render inside their group. They
-  are never siblings of the turn's process, and their details stay closed until
-  opened.
+- `Bash` and run rows are revealed by the turn's process disclosure. In
+  `fully-folded` they sit inside their group; in `command-first` they sit at its
+  top level beside the groups with adjacent rows separate; in `flat` no groups
+  exist, so they follow transcript order inside the disclosure. They are never
+  siblings of the turn's process, and their details stay closed until opened.
 - The processing group spans the full available assistant column, so expanded
   result details keep a usable width even when the header or payload is short.
 - The visible label is a natural-language action (`Read`, `Ran`, `Searched`),
@@ -2478,16 +2489,17 @@ twice.
 
 | State | Header treatment | Expanded content |
 |---|---|---|
-| Running | Progressive action with readable text and a pulsing marker; a `run` row also shows its spinner and pulses the status dot beside `Working…` | The active multi-item group opens; no item payload opens itself; live thinking follows its own indicator/disclosure policy |
+| Running | Progressive action with readable text and a pulsing marker; a `run` row also shows its spinner and pulses the status dot beside `Working…` | The active multi-item group opens; no tool/search payload opens itself, except the display mode's Thinking default; live thinking follows its own indicator/disclosure policy |
 | Success | Past-tense action + result chips; no green success badge, except a `run` row's dot and `Done` | Result blocks, then arguments if not already shown; an untouched active group closes on completion, while manual group and item choices are retained |
 | Error | Past-tense action + compact danger status; details remain collapsed by default and open only on user request. A `run` row is in this state whenever its command exited nonzero, whatever the call reported (D227) | Error note first, then arguments |
 | Denied | Muted `Denied` status; payload remains closed until requested | Permission result when available |
 
 ### 9.6 Interactions
 
-- Click the row: expand/collapse only that result payload. Payloads start
-  closed. No payload opens itself, so the row the user opens is the only expanded
-  one; failed and denied rows behave the same.
+- Click the row: expand/collapse only that result payload. Tool/search payloads
+  start closed. No tool/search payload opens itself, so the row the user opens is
+  the only expanded one; failed and denied rows behave the same. Thinking rows
+  follow the display mode's default described above.
 - A file path that a row or its result names is a link, not decoration: clicking
   the summary path of a `Read`, `Write`, `Edit`, or `fetch` row, or a path in a
   result's file list or match groups, completes the reference through the same
@@ -3558,9 +3570,13 @@ Anatomy:
   at the caret — the same sentinel-backed chip as a pasted file — whose
   canonical value is the original `entry.path`; the menu closes and that Enter
   does not send. Accepting a directory keeps the literal path in the draft so
-  completion can continue. Entries come from `fs/index` (D124, D209, D362). A
-  truncation footnote appears when the index is capped; without a workspace the
-  menu shows an "open a project" empty state.
+  completion can continue. Entries come from `fs/index` (D124, D209, D362).
+  When that index is capped, a typed query is also searched over the whole
+  listing through `fs/search` once typing pauses, and the found rows merge
+  with the local matches (D669). A truncation footnote appears while the list
+  may be incomplete — the bare `@`, until the first search for the token
+  answers, and when a search is itself capped or unavailable, as in remote
+  sessions; without a workspace the menu shows an "open a project" empty state.
 - Accepting commands and directories inserts text (`/name ` / `@dir/`);
   accepting a completed file inserts the inline chip rather than deleting the
   trigger. Immediately

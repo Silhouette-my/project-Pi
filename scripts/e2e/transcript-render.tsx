@@ -64,7 +64,7 @@ async function markdownLinkInteractionProbe(
     useAppStore.setState({
       activeSessionId: "markdown-link-probe",
       page: "chat",
-      settings: { ...initialState.settings, linkOpenTarget: "workpanel" },
+      settings: { ...initialState.settings, linkOpenTarget: "workpanel", transcriptDisplayMode: "command-first" },
       openUrlInWorkPanel: (url) => openedUrls.push(url),
     });
     flushSync(() =>
@@ -362,6 +362,7 @@ globalThis.resetContextOverflowRecoveryProbe = async () => {
       enterToSend: true,
       onboardingDismissed: false,
       smoothStreaming: false,
+      transcriptDisplayMode: "command-first",
     },
   });
 };
@@ -424,6 +425,7 @@ globalThis.transcriptRenderProbe = async () => {
       enterToSend: true,
       onboardingDismissed: false,
       smoothStreaming: false,
+      transcriptDisplayMode: "command-first",
     },
   });
   const container = document.createElement("div");

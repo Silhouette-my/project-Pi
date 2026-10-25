@@ -154,7 +154,7 @@ test("process segments pull every Bash row out and keep chronological chunks", (
     tool("bash", "Bash", { toolArgs: { command: "ls" } }),
     tool("edit", "Edit", { toolResult: "c" }),
   ]);
-  const segments = segmentTurnProcess(projectTurnProcess(entry).process, true);
+  const segments = segmentTurnProcess(projectTurnProcess(entry).process, "command-first");
   assert.deepEqual(
     segments.map((segment) => segment.kind),
     ["process", "run", "process"],
@@ -177,7 +177,7 @@ test("a Bash-only turn has no process segment at all", () => {
     tool("bash1", "Bash", { toolArgs: { command: "a" } }),
     tool("bash2", "Bash", { toolArgs: { command: "b" } }),
   ]);
-  const segments = segmentTurnProcess(projectTurnProcess(entry).process, true);
+  const segments = segmentTurnProcess(projectTurnProcess(entry).process, "command-first");
   assert.deepEqual(
     segments.map((segment) => segment.kind),
     ["run", "run"],
@@ -190,7 +190,7 @@ test("a turn without Bash keeps one process segment", () => {
     tool("read", "Read", { toolResult: "a" }),
     tool("grep", "Grep", { toolResult: "b" }),
   ]);
-  const segments = segmentTurnProcess(projectTurnProcess(entry).process, true);
+  const segments = segmentTurnProcess(projectTurnProcess(entry).process, "command-first");
   assert.deepEqual(
     segments.map((segment) => segment.kind),
     ["process"],
@@ -284,7 +284,7 @@ test("folding commands coalesces mixed work across run rows without mutating ent
     Object.freeze(part);
   }
   Object.freeze(process);
-  const [segment] = segmentTurnProcess(process, false);
+  const [segment] = segmentTurnProcess(process, "fully-folded");
   assert.equal(segment.kind, "process");
   // Progress text stays a paragraph boundary, so the run joins the group before
   // it rather than the one after it.
@@ -313,12 +313,12 @@ test("folding commands coalesces mixed work across run rows without mutating ent
   );
   // ON is unchanged: the original chunks are still separate and the run row is
   // still a standalone segment with its original item identity.
-  const on = segmentTurnProcess(process, true);
+  const on = segmentTurnProcess(process, "command-first");
   assert.deepEqual(on.map((part) => part.kind), ["process", "run", "process"]);
   assert.equal(on[0].parts[0], process[0]);
   assert.equal(on[0].parts[1], process[1]);
   assert.equal(on[1].item, sourceActivities[1].items[0]);
-  const again = segmentTurnProcess(process, true);
+  const again = segmentTurnProcess(process, "command-first");
   assert.deepEqual(again.map((part) => part.kind), on.map((part) => part.kind));
   assert.equal(again[0].parts[0], process[0]);
 });
@@ -339,7 +339,7 @@ test("folding commands keeps Task topology and progress text as group boundaries
   ]);
   const [segment] = segmentTurnProcess(
     projectTurnProcess(entry).process,
-    false,
+    "fully-folded",
   );
   const activityIds = segment.parts.flatMap((part) =>
     part.kind === "activity"
@@ -359,6 +359,26 @@ test("folding commands keeps Task topology and progress text as group boundaries
   assert.equal(task.items[0].delegate.items[0].message.id, "nested");
 });
 
+test("flat keeps the original part order and never extracts a run", () => {
+  const entry = turn([
+    message("user", "user", "Run"),
+    tool("read", "Read", { toolResult: "a" }),
+    tool("bash", "Bash", { toolArgs: { command: "pnpm test" } }),
+    message("progress", "assistant", "Progress"),
+    tool("edit", "Edit", { toolResult: "b" }),
+  ]);
+  const process = projectTurnProcess(entry).process;
+  const [segment] = segmentTurnProcess(process, "flat");
+  assert.equal(segment.kind, "process");
+  assert.equal(segment.parts.length, process.length);
+  assert.ok(segment.parts.every((part, index) => part === process[index]));
+  assert.deepEqual(
+    segment.parts.map((part) => part.kind),
+    ["activity", "activity", "message", "activity"],
+  );
+  assert.equal(segment.parts[1].items[0].message.id, "bash");
+});
+
 test("a Bash-only turn keeps one segment whether commands are expanded or not", () => {
   const entry = turn([
     message("user", "user", "Run"),
@@ -366,13 +386,13 @@ test("a Bash-only turn keeps one segment whether commands are expanded or not", 
     tool("bash2", "Bash", { toolArgs: { command: "b" } }),
   ]);
   const process = projectTurnProcess(entry).process;
-  assert.deepEqual(segmentTurnProcess(process, true).map((s) => s.kind), ["run", "run"]);
-  assert.deepEqual(segmentTurnProcess(process, false).map((s) => s.kind), ["process"]);
+  assert.deepEqual(segmentTurnProcess(process, "command-first").map((s) => s.kind), ["run", "run"]);
+  assert.deepEqual(segmentTurnProcess(process, "fully-folded").map((s) => s.kind), ["process"]);
 });
 
 test("an empty process segments to nothing in either mode", () => {
-  assert.deepEqual(segmentTurnProcess([], false), []);
-  assert.deepEqual(segmentTurnProcess([], true), []);
+  assert.deepEqual(segmentTurnProcess([], "fully-folded"), []);
+  assert.deepEqual(segmentTurnProcess([], "command-first"), []);
 });
 
 test("the turn header reports failure, stop, live and completion in that order", () => {

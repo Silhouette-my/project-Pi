@@ -17,7 +17,7 @@ const { flattenCatalog } = await import(
 const copy = flattenCatalog(en);
 const t = (key) => copy[key] ?? key;
 
-test("command folding is searchable from the AI preferences beside show thinking", () => {
+test("transcript display mode is searchable from the AI preferences beside show thinking", () => {
   const ai = SETTINGS_NAV.find((entry) => entry.id === "ai");
   assert.ok(ai, "AI settings entry is registered");
   const showThinkingAt = ai.keywordKeys.indexOf("settings.showThinking");
@@ -27,28 +27,28 @@ test("command folding is searchable from the AI preferences beside show thinking
     [
       "settings.showThinking",
       "settings.showThinkingDesc",
-      "settings.keepCommandsExpanded",
-      "settings.keepCommandsExpandedDesc",
+      "settings.transcriptDisplayMode",
+      "settings.transcriptDisplayModeDesc",
     ],
   );
 
-  const titleHits = searchSettings("collapse commands", t, {
+  const titleHits = searchSettings("transcript display", t, {
     developerMode: false,
     includeDevelopmentOnly: false,
   }).filter((hit) => hit.tab === "ai");
   assert.ok(
-    titleHits.some((hit) => hit.rowKey === "settings.keepCommandsExpanded"),
-    "the command-folding title is searchable",
+    titleHits.some((hit) => hit.rowKey === "settings.transcriptDisplayMode"),
+    "the transcript-display title is searchable",
   );
 
-  const descriptionHits = searchSettings("shell calls", t, {
+  const descriptionHits = searchSettings("assistant process", t, {
     developerMode: false,
     includeDevelopmentOnly: false,
   }).filter((hit) => hit.tab === "ai");
   assert.ok(
     descriptionHits.some(
-      (hit) => hit.rowKey === "settings.keepCommandsExpandedDesc",
+      (hit) => hit.rowKey === "settings.transcriptDisplayModeDesc",
     ),
-    "the command-folding description is searchable",
+    "the transcript-display description is searchable",
   );
 });

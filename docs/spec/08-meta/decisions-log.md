@@ -332,8 +332,9 @@ Gold source: local Codex electron captures; latest row wins where rows conflict.
 | D602 | Crash dumps stay in the data directory | **Electron's Crashpad reporter starts local-only (`uploadToServer: false`) before `ready`. Dumps live under `<data_dir>/crash-dumps`, not the default Electron `userData` crashDumps path, so a `PI_DESKTOP_DATA_DIR` profile does not share dumps. The next lock-holding launch writes one `diagnostics` line for dumps newer than `crash-dumps.json`, classified by Crashpad `ptype`: `error` if any new dump is the browser/main process, `warn` for recovered renderer/GPU/utility crashes. Host-core and sidecar crashes stay on the supervisor path. No upload, no IPC, no schema change.** | A crash left a minidump nobody read. Crashpad also records recovered renderer crashes, so a next-launch `error` that said the previous run died was a lie; and dumps outside the data directory escaped `PI_DESKTOP_DATA_DIR` isolation. |
 | D619 | A copied formula is its TeX source | **Renderer only: a copy whose selection covers rendered math writes `text/plain` from the MathML `annotation` — `$…$` inline, `$$…$$` on its own lines, the delimiters `lib/latex-math.ts` normalizes `\(…\)` and `\[…\]` to, each run widened past any run inside the formula as a code span's fence is — instead of the two trees KaTeX paints. A cut that lands inside a formula grows to the whole formula. Only the formulas are rewritten: the reduced clone is read back through `Selection.toString()`, the serializer a copy itself runs, so prose, lists, tables and code blocks sharing the selection keep the platform's own reading — `user-select: none` chrome left behind included, which `innerText` would have written out. A selection with no formula in it, and a copy raised where the selection does not live, are left to the platform entirely. One flavour is written, `text/plain`: taking the event over drops the platform's `text/html` too and none is written back, because the reduced clone is app markup that would carry the `user-select: none` chrome the text reading drops, and because carrying the rendering instead would paste every formula twice — KaTeX's stylesheet is the only thing hiding the MathML tree and no stylesheet travels on the clipboard. One document `copy` listener owned by the shell, and the transcript's right-click Copy reads the same selection through the same module.** | A formula pasted as its glyphs, once per rendered tree, so it could not be carried into a LaTeX document or another Markdown editor (issue #414). ADR 0268 removed quoting on the grounds that the OS clipboard was the substitute; the clipboard had to actually carry the source. |
 | D620 | pi-ai built-in API-key services are named presets | **Add fifteen named endpoint presets — Ant Ling, Baseten, Cerebras, Hugging Face, Meta (`responses`), MiniMax (International), Moonshot AI (International), NVIDIA, OpenCode Zen, Vercel AI Gateway, Qwen Token Plan (`alibaba-token-plan`), Qwen Token Plan (China), Xiaomi Token Plan (China / Europe / Singapore) — to `NAMED_ENDPOINT_PRESETS`, each at its published host, with the pi-ai provider id kept as an alias wherever the models.dev key differs. Eight built-in providers remain exceptions with a recorded reason: Amazon Bedrock, Azure OpenAI, Cloudflare AI Gateway, Cloudflare Workers AI, Google Vertex AI (account- or region-scoped URLs), GitHub Copilot and OpenAI Codex (vendor-account rows), and Radius (`pi_messages` is account-only here). `packages/agent-runtime/src/pi-ai-provider-sync.test.ts` fails on a pi-ai upgrade that leaves a provider neither covered nor excepted. No protocol, storage, or IPC change.** | Every other pi-ai capability was already reachable, but the API-key half of the service catalog was hand-maintained and had drifted from the library's own provider list (ADR 0307). |
-| D668 | One process disclosure per turn, with a command-folding preference | **Amend D661 / the `turn-process-and-thinking-display` ADR. A turn renders exactly one top-level process disclosure holding every pre-answer row, the run rows included; the answer stays outside it. `Bash` and run aliases are no longer excluded from every folded container. Inside that disclosure, the optional boolean `AppSettings.keepCommandsExpanded` (absent means on) decides whether run rows are lifted beside the groups they ran among or stay inside them; both values render exactly one disclosure. The preference is read while rendering, not while building transcript entries, so toggling it repaints immediately - the projection cache is keyed by messages and compactions only. The disclosure header reports failed / stopped / running / finished with precedence in that order and never echoes the current item, and the disclosure shares one left edge with the levels it reveals. `keepCommandsExpanded` joins the portable application fields. No host protocol, persistence schema, permission, or plugin contract change. See the amended ADR, `04-ux/06-settings-ia.md`, `04-ux/08-component-spec.md`, `04-ux/09-interaction-patterns.md`, and E2E-CHAT-turn-process-and-thinking-display.** | Chronological segmentation split one turn into several sibling disclosures above the answer, and always-visible command rows could not be turned off by readers who preferred the older grouped layout; one disclosure plus a presentation-only preference satisfies both without changing what a tool received or stored. |
-| D669 | User theme colour and optional per-project colour | **Relax the neutral-gray-only accent principle for a small, deliberate surface. `AppSettings.accentColor` (preset id or custom `#rrggbb`; absent means Blue) drives `--ds-theme-accent` / `--ds-on-theme-accent`, used only by the primary `Button`, `SettingsToggle` on-state, `Checkbox` fill, the keyboard focus ring, and the enabled composer send button. Text, links, borders, sidebar selection, segmented controls, and the semantic success / warning / error / purple colours are unchanged, and `--ds-accent` stays neutral. An optional per-project colour (`ProjectMeta.color`, a preset id in renderer sidebar preferences) tints only the sidebar folder glyph and the Project Console `--workflow-accent` via `--ds-project-accent`. `accentColor` joins the portable application fields. See `04-ux/07-ui-design-system.md`, `04-ux/06-settings-ia.md`, `04-ux/01-ui-ia.md`, and `04-ux/08-component-spec.md`.** | Users asked to personalize the product and tell projects apart; confining colour to a handful of primitives keeps the Codex-aligned neutral shell and keeps status colours unambiguous. |
+| D668 | One process disclosure per turn, with three transcript display modes | **Amend D661 / the `turn-process-and-thinking-display` ADR. A turn renders exactly one top-level process disclosure holding every pre-answer row; the answer stays outside it. `AppSettings.transcriptDisplayMode` selects the layout: `flat` renders no nested activity groups, `command-first` renders `Bash`/run rows as standalone rows beside activity groups, and `fully-folded` (the default for absent or invalid values) keeps commands inside their groups and lets only ordinary assistant progress text split them. The mode is read while rendering, so switching repaints immediately - the projection cache is keyed by messages and compactions only. The disclosure header reports failed / stopped / running / finished with precedence in that order and never echoes the current item, and the disclosure shares one left edge with the levels it reveals. `transcriptDisplayMode` joins the portable application fields; `keepCommandsExpanded` is deprecated, retained only for persisted-settings compatibility, and no longer exposed or read for rendering. No host protocol, persistence schema, permission, or plugin contract change. See the amended ADR, `04-ux/06-settings-ia.md`, `04-ux/08-component-spec.md`, `04-ux/09-interaction-patterns.md`, and E2E-CHAT-turn-process-and-thinking-display.** | Chronological segmentation split one turn into several sibling disclosures above the answer, and the boolean command-folding preference could only express two layouts; a three-mode setting covers flat, command-first, and the released grouped view without changing what a tool received or stored. |
+| D669 | `@` queries search past a truncated file index | **Amend D124: while the 8000-entry `fs/index` snapshot is truncated, a non-empty `@` query is also searched over the root's full listing through the read-only Electron channel `pi-desktop/fs/search` once typing pauses, and its best 50 rows merge with the local matches. A complete index never searches. Remote sessions keep their snapshot. No host RPC, storage, or schema change.** |
+| D670 | User theme colour and optional per-project colour | **Relax the neutral-gray-only accent principle for a small, deliberate surface. `AppSettings.accentColor` (preset id or custom `#rrggbb`; absent means Blue) drives `--ds-theme-accent` / `--ds-on-theme-accent`, used only by the primary `Button`, `SettingsToggle` on-state, `Checkbox` fill, the keyboard focus ring, and the enabled composer send button. Text, links, borders, sidebar selection, segmented controls, and the semantic success / warning / error / purple colours are unchanged, and `--ds-accent` stays neutral. An optional per-project colour (`ProjectMeta.color`, a preset id in renderer sidebar preferences) tints only the sidebar folder glyph and the Project Console `--workflow-accent` via `--ds-project-accent`. `accentColor` joins the portable application fields. See `04-ux/07-ui-design-system.md`, `04-ux/06-settings-ia.md`, `04-ux/01-ui-ia.md`, and `04-ux/08-component-spec.md`.** | Users asked to personalize the product and tell projects apart; confining colour to a handful of primitives keeps the Codex-aligned neutral shell and keeps status colours unambiguous. |
 
 
 ## M0. Model catalog decisions
@@ -7850,31 +7851,61 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
   `04-ux/06-settings-ia.md`, `04-ux/08-component-spec.md`, and
   `apps/desktop/test/macos-window-translucency.test.mjs`.
 
-## 2026-10-21 — One process disclosure per turn, with command folding (D668)
+## 2026-10-21 — One process disclosure per turn, with three transcript display modes (D668)
 
 - D668 amends D661 / the `turn-process-and-thinking-display` ADR: a turn now
   renders exactly one top-level process disclosure containing every pre-answer
-  row, the `Bash`/run rows included. No run row is a sibling of that disclosure;
-  the trailing answer, assistant errors, stopped trailing text, and pending action
-  surfaces stay outside it.
-- `AppSettings.keepCommandsExpanded` (absent means on) decides whether run rows are
-  lifted beside the groups they ran among or stay inside them. The preference is
-  read while rendering, not while building transcript entries, so toggling it
-  repaints immediately; both values render exactly one disclosure.
-- The disclosure header reports failed / stopped / running / finished in that
-  order, names compaction and recovery while those stages are live, drops an
-  unavailable duration instead of showing zero, and never echoes the current item.
-  The disclosure and the levels it reveals share one left edge.
-- `keepCommandsExpanded` joins the portable application fields. Covered by
-  `apps/desktop/test/turn-process.test.mjs`,
-  `apps/desktop/test/transcript-style.test.mjs`, and the interactive transcript
-  probes. See the amended ADR, `04-ux/06-settings-ia.md`,
-  `04-ux/08-component-spec.md`, `04-ux/09-interaction-patterns.md`, and
+  row. No run row is a sibling of that disclosure; the trailing answer, assistant
+  errors, stopped trailing text, and pending action surfaces stay outside it.
+- `AppSettings.transcriptDisplayMode` selects the layout. `flat` renders no
+  nested activity groups and lists rows in transcript order. `command-first`
+  keeps the groups but lifts `Bash`/run rows into standalone rows, with a normal
+  progress message or a command ending a group. `fully-folded`, the default for
+  absent or invalid values, keeps run rows inside their groups and lets only
+  ordinary assistant progress text split them. The mode is read while rendering,
+  so switching repaints immediately.
+- With `showThinking` on, Thinking rows default expanded in `flat` and
+  `command-first`; `fully-folded` keeps the released exception where only the
+  last active row opens while it is live. With the preference off, no completed
+  reasoning row renders and only a live whole-run TextShimmer `Thinking`
+  indicator remains while reasoning streams.
+- `keepCommandsExpanded` is deprecated and retained only for persisted-settings
+  compatibility; it is no longer exposed or read for rendering. The disclosure
+  header, left edge, and pane-owned disclosure memory are unchanged.
+- Covered by `apps/desktop/test/turn-process.test.mjs`,
+  `apps/desktop/test/transcript-display-modes-ui.test.mjs`,
+  `apps/desktop/test/transcript-display-mode-settings.test.mjs`, and
+  `apps/desktop/test/settings-roundtrip.test.mjs`. See the amended ADR,
+  `04-ux/06-settings-ia.md`, `04-ux/08-component-spec.md`,
+  `04-ux/09-interaction-patterns.md`, and
   E2E-CHAT-turn-process-and-thinking-display.
 
-## 2026-10-22 — User theme colour and per-project colour (D669)
+## 2026-10-19 — `@` queries search past a truncated file index (D669)
 
-- D669 relaxes the "neutral gray accent only" principle recorded on 2026-07-28
+- The `fs/index` snapshot keeps the shallowest 8000 entries, and the menu
+  fuzzy-filtered only that snapshot. In a large tree — a Unity project, where
+  every asset has a `.meta` sibling — scripts several folders deep were never
+  in it, so no query could reach them even though the truncation footnote
+  invited refining the query (issue #1781).
+- While the snapshot is truncated, a non-empty query is now also sent to
+  `fs/search` after a 150 ms typing pause. Main ranks it with the renderer's
+  scorer over the listing it already built for the index (`git ls-files`), or
+  over a deeper ignore-set walk (at most 200,000 entries or two seconds) when
+  the index came from the walk, and returns the best 50 rows. The menu merges
+  them with its local matches; an answer for an earlier query is dropped.
+- A complete index never searches, so small projects behave as before. The
+  footnote stays while the list may be incomplete. Remote sessions keep their
+  snapshot because the remote file protocol has no search operation. Bundling
+  a native lister (ripgrep, bfs) was not needed: git already lists the whole
+  repository, and searching 60,000 paths takes a few milliseconds.
+- Covered by `packages/host-runtime/src/fs-index.test.ts` and
+  `apps/desktop/test/composer-deep-file-search-user-path.test.mjs`. See
+  `03-runtime/01-ipc-protocol.md` §13c, `04-ux/08-component-spec.md` §11.8,
+  and E2E-COMPOSER-deep-file-mentions.
+
+## 2026-10-22 — User theme colour and per-project colour (D670)
+
+- D670 relaxes the "neutral gray accent only" principle recorded on 2026-07-28
   and in `04-ux/07-ui-design-system.md`: the user picks a global theme colour
   (seven presets or a custom `#rrggbb`, default Blue) and may give each project a
   preset colour.

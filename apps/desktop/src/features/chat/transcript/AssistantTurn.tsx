@@ -25,7 +25,7 @@ import {
 } from "../../../lib/turn-process";
 import { sessionAllows } from "../../../lib/remote-session-safety";
 import { resolveShowThinking } from "../../../lib/thinking-visibility";
-import { resolveKeepCommandsExpanded } from "../../../lib/command-folding";
+import { resolveTranscriptDisplayMode } from "../../../lib/transcript-display-mode";
 import { cachedVisibleProcessSteps } from "../../../lib/transcript-activity-summary";
 import { useSlotSessionId } from "../../../plugins/renderer-slots/use-slots";
 import { useAppStore } from "../../../stores/app-store";
@@ -356,10 +356,10 @@ export const AssistantTurn = memo(function AssistantTurn({
   // by messages and compactions only, so a grouping decision made there would
   // stay stale until new messages arrived. Segmenting here makes the preference
   // apply on the next paint.
-  const keepCommandsExpanded = useAppStore((state) => resolveKeepCommandsExpanded(state.settings));
+  const displayMode = useAppStore((state) => resolveTranscriptDisplayMode(state.settings));
   const segments = useMemo(
-    () => segmentTurnProcess(process, keepCommandsExpanded),
-    [process, keepCommandsExpanded],
+    () => segmentTurnProcess(process, displayMode),
+    [process, displayMode],
   );
   // The one disclosure exists if it reveals anything at all. This uses the same
   // helper the activity rows use: progress text counts, completed thinking is

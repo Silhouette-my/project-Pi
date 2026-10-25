@@ -91,6 +91,43 @@ test("command folding defaults on and rejects non-boolean writes before IPC", ()
   }
 });
 
+test("transcript display mode defaults to fully folded and validates its three values", () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { piDesktop: { platform: "win32" } };
+  try {
+    const base = { defaultMode: "agent", theme: "light", enterToSend: true };
+    assert.equal(renderer.normalizeSettings(base).transcriptDisplayMode, "fully-folded");
+    assert.equal(main.normalizeSettings(base).transcriptDisplayMode, "fully-folded");
+    for (const mode of ["flat", "command-first", "fully-folded"]) {
+      assert.equal(
+        renderer.normalizeSettings({ ...base, transcriptDisplayMode: mode }).transcriptDisplayMode,
+        mode,
+      );
+      assert.equal(
+        main.normalizeSettings({ ...base, transcriptDisplayMode: mode }).transcriptDisplayMode,
+        mode,
+      );
+      assert.equal(
+        renderer.validateSettingsWrite({ ...base, transcriptDisplayMode: mode }).transcriptDisplayMode,
+        mode,
+      );
+    }
+    for (const value of ["yes", 0, null, undefined, {}]) {
+      assert.throws(
+        () => renderer.validateSettingsWrite({ transcriptDisplayMode: value }),
+        /transcriptDisplayMode is invalid/,
+      );
+      assert.throws(
+        () => main.validateSettingsWrite({ transcriptDisplayMode: value }),
+        /transcriptDisplayMode is invalid/,
+      );
+    }
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
+
 test("settings write round-trips command folding through the preload boundary", async () => {
   const previousWindow = globalThis.window;
   const calls = [];
