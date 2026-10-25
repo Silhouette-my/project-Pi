@@ -257,11 +257,20 @@ try {
   await until(async () => (await snapshot()).navigation.find(item => item.sessionId === chat.sessionId)?.favorite === true, "favourite persisted");
   await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
   // A conversation inside the project (project scope) takes the same toggle in the same menu position.
+  const projectChatOrder = () => page.evaluate(`[...document.querySelectorAll('[data-sidebar-project-group] [data-workflow-tree="project"] [data-workflow-tree-node^="session:"]')].map(el=>el.dataset.workflowTreeNode)`);
+  const chatsBefore = await projectChatOrder();
+  const rowBefore = (await snapshot()).navigation.find(item => item.sessionId === setup.sessionId);
+  const visibleIndex = chatsBefore.indexOf(`session:${setup.sessionId}`);
+  assert.ok(visibleIndex >= 0, "project chat visible before starring");
   assert.ok(await clickSelector(`[data-sidebar-project-group] [data-workflow-tree-node="session:${setup.sessionId}"] [data-action="session-menu"]`));
   await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu')"), "project chat menu");
   assert.deepEqual((await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action], .sidebar-row-menu [data-submenu-trigger]')].map(el=>el.dataset.action||el.dataset.submenuTrigger)")).filter(id => wanted.includes(id)).slice(0,4), ["rename-session","toggle-session-pin","toggle-session-favorite","move-session-to-folder"]);
   await clickMenuAction("toggle-session-favorite");
   await until(async () => (await snapshot()).navigation.find(item => item.sessionId === setup.sessionId)?.favorite === true, "project chat favourite persisted");
+  // Starring must not move the chat: its record keeps the order it showed (or the stored one) and the list is unchanged.
+  const rowAfter = (await snapshot()).navigation.find(item => item.sessionId === setup.sessionId);
+  assert.equal(rowAfter.order, rowBefore?.order ?? visibleIndex, "starring keeps the chat's order");
+  assert.deepEqual(await projectChatOrder(), chatsBefore, "starring does not reorder the project's chats");
   await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
   await capture("sidebar-tree-light.png");
   assert.ok(await clickSelector('.sidebar-header [data-nav="favorites"]'));

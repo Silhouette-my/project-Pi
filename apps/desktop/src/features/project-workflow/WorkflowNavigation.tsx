@@ -8,6 +8,7 @@ import { useProjectWorkflow } from "./useProjectWorkflow";
 import { NavigationTree } from "./NavigationTree";
 import { folderInContext } from "./navigation-tree-model";
 import { projectSessionChildren } from "./navigation-session-children";
+import { rememberVisibleOrders } from "./navigation-visible-order";
 import "./navigation-styles.css";
 
 /** Resolve durable identity only; Sidebar remains the owner of visible project ordering/filtering. */
@@ -108,6 +109,17 @@ export function WorkflowProjectConversations({
       setCreating(false);
     }
   }
+  const treeEntries = roots.map((session, index) => ({
+    kind: "session" as const,
+    id: session.id,
+    label: session.title,
+    parentId: folderIds.has(nav.get(session.id)?.folderId ?? "")
+      ? nav.get(session.id)?.folderId
+      : undefined,
+    order: nav.get(session.id)?.order ?? index,
+    rank: sessionPinned(session, sessionMeta[session.id] ?? {}) ? -1 : 0,
+  }));
+  rememberVisibleOrders(treeEntries);
   return (
     <div className="workflow-navigation-projects">
       <NavigationTree
@@ -115,16 +127,7 @@ export function WorkflowProjectConversations({
         label={t("workflowNav.chats")}
         newChatDisabled={creating}
         onNewChat={(where) => void newChat(where)}
-        entries={roots.map((session, index) => ({
-          kind: "session",
-          id: session.id,
-          label: session.title,
-          parentId: folderIds.has(nav.get(session.id)?.folderId ?? "")
-            ? nav.get(session.id)?.folderId
-            : undefined,
-          order: nav.get(session.id)?.order ?? index,
-          rank: sessionPinned(session, sessionMeta[session.id] ?? {}) ? -1 : 0,
-        }))}
+        entries={treeEntries}
         renderEntry={(entry) =>
           renderSessions(roots.filter((session) => session.id === entry.id), childrenOf)
         }

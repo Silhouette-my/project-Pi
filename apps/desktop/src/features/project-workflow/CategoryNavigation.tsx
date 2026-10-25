@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { SessionSummary, WorkflowNavigation as NavigationRecord } from "@pi-desktop/shared";
 import { useAppStore } from "../../stores/app-store";
+import { navigationRecordFor, rememberVisibleOrders } from "./navigation-visible-order";
 import { FavoritesView } from "./FavoritesView";
 import { NavigationTree } from "./NavigationTree";
 import { categoryLeaves, sidebarCategories, standaloneSessions } from "./navigation-category-model";
@@ -56,9 +57,9 @@ export function CategoryNavigation({
   if (!snapshot) return null;
   const standalone = standaloneSessions(snapshot, sessions);
   const nav = new Map(snapshot.navigation.map((item) => [item.sessionId, item]));
-  const record = (sessionId: string): NavigationRecord =>
-    nav.get(sessionId) ?? { sessionId, order: 0, favorite: false };
+  const record = (sessionId: string): NavigationRecord => navigationRecordFor(snapshot, sessionId);
   const leaves = categoryLeaves(snapshot, standalone, projects, pinnedSessionIds);
+  rememberVisibleOrders(leaves);
 
   async function newChat(where: { folderId?: string; categoryId?: string }) {
     setCreating(true);

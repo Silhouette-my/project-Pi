@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { ProjectGroupRecord, SessionSummary } from "@pi-desktop/shared";
 import { IconArrowUpDown, IconStar } from "../../components/icons";
 import { sidebarMenuAction, type SidebarMenuActionItem } from "../../lib/sidebar-menu";
+import { navigationRecordFor } from "./navigation-visible-order";
 import { openFolderDialog } from "./folder-dialog-store";
 import { workflowContextProjectId } from "./navigation-model";
 import { sessionTreeContext } from "./navigation-tree-model";
@@ -30,11 +31,7 @@ export function useWorkflowSessionMenu(groups: ProjectGroupRecord[]) {
       const context = contextOf(session);
       if (!snapshot || !context) return [];
       // Any conversation can be a favourite: the flag sits on its navigation record.
-      const record = snapshot.navigation.find((item) => item.sessionId === session.id) ?? {
-        sessionId: session.id,
-        order: 0,
-        favorite: false,
-      };
+      const record = navigationRecordFor(snapshot, session.id);
       const favorite = [
         sidebarMenuAction({
           id: "toggle-session-favorite",

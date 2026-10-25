@@ -92,3 +92,21 @@ test("the list view choice persists and falls back to the tree", () => {
     view.resetSidebarListView();
   }
 });
+
+test("starring a conversation without a navigation record keeps the position it shows", async () => {
+  const { navigationRecordFor, rememberVisibleOrders, visibleOrderOf } = await import(
+    "../src/features/project-workflow/navigation-visible-order.ts"
+  );
+  const data = snapshot([{ sessionId: "placed", order: 7, favorite: false, folderId: "f" }]);
+  rememberVisibleOrders([
+    { kind: "session", id: "unplaced", order: 3 },
+    { kind: "session", id: "placed", order: 7 },
+    { kind: "folder", id: "f", order: 0 },
+  ]);
+  assert.equal(visibleOrderOf("unplaced"), 3);
+  assert.equal(visibleOrderOf("f"), undefined, "only conversations are remembered");
+  assert.deepEqual(navigationRecordFor(data, "unplaced"), { sessionId: "unplaced", order: 3, favorite: false });
+  assert.deepEqual(navigationRecordFor(data, "placed"), data.navigation[0], "a stored record is used as is");
+  assert.equal(navigationRecordFor(data, "never-shown").order, 0);
+  assert.equal(navigationRecordFor(data, "x", 5).order, 5);
+});
