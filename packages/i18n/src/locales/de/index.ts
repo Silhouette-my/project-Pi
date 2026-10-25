@@ -2087,7 +2087,7 @@ sklm: {
     title: "Seitenchat",
     sessionTitle: "Seitenchat: {{title}}",
     placeholder: "Stellen Sie eine Rückfrage zu dieser Antwort",
-    empty: "Fragen Sie hier, ohne die Hauptkonversation zu ändern.",
+    empty: "Keine Nachrichten",
     returnMode: {
       none: "Keine",
       summary: "Zusammenfassung",

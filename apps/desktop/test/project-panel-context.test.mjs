@@ -158,3 +158,19 @@ test("the project Agent tab is labelled Project Agent and its composer carries n
   const tab = readFileSync(new URL("../src/features/project-panel/ProjectAgentTab.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(tab, /scopeLabel=/);
 });
+
+test("empty right-panel conversations show one short line", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (name, file) =>
+    readFileSync(new URL(`../../../packages/i18n/src/locales/${name}/${file}.ts`, import.meta.url), "utf8");
+  for (const locale of ["en", "de", "es", "fr", "ko", "pt-BR", "tr", "zh-CN", "zh-TW"]) {
+    const workflow = read(locale, "workflow");
+    const [, agent] = workflow.match(/agentDockEmpty: "([^"]*)"/);
+    const [, side] = workflow.match(/sideEmpty: "([^"]*)"/);
+    assert.equal(agent, side, `${locale}: project Agent and side conversations share the empty line`);
+    assert.ok(agent.length <= 20, `${locale}: ${agent}`);
+    const index = read(locale, "index");
+    const block = index.slice(index.indexOf("\n  sideChat: {"), index.indexOf("\n  sideChat: {") + 800);
+    assert.ok(block.includes(`\n    empty: "${agent}"`), `${locale}: side chat matches`);
+  }
+});

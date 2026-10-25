@@ -2082,7 +2082,7 @@ sklm: {
     title: "侧聊",
     sessionTitle: "侧聊：{{title}}",
     placeholder: "就这条回复继续追问",
-    empty: "在这里追问，主对话不受影响。",
+    empty: "暂无消息",
     returnMode: {
       none: "不回传",
       summary: "摘要",

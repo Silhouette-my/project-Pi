@@ -2103,7 +2103,7 @@ sklm: {
     title: "사이드 채팅",
     sessionTitle: "사이드 채팅: {{title}}",
     placeholder: "이 답변에 대해 이어서 질문하세요",
-    empty: "여기에서 질문하면 기본 대화가 그대로 유지됩니다.",
+    empty: "메시지 없음",
     returnMode: {
       none: "안 보냄",
       summary: "요약",

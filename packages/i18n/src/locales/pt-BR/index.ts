@@ -2053,7 +2053,7 @@ export const ptBR = {
     title: "Chat lateral",
     sessionTitle: "Chat lateral: {{title}}",
     placeholder: "Faça uma pergunta de acompanhamento sobre esta resposta",
-    empty: "Pergunte aqui para manter a conversa principal inalterada.",
+    empty: "Sem mensagens",
     returnMode: {
       none: "Nenhum",
       summary: "Resumo",

@@ -2097,7 +2097,7 @@ sklm: {
     title: "Yan sohbet",
     sessionTitle: "Yan sohbet: {{title}}",
     placeholder: "Bu yanıtla ilgili ek soru sorun",
-    empty: "Buradan sorun, ana sohbet değişmeden kalır.",
+    empty: "Mesaj yok",
     returnMode: {
       none: "Yok",
       summary: "Özet",

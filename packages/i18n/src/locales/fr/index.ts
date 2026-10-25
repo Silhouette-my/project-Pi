@@ -2087,7 +2087,7 @@ sklm: {
     title: "Chat latéral",
     sessionTitle: "Chat latéral : {{title}}",
     placeholder: "Posez une question complémentaire sur cette réponse",
-    empty: "Posez votre question ici, sans modifier la conversation principale.",
+    empty: "Aucun message",
     returnMode: {
       none: "Aucun",
       summary: "Résumé",

@@ -2108,7 +2108,7 @@ sklm: {
     title: "Side chat",
     sessionTitle: "Side chat: {{title}}",
     placeholder: "Ask a follow-up about this answer",
-    empty: "Ask here to keep the main conversation unchanged.",
+    empty: "No messages",
     returnMode: {
       none: "None",
       summary: "Summary",

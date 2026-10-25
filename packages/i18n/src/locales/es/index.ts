@@ -2087,7 +2087,7 @@ sklm: {
     title: "Chat lateral",
     sessionTitle: "Chat lateral: {{title}}",
     placeholder: "Haga una pregunta de seguimiento sobre esta respuesta",
-    empty: "Pregunte aquí para no cambiar la conversación principal.",
+    empty: "Sin mensajes",
     returnMode: {
       none: "Ninguno",
       summary: "Resumen",
