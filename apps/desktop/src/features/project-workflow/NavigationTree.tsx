@@ -442,7 +442,11 @@ export function NavigationTree({
           </div>
         </div>
         {open ? (
-          <div className="sidebar-category-body">
+          <div
+            className={`sidebar-category-body${drop?.key === groupId ? " is-drop-inside" : ""}`}
+            onDragOver={(event) => over(event, undefined, rootKey, groupId)}
+            onDrop={(event) => dropOn(event, undefined, rootKey, groupId)}
+          >
             {top.map((entry) => row(entry, false))}
             {isChats ? (
               <>
