@@ -151,7 +151,7 @@ export const workflowCatalog = {
     dialogDescription: "Klasörler yalnızca konuşmaları düzenler; bir konuşmanın çalışma alanını veya izinlerini asla değiştirmez.", location: "Konum", position: "Sıra",
     positionEnd: "Sonda", positionStart: "Başta", create: "Oluştur",
     removeFolderConfirm: "Klasör kaldırılsın mı?",
-    newCategory: "Yeni kategori", renameCategoryTitle: "Kategoriyi yeniden adlandır", categoryName: "Kategori adı", renameCategory: "Yeniden adlandır", deleteCategory: "Kategoriyi sil", categoryActions: "Kategori eylemleri", noFavorites: "Favori yok", emptyCategory: "Burada henüz bir şey yok", noChats: "Sohbet yok", collapse: "Daralt", expand: "Genişlet", toggleBranches: "Dalları genişlet veya daralt", projectInstructions: "Proje yönergeleri", projectMemory: "Bellek", renameProject: "Yeniden adlandır",
+    newCategory: "Yeni kategori", renameCategoryTitle: "Kategoriyi yeniden adlandır", categoryName: "Kategori adı", renameCategory: "Yeniden adlandır", deleteCategory: "Kategoriyi sil", moveCategoryUp: "Yukarı taşı", moveCategoryDown: "Aşağı taşı", categoryActions: "Kategori eylemleri", noFavorites: "Favori yok", emptyCategory: "Burada henüz bir şey yok", noChats: "Sohbet yok", collapse: "Daralt", expand: "Genişlet", toggleBranches: "Dalları genişlet veya daralt", projectInstructions: "Proje yönergeleri", projectMemory: "Bellek", renameProject: "Yeniden adlandır",
   },
   workflowContext: {
     title: "Bağlam", resources: "Asıl başvurular", addResource: "Başvuru ekle", noResources: "Başvuru yok", projectScope: "Tüm proje", sourceValue: "{{kind}} · {{ref}} · sürüm {{revision}}",

@@ -148,7 +148,7 @@ export const workflowCatalog = {
     dialogDescription: "文件夹仅用于整理对话，不会更改对话的工作区或权限。", location: "位置", position: "排列位置",
     positionEnd: "放在末尾", positionStart: "放在开头", create: "创建",
     removeFolderConfirm: "移除此文件夹？",
-    newCategory: "新建分类", renameCategoryTitle: "重命名分类", categoryName: "分类名称", renameCategory: "重命名", deleteCategory: "删除分类", categoryActions: "分类操作", noFavorites: "暂无收藏", emptyCategory: "暂无内容", noChats: "暂无对话", collapse: "收起", expand: "展开", toggleBranches: "展开或收起分支", projectInstructions: "项目说明", projectMemory: "记忆", renameProject: "重命名",
+    newCategory: "新建分类", renameCategoryTitle: "重命名分类", categoryName: "分类名称", renameCategory: "重命名", deleteCategory: "删除分类", moveCategoryUp: "上移", moveCategoryDown: "下移", categoryActions: "分类操作", noFavorites: "暂无收藏", emptyCategory: "暂无内容", noChats: "暂无对话", collapse: "收起", expand: "展开", toggleBranches: "展开或收起分支", projectInstructions: "项目说明", projectMemory: "记忆", renameProject: "重命名",
   },
   workflowContext: {
     title: "上下文", resources: "规范参考资料", addResource: "添加参考", noResources: "暂无参考资料", projectScope: "整个项目", sourceValue: "{{kind}} · {{ref}} · 修订 {{revision}}",

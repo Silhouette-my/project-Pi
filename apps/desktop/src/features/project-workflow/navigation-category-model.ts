@@ -8,7 +8,11 @@ import { categoryRoot, folderInContext, type TreeEntry } from "./navigation-tree
 
 export type SidebarCategory = { id: string; name: string; builtin: boolean };
 
-/** Built-in 对话 and 项目 first, then the user's categories in their order. */
+/**
+ * Default order: built-in 对话 and 项目, then the user's categories by `order`.
+ * `snapshot.categoryOrder` (set by dragging, built-ins included) wins; ids it
+ * does not list keep their default position after the listed ones.
+ */
 export function sidebarCategories(
   snapshot: ProjectWorkflowSnapshot,
   names: { chats: string; projects: string },
@@ -16,11 +20,32 @@ export function sidebarCategories(
   const custom = [...(snapshot.categories ?? [])]
     .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
     .map((category) => ({ id: category.id, name: category.name, builtin: false }));
-  return [
+  const defaults: SidebarCategory[] = [
     { id: WORKFLOW_CHATS_CATEGORY, name: names.chats, builtin: true },
     { id: WORKFLOW_PROJECTS_CATEGORY, name: names.projects, builtin: true },
     ...custom,
   ];
+  const rank = new Map((snapshot.categoryOrder ?? []).map((id, index) => [id, index]));
+  if (rank.size === 0) return defaults;
+  return defaults
+    .map((category, index) => ({ category, index }))
+    .sort((a, b) => (rank.get(a.category.id) ?? Infinity) - (rank.get(b.category.id) ?? Infinity) || a.index - b.index)
+    .map((item) => item.category);
+}
+
+/** Ids after moving `id` before/after `targetId`; null when nothing changes. */
+export function reorderedCategoryIds(ids: string[], id: string, targetId: string, after: boolean) {
+  if (id === targetId || !ids.includes(id) || !ids.includes(targetId)) return null;
+  const rest = ids.filter((item) => item !== id);
+  rest.splice(rest.indexOf(targetId) + (after ? 1 : 0), 0, id);
+  return rest.every((item, index) => item === ids[index]) ? null : rest;
+}
+
+/** Ids after moving `id` one step up (-1) or down (1); null at the edge. */
+export function steppedCategoryIds(ids: string[], id: string, step: -1 | 1) {
+  const index = ids.indexOf(id);
+  const target = ids[index + step];
+  return index < 0 || target === undefined ? null : reorderedCategoryIds(ids, id, target, step > 0);
 }
 
 /** An id that no longer names a category (removed elsewhere) falls back to the built-in. */

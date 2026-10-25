@@ -258,6 +258,8 @@ export const workflowCatalog = {
     categoryName: "Category name",
     renameCategory: "Rename",
     deleteCategory: "Delete category",
+    moveCategoryUp: "Move up",
+    moveCategoryDown: "Move down",
     categoryActions: "Category actions",
     emptyCategory: "Nothing here yet",
     noFavorites: "Nothing favorited",
