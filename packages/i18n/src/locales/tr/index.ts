@@ -2985,7 +2985,7 @@ importConfirm: "İçe aktarılan uzantılar ajan sürecinde, ajanın kendi araç
     sideChatEmpty: "Konuşma boş",
   },
   projectPanel: {
-    agentTab: "Ajan",
+    agentTab: "Proje Agent",
     sideTab: "Yan konuşma",
     emptyHint: "Burada henüz açık bir şey yok.",
     openAgent: "Proje ajanını aç",

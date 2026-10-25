@@ -147,3 +147,14 @@ test("a navigation reveal is taken only by the context it was requested for", ()
   assert.equal(takeWorkPanelNavigationReveal("project:p1"), true);
   assert.equal(takeWorkPanelNavigationReveal("project:p1"), false, "taken once");
 });
+
+test("the project Agent tab is labelled Project Agent and its composer carries no scope chip", async () => {
+  const { readFileSync } = await import("node:fs");
+  const locale = (name, file) =>
+    readFileSync(new URL(`../../../packages/i18n/src/locales/${name}/${file}.ts`, import.meta.url), "utf8");
+  assert.match(locale("zh-CN", "index"), /agentTab: "项目 Agent"/);
+  assert.match(locale("en", "index"), /agentTab: "Project Agent"/);
+  assert.match(locale("zh-CN", "workflow"), /agentPlaceholder: "与项目 Agent 讨论"/);
+  const tab = readFileSync(new URL("../src/features/project-panel/ProjectAgentTab.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(tab, /scopeLabel=/);
+});

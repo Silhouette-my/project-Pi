@@ -104,7 +104,7 @@ export const workflowCatalog = {
     projectMenu: "Menu du projet",
     homeTitle: "Poursuivez votre projet ici",
     homeSubtitle: "Définissez la direction avec l’agent du projet ou reprenez un travail.",
-    agentPlaceholder: "Discutez des objectifs, idées ou prochaines étapes avec l’agent du projet…",
+    agentPlaceholder: "Discuter avec l’agent du projet",
     discussion: "Discussion",
     configureAgent: "Ouvrir la conversation",
     sendAgent: "Envoyer à l’agent du projet",
@@ -151,7 +151,7 @@ export const workflowCatalog = {
     dialogDescription: "Les dossiers servent uniquement à organiser les conversations ; ils ne modifient jamais l’espace de travail ni les autorisations d’une conversation.", location: "Emplacement", position: "Position",
     positionEnd: "À la fin", positionStart: "Au début", create: "Créer",
     removeFolderConfirm: "Retirer le dossier ?",
-    newCategory: "Nouvelle catégorie", renameCategoryTitle: "Renommer la catégorie", categoryName: "Nom de la catégorie", renameCategory: "Renommer", deleteCategory: "Supprimer la catégorie", categoryActions: "Actions de la catégorie", emptyCategory: "Rien pour l'instant", noChats: "Aucune discussion", collapse: "Réduire", expand: "Développer", toggleBranches: "Développer ou réduire les branches", projectInstructions: "Instructions du projet", projectMemory: "Mémoire", renameProject: "Renommer",
+    newCategory: "Nouvelle catégorie", renameCategoryTitle: "Renommer la catégorie", categoryName: "Nom de la catégorie", renameCategory: "Renommer", deleteCategory: "Supprimer la catégorie", categoryActions: "Actions de la catégorie", noFavorites: "Aucun favori", emptyCategory: "Rien pour l'instant", noChats: "Aucune discussion", collapse: "Réduire", expand: "Développer", toggleBranches: "Développer ou réduire les branches", projectInstructions: "Instructions du projet", projectMemory: "Mémoire", renameProject: "Renommer",
   },
   workflowContext: {
     title: "Contexte", resources: "Références de référence", addResource: "Ajouter une référence", noResources: "Aucune référence", projectScope: "Tout le projet", sourceValue: "{{kind}} · {{ref}} · révision {{revision}}",

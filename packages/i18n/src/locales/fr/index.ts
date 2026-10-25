@@ -2950,7 +2950,7 @@ sklm: {
     sideChatEmpty: "La conversation est vide",
   },
   projectPanel: {
-    agentTab: "Agent",
+    agentTab: "Agent du projet",
     sideTab: "Conversation annexe",
     emptyHint: "Rien n'est encore ouvert ici.",
     openAgent: "Ouvrir l'agent du projet",

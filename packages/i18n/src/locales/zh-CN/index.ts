@@ -3026,7 +3026,7 @@ sklm: {
     sideChatEmpty: "对话为空",
   },
   projectPanel: {
-    agentTab: "Agent",
+    agentTab: "项目 Agent",
     sideTab: "旁路对话",
     emptyHint: "这里还没有打开任何内容。",
     openAgent: "打开项目 Agent",

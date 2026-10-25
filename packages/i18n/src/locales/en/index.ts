@@ -3094,7 +3094,7 @@ importConfirm: "Imported extensions run inside the agent process with the same a
     sideChatEmpty: "Conversation is empty",
   },
   projectPanel: {
-    agentTab: "Agent",
+    agentTab: "Project Agent",
     sideTab: "Side conversation",
     emptyHint: "Nothing is open here yet.",
     openAgent: "Open project Agent",

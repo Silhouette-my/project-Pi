@@ -104,7 +104,7 @@ export const workflowCatalog = {
     projectMenu: "Menú del proyecto",
     homeTitle: "Continúa tu proyecto aquí",
     homeSubtitle: "Define el rumbo con el agente del proyecto o retoma un trabajo.",
-    agentPlaceholder: "Habla de objetivos, ideas o próximos pasos con el agente del proyecto…",
+    agentPlaceholder: "Habla con el agente del proyecto",
     discussion: "Conversar",
     configureAgent: "Abrir conversación",
     sendAgent: "Enviar al agente del proyecto",
@@ -151,7 +151,7 @@ export const workflowCatalog = {
     dialogDescription: "Las carpetas solo organizan conversaciones; nunca cambian el espacio de trabajo ni los permisos de una conversación.", location: "Ubicación", position: "Posición",
     positionEnd: "Al final", positionStart: "Al principio", create: "Crear",
     removeFolderConfirm: "¿Quitar carpeta?",
-    newCategory: "Nueva categoría", renameCategoryTitle: "Cambiar nombre de la categoría", categoryName: "Nombre de la categoría", renameCategory: "Cambiar nombre", deleteCategory: "Eliminar categoría", categoryActions: "Acciones de la categoría", emptyCategory: "Aún no hay nada", noChats: "Sin chats", collapse: "Contraer", expand: "Expandir", toggleBranches: "Expandir o contraer ramas", projectInstructions: "Instrucciones del proyecto", projectMemory: "Memoria", renameProject: "Cambiar nombre",
+    newCategory: "Nueva categoría", renameCategoryTitle: "Cambiar nombre de la categoría", categoryName: "Nombre de la categoría", renameCategory: "Cambiar nombre", deleteCategory: "Eliminar categoría", categoryActions: "Acciones de la categoría", noFavorites: "Sin favoritos", emptyCategory: "Aún no hay nada", noChats: "Sin chats", collapse: "Contraer", expand: "Expandir", toggleBranches: "Expandir o contraer ramas", projectInstructions: "Instrucciones del proyecto", projectMemory: "Memoria", renameProject: "Cambiar nombre",
   },
   workflowContext: {
     title: "Contexto", resources: "Referencias canónicas", addResource: "Añadir referencia", noResources: "Sin referencias", projectScope: "Todo el proyecto", sourceValue: "{{kind}} · {{ref}} · revisión {{revision}}",

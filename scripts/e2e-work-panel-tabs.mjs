@@ -139,6 +139,7 @@ try {
   await until(() => page.evaluate(`(() => { const row=document.querySelector('[data-sidebar-session-row="${setup.sessionId}"]'); if(!row) return false; (row.querySelector('button')||row).click(); return true })()`), "seeded session row");
   // A chat in a workspace is a project chat: the Agent tab opens first and reveals the panel.
   await until(() => page.evaluate("!!document.querySelector('.work-panel [role=tab]')"), "the panel shows its first tab");
+  assert.match(await page.evaluate("document.querySelector('.work-panel [role=tab]').textContent"), /Project Agent|项目 Agent/, "the Agent tab is labelled Project Agent");
   await page.evaluate("document.documentElement.dataset.theme='light'");
   // Keep the panel docked-looking and open for the whole journey: pin it.
   await page.evaluate("document.querySelector('.work-panel [data-nav=pin-work-panel]')?.click()");

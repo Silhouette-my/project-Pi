@@ -120,7 +120,6 @@ export function ProjectAgentTab({ projectId }: { projectId: string }) {
         placeholder={t("workflow.agentPlaceholder")}
         inputLabel={t("workflow.intentText")}
         sendLabel={t("workflow.sendAgent")}
-        scopeLabel={group?.name}
         // `agent.open` needs the loaded snapshot's revision; until then a send could only fail.
         disabledReason={snapshot ? undefined : t("workflow.loading")}
         formProps={{ "data-workflow": "project-intent" }}

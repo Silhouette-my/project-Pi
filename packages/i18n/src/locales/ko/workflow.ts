@@ -104,7 +104,7 @@ export const workflowCatalog = {
     projectMenu: "프로젝트 메뉴",
     homeTitle: "여기서 프로젝트를 이어가세요",
     homeSubtitle: "프로젝트 Agent와 방향을 논의하거나 진행 중인 작업을 이어가세요.",
-    agentPlaceholder: "프로젝트 Agent와 목표, 아이디어, 다음 단계를 논의하세요…",
+    agentPlaceholder: "프로젝트 Agent와 논의",
     discussion: "논의",
     configureAgent: "대화 열기",
     sendAgent: "프로젝트 Agent에게 보내기",
@@ -151,7 +151,7 @@ export const workflowCatalog = {
     dialogDescription: "폴더는 대화를 정리하는 용도로만 쓰이며 대화의 작업 공간이나 권한은 바꾸지 않습니다.", location: "위치", position: "순서",
     positionEnd: "맨 뒤", positionStart: "맨 앞", create: "만들기",
     removeFolderConfirm: "폴더를 제거할까요?",
-    newCategory: "새 카테고리", renameCategoryTitle: "카테고리 이름 바꾸기", categoryName: "카테고리 이름", renameCategory: "이름 바꾸기", deleteCategory: "카테고리 삭제", categoryActions: "카테고리 작업", emptyCategory: "아직 비어 있습니다", noChats: "대화 없음", collapse: "접기", expand: "펼치기", toggleBranches: "분기 펼치기 또는 접기", projectInstructions: "프로젝트 지침", projectMemory: "메모리", renameProject: "이름 바꾸기",
+    newCategory: "새 카테고리", renameCategoryTitle: "카테고리 이름 바꾸기", categoryName: "카테고리 이름", renameCategory: "이름 바꾸기", deleteCategory: "카테고리 삭제", categoryActions: "카테고리 작업", noFavorites: "즐겨찾기 없음", emptyCategory: "아직 비어 있습니다", noChats: "대화 없음", collapse: "접기", expand: "펼치기", toggleBranches: "분기 펼치기 또는 접기", projectInstructions: "프로젝트 지침", projectMemory: "메모리", renameProject: "이름 바꾸기",
   },
   workflowContext: {
     title: "컨텍스트", resources: "정식 참조", addResource: "참조 추가", noResources: "참조 없음", projectScope: "전체 프로젝트", sourceValue: "{{kind}} · {{ref}} · 리비전 {{revision}}",

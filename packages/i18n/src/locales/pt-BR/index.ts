@@ -2920,7 +2920,7 @@ export const ptBR = {
     sideChatEmpty: "A conversa está vazia",
   },
   projectPanel: {
-    agentTab: "Agente",
+    agentTab: "Agente do projeto",
     sideTab: "Conversa lateral",
     emptyHint: "Ainda não há nada aberto aqui.",
     openAgent: "Abrir o agente do projeto",

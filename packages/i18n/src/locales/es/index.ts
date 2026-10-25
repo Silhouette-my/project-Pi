@@ -2950,7 +2950,7 @@ sklm: {
     sideChatEmpty: "La conversación está vacía",
   },
   projectPanel: {
-    agentTab: "Agente",
+    agentTab: "Agente del proyecto",
     sideTab: "Conversación lateral",
     emptyHint: "Aquí todavía no hay nada abierto.",
     openAgent: "Abrir el agente del proyecto",

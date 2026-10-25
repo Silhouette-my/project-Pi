@@ -2991,7 +2991,7 @@ importConfirm: "가져온 확장은 에이전트 프로세스 안에서 에이�
     sideChatEmpty: "대화가 비어 있습니다",
   },
   projectPanel: {
-    agentTab: "에이전트",
+    agentTab: "프로젝트 Agent",
     sideTab: "보조 대화",
     emptyHint: "여기에는 아직 열린 항목이 없습니다.",
     openAgent: "프로젝트 에이전트 열기",
