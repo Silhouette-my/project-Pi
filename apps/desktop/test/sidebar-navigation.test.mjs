@@ -161,8 +161,8 @@ test("sidebar project and session lists stay coordinated with the global type sc
 test("project rows are a cube mark plus name; pinned projects rank first without a star", () => {
   assert.match(sidebarSource, /<IconCube size=\{15\} \/>/);
   assert.doesNotMatch(sidebarSource, /sidebar-project-pin/);
-  // The star belongs to the Favorites view toggle only, never to project rows.
-  assert.equal((sidebarSource.match(/<IconStar/g) ?? []).length, 1);
+  // The star marks the Favorites toggle and the menu entry; project rows carry none.
+  assert.equal((sidebarSource.match(/<IconStar/g) ?? []).length, 2);
   assert.doesNotMatch(sidebarSource, /project-color|ProjectColorDot|projectAccentStyle|setProjectColor/);
   assert.match(sidebarSource, /pinned: entry\.meta\.pinned/);
   assert.match(sidebarSource, /data-action="open-project-home"/);
@@ -301,7 +301,7 @@ test("project rows expose folder actions and full-path hover", () => {
   const menuIds = [
     "new-project-chat", "new-project-folder",
     "project-instructions", "project-memory",
-    "edit-project", "toggle-project-pin",
+    "edit-project", "toggle-project-favorite", "toggle-project-pin",
     "open-project-folder", "project-copy", "project-git",
     "toggle-project-archive", "project-danger",
   ].map((id) => projectMenu.indexOf(`id: "${id}"`));

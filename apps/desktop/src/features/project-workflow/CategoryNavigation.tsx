@@ -2,8 +2,9 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { SessionSummary, WorkflowNavigation as NavigationRecord } from "@pi-desktop/shared";
 import { useAppStore } from "../../stores/app-store";
+import { FavoritesView } from "./FavoritesView";
 import { NavigationTree } from "./NavigationTree";
-import { categoryLeaves, favoriteSessions, sidebarCategories, standaloneSessions } from "./navigation-category-model";
+import { categoryLeaves, sidebarCategories, standaloneSessions } from "./navigation-category-model";
 import { useSidebarListView } from "../../lib/sidebar-view-state";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import "./navigation-styles.css";
@@ -25,6 +26,8 @@ type Props = {
   renderSessions: (sessions: SessionSummary[]) => ReactNode;
   projects: CategoryProject[];
   onNewProject: () => void;
+  /** Owning project of a conversation, for the Favorites view's secondary text. */
+  projectNameOf?: (session: SessionSummary) => string | undefined;
 };
 
 /**
@@ -38,6 +41,7 @@ export function CategoryNavigation({
   renderSessions,
   projects,
   onNewProject,
+  projectNameOf,
 }: Props) {
   const workflow = useProjectWorkflow();
   const { t } = useTranslation();
@@ -91,29 +95,14 @@ export function CategoryNavigation({
     );
   }
   if (view === "favorites") {
-    const favorites = favoriteSessions(snapshot, sessions);
     return (
-      <section
-        className="workflow-navigation sidebar-favorites"
-        aria-label={t("workflowNav.favorites")}
-        data-sidebar-view="favorites"
-      >
-        <div className="sidebar-category-header sidebar-favorites-header">
-          <span className="sidebar-category-title">{t("workflowNav.favorites")}</span>
-        </div>
-        <div className="sidebar-category-body">
-          {favorites.map((session) => (
-            <div key={session.id} className="workflow-tree-node" data-workflow-tree-node={`session:${session.id}`}>
-              <div className="workflow-tree-row is-session">
-                <div className="workflow-tree-content">{renderChat(session)}</div>
-              </div>
-            </div>
-          ))}
-          {favorites.length === 0 ? (
-            <div className="workflow-tree-empty">{t("workflowNav.noFavorites")}</div>
-          ) : null}
-        </div>
-      </section>
+      <FavoritesView
+        snapshot={snapshot}
+        sessions={sessions}
+        projects={projects}
+        projectNameOf={projectNameOf ?? (() => undefined)}
+        renderChat={renderChat}
+      />
     );
   }
   return (

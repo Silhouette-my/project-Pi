@@ -3,7 +3,7 @@ import { register } from "node:module";
 import test from "node:test";
 register(new URL("./helpers/ts-import-hooks.mjs", import.meta.url));
 
-const { favoriteSessions } = await import("../src/features/project-workflow/navigation-category-model.ts");
+const { favoriteProjects, favoriteSessions } = await import("../src/features/project-workflow/navigation-category-model.ts");
 const view = await import("../src/lib/sidebar-view-state.ts");
 
 const session = (id, updatedAt, extra = {}) => ({ id, title: id, createdAt: "2026-10-01", updatedAt, projectPath: null, ...extra });
@@ -17,12 +17,13 @@ const snapshot = (navigation, extra = {}) => ({
   ...extra,
 });
 
-test("the Favorites view lists starred standalone conversations, newest activity first", () => {
+test("the Favorites view lists starred conversations from anywhere, newest activity first", () => {
   const sessions = [
     session("old", "2026-10-02"),
     session("new", "2026-10-05"),
     session("plain", "2026-10-09"),
-    session("project-chat", "2026-10-09", { projectPath: "/work" }),
+    session("project-chat", "2026-10-07", { projectPath: "/work" }),
+    session("side", "2026-10-09"),
     session("agent", "2026-10-09"),
   ];
   const nav = [
@@ -30,11 +31,34 @@ test("the Favorites view lists starred standalone conversations, newest activity
     { sessionId: "new", order: 1, favorite: true },
     { sessionId: "plain", order: 2, favorite: false },
     { sessionId: "project-chat", order: 0, favorite: true },
+    { sessionId: "side", order: 0, favorite: true },
     { sessionId: "agent", order: 0, favorite: true },
   ];
-  const data = snapshot(nav, { projectAgents: [{ projectId: "p", sessionId: "agent" }] });
-  assert.deepEqual(favoriteSessions(data, sessions).map((item) => item.id), ["new", "old"]);
+  const data = snapshot(nav, {
+    projectAgents: [{ projectId: "p", sessionId: "agent" }],
+    conversations: [{ sessionId: "side", projectId: "p", visibility: "side_only" }],
+  });
+  assert.deepEqual(favoriteSessions(data, sessions).map((item) => item.id), ["project-chat", "new", "old"]);
   assert.deepEqual(favoriteSessions(snapshot([]), sessions), []);
+});
+
+test("favourite projects are the starred, unarchived ones in tree order", () => {
+  const projects = [
+    { id: "a", order: 2 },
+    { id: "b", order: 0, archived: true },
+    { id: "c", order: 1 },
+    { id: "d", order: 3 },
+  ];
+  const data = snapshot([], {
+    projectNavigation: [
+      { projectId: "a", order: 2, favorite: true },
+      { projectId: "b", order: 0, favorite: true },
+      { projectId: "c", order: 1, favorite: true },
+      { projectId: "d", order: 3 },
+    ],
+  });
+  assert.deepEqual(favoriteProjects(data, projects).map((item) => item.id), ["c", "a"]);
+  assert.deepEqual(favoriteProjects(snapshot([]), projects), []);
 });
 
 test("an access after the last update moves a favourite up", () => {

@@ -139,8 +139,7 @@ try {
   assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-header-actions [data-nav]')].map(el=>el.dataset.nav)"), ["search","favorites","new-task","pin-sidebar","toggle-sidebar"]);
   // The search tooltip carries its shortcut like the other shortcut tooltips.
   const searchRect = await rectOf('.sidebar-header [data-nav="search"]');
-  await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: searchRect.left + searchRect.width / 2, y: searchRect.top + searchRect.height / 2 });
-  await until(() => page.evaluate("/(⌘|Ctrl\\+)K/.test(document.querySelector('.ui-tooltip')?.textContent ?? '')"), "search tooltip shows its shortcut");
+  await until(async () => { await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: searchRect.left + searchRect.width / 2 + (sequence % 2), y: searchRect.top + searchRect.height / 2 }); sequence += 1; return page.evaluate("/(⌘|Ctrl\\+)K/.test(document.querySelector('.ui-tooltip')?.textContent ?? '')"); }, "search tooltip shows its shortcut");
   await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: 400, y: 400 });
   assert.ok(await page.evaluate("getComputedStyle(document.querySelector('.sidebar-header')).borderBottomWidth==='1px'"), "divider below the sidebar top bar");
   assert.equal(await page.evaluate("document.querySelectorAll('.ct-lead [data-nav=new-task]').length>0 && document.querySelector('.conversation-topbar.ct-collapsed')!==null"), false, "no titlebar new-chat while the sidebar is docked");
@@ -185,9 +184,17 @@ try {
   assert.ok(await clickSelector('[data-sidebar-project-group] .project-more'));
   await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu')"), "project menu");
   assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu > [role=menuitem], .sidebar-row-menu [data-action]')].map(el=>el.dataset.action).slice(0,5)"), ["new-project-chat","new-project-folder","project-instructions","project-memory","edit-project"]);
-  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action], .sidebar-row-menu [data-submenu-trigger]')].map(el=>el.dataset.action||el.dataset.submenuTrigger)"), ["new-project-chat","new-project-folder","project-instructions","project-memory","edit-project","toggle-project-pin","open-project-folder","project-copy","project-git","toggle-project-archive","project-danger"]);
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action], .sidebar-row-menu [data-submenu-trigger]')].map(el=>el.dataset.action||el.dataset.submenuTrigger)"), ["new-project-chat","new-project-folder","project-instructions","project-memory","edit-project","toggle-project-favorite","toggle-project-pin","open-project-folder","project-copy","project-git","toggle-project-archive","project-danger"]);
   assert.equal(await page.evaluate("document.querySelectorAll('.sidebar-row-menu [role=separator]').length"), 5, "five dividers split the project menu into six groups");
   await captureBoth("project-menu");
+  // Star the project from its menu; the row it creates keeps the order the project showed.
+  const orderBefore = (await snapshot()).projectNavigation?.find(item => item.projectId === projectId)?.order;
+  await clickMenuAction("toggle-project-favorite");
+  await until(async () => (await snapshot()).projectNavigation?.find(item => item.projectId === projectId)?.favorite === true, "project favourite persisted");
+  if (orderBefore !== undefined) assert.equal((await snapshot()).projectNavigation.find(item => item.projectId === projectId).order, orderBefore, "starring keeps the project's order");
+  assert.ok(await clickSelector('[data-sidebar-project-group] .project-more'));
+  await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu [data-action=toggle-project-favorite]')"), "project menu again");
+  assert.match(await page.evaluate("document.querySelector('.sidebar-row-menu [data-action=toggle-project-favorite]').textContent"), /Remove from Favorites|取消收藏/);
   assert.equal(await page.evaluate("!!document.querySelector('.sidebar-row-menu [data-submenu-trigger=\"project-color\"]')"), false, "no project colour in the menu");
   await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
 
@@ -249,6 +256,13 @@ try {
   await clickMenuAction("toggle-session-favorite");
   await until(async () => (await snapshot()).navigation.find(item => item.sessionId === chat.sessionId)?.favorite === true, "favourite persisted");
   await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
+  // A conversation inside the project (project scope) takes the same toggle in the same menu position.
+  assert.ok(await clickSelector(`[data-sidebar-project-group] [data-workflow-tree-node="session:${setup.sessionId}"] [data-action="session-menu"]`));
+  await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu')"), "project chat menu");
+  assert.deepEqual((await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action], .sidebar-row-menu [data-submenu-trigger]')].map(el=>el.dataset.action||el.dataset.submenuTrigger)")).filter(id => wanted.includes(id)).slice(0,4), ["rename-session","toggle-session-pin","toggle-session-favorite","move-session-to-folder"]);
+  await clickMenuAction("toggle-session-favorite");
+  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === setup.sessionId)?.favorite === true, "project chat favourite persisted");
+  await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
   await capture("sidebar-tree-light.png");
   assert.ok(await clickSelector('.sidebar-header [data-nav="favorites"]'));
   await until(() => page.evaluate("!!document.querySelector('[data-sidebar-view=favorites]')"), "Favorites view");
@@ -257,7 +271,15 @@ try {
   assert.match(await page.evaluate("document.querySelector('[data-sidebar-view=favorites] .sidebar-favorites-header').textContent"), /Favorites|收藏/);
   assert.equal(await page.evaluate(`!!document.querySelector('[data-sidebar-view=favorites] [data-sidebar-session-row="${chat.sessionId}"], [data-sidebar-view=favorites] [data-workflow-tree-node="session:${chat.sessionId}"]')`), true, "favourite listed with its row");
   assert.ok(await page.evaluate(`!!document.querySelector('[data-sidebar-view=favorites] [data-workflow-tree-node="session:${chat.sessionId}"] [data-action="session-menu"]')`), "favourite rows keep their menus");
+  // Projects first (cube row, not expandable), then conversations from anywhere with their project as muted text.
+  assert.equal(await page.evaluate(`!!document.querySelector('[data-sidebar-view=favorites] [data-favorite-project="${projectId}"] .sidebar-project-cube')`), true, "favourite project listed with its cube");
+  assert.equal(await page.evaluate(`!!document.querySelector('[data-sidebar-view=favorites] [data-favorite-project="${projectId}"] [aria-expanded]')`), false, "favourite project rows are not expandable");
+  assert.equal(await page.evaluate(`document.querySelector('[data-sidebar-view=favorites] .workflow-tree-node').dataset.workflowTreeNode`), `project:${projectId}`, "projects are listed before conversations");
+  assert.equal(await page.evaluate(`document.querySelector('[data-sidebar-view=favorites] [data-workflow-tree-node="session:${setup.sessionId}"] .sidebar-favorite-origin')?.textContent`), "Project navigation", "project chats show their project");
+  assert.equal(await page.evaluate(`!!document.querySelector('[data-sidebar-view=favorites] [data-workflow-tree-node="session:${chat.sessionId}"] .sidebar-favorite-origin')`), false, "standalone chats have no origin line");
   await captureBoth("sidebar-favorites");
+  assert.ok(await clickSelector(`[data-sidebar-view=favorites] [data-favorite-project="${projectId}"] .project-toggle`));
+  await until(() => page.evaluate(`document.querySelector('[data-workflow=console]')!==null`), "the favourite project's name opens project home");
   // Esc inside the sidebar returns to the tree; the button toggles it again; the persisted choice survives a reload later.
   await page.evaluate("document.querySelector('.sidebar-header [data-nav=favorites]').focus()");
   await page.call("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
@@ -269,7 +291,6 @@ try {
   assert.ok(await clickSelector(`[data-sidebar-view=favorites] [data-workflow-tree-node="session:${chat.sessionId}"] [data-action="session-menu"]`));
   await until(() => clickMenuAction("toggle-session-favorite"), "unfavourite from the Favorites view");
   await until(async () => (await snapshot()).navigation.find(item => item.sessionId === chat.sessionId)?.favorite === false, "favourite cleared");
-  await until(() => page.evaluate("/Nothing favorited|暂无收藏/.test(document.querySelector('[data-sidebar-view=favorites]')?.textContent ?? '')"), "empty Favorites state");
   assert.ok(await clickSelector('.sidebar-header [data-nav="favorites"]'));
   await until(() => page.evaluate("!document.querySelector('[data-sidebar-view=favorites]') && !!document.querySelector('[data-sidebar-category=chats]')"), "button returns to the tree");
 
@@ -331,6 +352,9 @@ try {
   await captureBoth("project-tree");
 
   // Hidden sidebar: the titlebar shows the toggle and New chat (no search); the docked chrome has no extra new-chat icon.
+  // The favourite project's name opened project home earlier; the collapsed titlebar journey runs on a chat page.
+  assert.ok(await clickSelector('.sidebar-header [data-nav="new-task"]'));
+  await until(() => page.evaluate("!document.querySelector('[data-workflow=console]')"), "back on a chat page");
   assert.ok(await clickSelector('.sidebar-header [data-nav="toggle-sidebar"]'));
   await until(() => page.evaluate("!document.querySelector('.sidebar') && document.querySelector('.conversation-topbar.ct-collapsed')!==null"), "sidebar hidden");
   await sleep(400);
@@ -353,6 +377,21 @@ try {
   await stopApp();await startApp();
   const persisted=await snapshot();
   assert.equal(persisted.projectNavigation.find(item=>item.projectId===projectId).folderId,folderC.id);
+  // Favourites survive a restart: the Host kept both flags, and the view lists both after reload.
+  assert.equal(persisted.projectNavigation.find(item=>item.projectId===projectId).favorite,true,"project favourite survives restart");
+  assert.equal(persisted.navigation.find(item=>item.sessionId===setup.sessionId).favorite,true,"project chat favourite survives restart");
+  await page.evaluate("document.documentElement.dataset.theme='light'");
+  await until(() => page.evaluate("!!document.querySelector('.sidebar-header [data-nav=favorites]')"), "favourites button after restart");
+  assert.ok(await clickSelector('.sidebar-header [data-nav="favorites"]'));
+  await until(() => page.evaluate(`!!document.querySelector('[data-sidebar-view=favorites] [data-favorite-project="${projectId}"]') && !!document.querySelector('[data-sidebar-view=favorites] [data-workflow-tree-node="session:${setup.sessionId}"]')`), "favourites listed after restart");
+  // Clearing both leaves the one-line empty state.
+  assert.ok(await clickSelector(`[data-sidebar-view=favorites] [data-favorite-project="${projectId}"] [data-action="unfavorite-project"]`));
+  await until(async () => (await snapshot()).projectNavigation.find(item=>item.projectId===projectId).favorite===false, "project unfavourited from the view");
+  assert.ok(await clickSelector(`[data-sidebar-view=favorites] [data-workflow-tree-node="session:${setup.sessionId}"] [data-action="session-menu"]`));
+  await until(() => clickMenuAction("toggle-session-favorite"), "unfavourite project chat");
+  await until(() => page.evaluate("/Nothing favorited|暂无收藏/.test(document.querySelector('[data-sidebar-view=favorites]')?.textContent ?? '')"), "empty Favorites state");
+  await capture("sidebar-favorites-empty-light.png");
+  assert.ok(await clickSelector('.sidebar-header [data-nav="favorites"]'));
   await writeFile(join(output,"result.json"),json({ok:true,sourceCommitAtRun,sourceChangesAtRun,builtCommit,hostBuiltCommit,projectId,coverage:["top bar order and search","cube opens project home, no row highlight","custom category create/mix/delete","one-indent nested folders","status dot geometry","session and project menus","hidden-sidebar titlebar","before/inside drag feedback","navigation-only session move","restart persistence"],interaction:"production renderer DOM DragEvent and click handlers; no physical pointer or model calls"}));
   await Promise.all(["failure.txt","failure.png"].map(name => rm(join(output,name),{force:true})));
 } catch(error) {

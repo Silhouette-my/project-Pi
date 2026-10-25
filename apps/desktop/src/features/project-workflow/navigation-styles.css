@@ -61,6 +61,13 @@
 .sidebar .sidebar-category-header.is-menu-open .sidebar-category-actions { opacity: 1; }
 .sidebar .sidebar-category-header.is-drop-inside { outline: 1px dashed var(--ds-accent); outline-offset: -1px; }
 .sidebar .sidebar-favorites-header { cursor: default; color: var(--ds-text-secondary); }
+.sidebar .sidebar-favorite-origin {
+  /* Aligns with the title of the row above (icon-less row, title inset). */
+  margin: -4px 0 4px 30px;
+  color: var(--ds-text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-compact);
+}
 .sidebar .sidebar-category-body { margin-left: var(--sidebar-category-inset); min-width: 0; }
 
 /* ---- rows ---- */

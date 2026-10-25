@@ -3,7 +3,7 @@ import { IconBot, IconClock, IconCube, IconSearch, IconStar } from "./icons";
 import { openProjectAgentPanel } from "../features/project-panel/project-panel-actions";
 import { toggleSidebarFavoritesView, setSidebarListView, useSidebarListView } from "../lib/sidebar-view-state";
 import { WorkflowProjectConversations, useWorkflowProjectGroups } from "../features/project-workflow/WorkflowNavigation";
-import { workflowGroupForPath, workflowProjectEntries } from "../features/project-workflow/navigation-model";
+import { workflowContextProjectId, workflowGroupForPath, workflowProjectEntries } from "../features/project-workflow/navigation-model";
 import { ProjectInstructionsDialog } from "./ProjectInstructionsDialog";
 import { ProjectMemoryDialog } from "./ProjectMemoryDialog";
 import { openFolderDialog } from "../features/project-workflow/folder-dialog-store";
@@ -1892,12 +1892,26 @@ export function Sidebar({
     ],
   );
 
+  /** The order the project shows in its category right now, so a first star keeps its place. */
+  const projectTreeOrder = useCallback(
+    (entry: ProjectEntry, group: { primaryPath: string }) => {
+      const index = workflowProjectEntries(projectEntries, workflowGroups.groups).findIndex(
+        (item) => item.key === entry.key,
+      );
+      return projectMetaFor(group.primaryPath, projectMeta).order ?? entry.meta.order ?? Math.max(index, 0);
+    },
+    [projectEntries, projectMeta, workflowGroups.groups],
+  );
+
   const projectMenuContent = useCallback(
     (entry: ProjectEntry): SidebarMenuPanelContent => {
       const archived = Boolean(entry.meta.archived);
       const workflowGroup = workflow.snapshot
         ? workflowGroupForPath(workflowGroups.groups, entry.path)
         : undefined;
+      const projectFavorite =
+        !!workflowGroup &&
+        workflow.snapshot?.projectNavigation?.some((row) => row.projectId === workflowGroup.id && row.favorite === true) === true;
       return {
         label: t("project.openActions", { name: entry.name }),
         // Groups, top to bottom: create / context / identity / places / archive / danger.
@@ -1957,6 +1971,26 @@ export function Sidebar({
               setEditProjectFor(entry);
             },
           }),
+          ...(workflowGroup
+            ? [
+                sidebarMenuAction({
+                  id: "toggle-project-favorite",
+                  label: projectFavorite ? t("workflowNav.removeFavorite") : t("workflowNav.addFavorite"),
+                  icon: <IconStar size={14} />,
+                  disabled: workflow.busy,
+                  onSelect: () => {
+                    closeMenus(false);
+                    void workflow.mutate({
+                      kind: "project.favorite",
+                      projectId: workflowGroup.id,
+                      favorite: !projectFavorite,
+                      // A first star must not move the project: keep the order it shows now.
+                      order: projectTreeOrder(entry, workflowGroup),
+                    });
+                  },
+                }),
+              ]
+            : []),
           sidebarMenuAction({
             id: "toggle-project-pin",
             label: entry.meta.pinned ? t("project.unpin") : t("project.pin"),
@@ -2032,7 +2066,8 @@ export function Sidebar({
       t,
       toggleProjectPin,
       createProjectSession,
-      workflow.snapshot,
+      projectTreeOrder,
+      workflow,
       workflowGroups.groups,
     ],
   );
@@ -3036,6 +3071,14 @@ export function Sidebar({
               pinnedSessionIds={pinnedSessionIds}
               renderSessions={(items) => renderSessionRows(items)}
               onNewProject={() => void openProjectPicker()}
+              projectNameOf={(session) => {
+                const id = workflowContextProjectId(workflow.snapshot, workflowGroups.groups, session);
+                if (!id) return undefined;
+                const entry = workflowProjectEntries(projectEntries, workflowGroups.groups).find(
+                  (item) => workflowGroupForPath(workflowGroups.groups, item.path)?.id === id,
+                );
+                return entry?.name ?? workflowGroups.groups.find((group) => group.id === id)?.name;
+              }}
               projects={workflowProjectEntries(projectEntries, workflowGroups.groups).flatMap((entry, index) => {
                 const group = workflowGroupForPath(workflowGroups.groups, entry.path);
                 return group ? [{

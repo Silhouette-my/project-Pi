@@ -100,15 +100,33 @@ export function recentOrder(entries: TreeEntry[]) {
 }
 
 /**
- * The Favorites view: favourited conversations, newest activity first. Only
- * standalone conversations can be favourites; the flag lives on the persisted
- * navigation record, so nothing here writes data.
+ * The Favorites view, conversations: every favourited conversation wherever it
+ * lives (standalone, project chat, workstream), newest activity first. Side-only
+ * and Agent sessions are not sidebar rows, so they are never listed. The flag is
+ * on the persisted navigation record; nothing here writes data.
  */
 export function favoriteSessions(snapshot: ProjectWorkflowSnapshot, sessions: SessionSummary[]) {
   const nav = new Map(snapshot.navigation.map((row) => [row.sessionId, row]));
+  const hidden = new Set([
+    ...(snapshot.projectAgents ?? []).map((item) => item.sessionId),
+    ...snapshot.conversations.filter((item) => item.visibility === "side_only").map((item) => item.sessionId),
+  ]);
   const touched = (session: SessionSummary) =>
     Math.max(Date.parse(session.updatedAt) || 0, Date.parse(nav.get(session.id)?.lastAccessedAt ?? "") || 0);
-  return standaloneSessions(snapshot, sessions)
-    .filter((session) => nav.get(session.id)?.favorite === true)
+  return sessions
+    .filter((session) => nav.get(session.id)?.favorite === true && !hidden.has(session.id))
     .sort((a, b) => touched(b) - touched(a) || a.id.localeCompare(b.id));
+}
+
+/** The Favorites view, projects: favourited, unarchived, in their tree order. */
+export function favoriteProjects<T extends { id: string; order: number; archived?: boolean }>(
+  snapshot: ProjectWorkflowSnapshot,
+  projects: T[],
+) {
+  const starred = new Set(
+    (snapshot.projectNavigation ?? []).filter((row) => row.favorite === true).map((row) => row.projectId),
+  );
+  return projects
+    .filter((project) => starred.has(project.id) && !project.archived)
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 }
