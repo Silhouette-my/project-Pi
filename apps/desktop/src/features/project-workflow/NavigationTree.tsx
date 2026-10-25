@@ -4,6 +4,7 @@ import { WORKFLOW_CHATS_CATEGORY, WORKFLOW_PROJECTS_CATEGORY, type WorkflowFolde
 import { Button, TooltipButton } from "../../components/ui";
 import {
   IconChevronDown,
+  IconArrowUpDown,
   IconClock,
   IconFolder,
   IconFolderOpen,
@@ -102,6 +103,17 @@ export function NavigationTree({
           onSelect: () => {
             folderMenu.close(false);
             openFolderDialog({ mode: "create", context, parentId: folder.id });
+          },
+        }),
+        // The keyboard path for relocating a folder; dragging stays the pointer path.
+        sidebarMenuAction({
+          id: "move-folder",
+          label: t("workflowNav.moveTo"),
+          icon: <IconArrowUpDown size={14} />,
+          disabled: workflow.busy,
+          onSelect: () => {
+            folderMenu.close(false);
+            openFolderDialog({ mode: "move", context, targets: [{ kind: "folder", id: folder.id }] });
           },
         }),
         // Never deletes conversations: children move up one level.
@@ -413,21 +425,17 @@ export function NavigationTree({
                     action: "new-project",
                   })
                 : null
-              : (
-                <>
-                  {onNewChat
-                    ? actionButton(t("workflowNav.newChat"), <IconNewSession size={14} />, () =>
-                        onNewChat({ categoryId: category.id }), {
-                        disabled: newChatDisabled || workflow.busy,
-                        action: "category-new-chat",
-                      })
-                    : null}
-                  {actionButton(t("workflowNav.newFolder"), <IconNewFolder size={14} />, () =>
-                    openFolderDialog({ mode: "create", context, parentId: rootKey }), {
-                    action: "category-new-folder",
-                  })}
-                </>
-              )}
+              : onNewChat
+                ? actionButton(t("workflowNav.newChat"), <IconNewSession size={14} />, () =>
+                    onNewChat({ categoryId: category.id }), {
+                    disabled: newChatDisabled || workflow.busy,
+                    action: "category-new-chat",
+                  })
+                : null}
+            {actionButton(t("workflowNav.newFolder"), <IconNewFolder size={14} />, () =>
+              openFolderDialog({ mode: "create", context, parentId: rootKey }), {
+              action: "category-new-folder",
+            })}
             {category.builtin
               ? null
               : moreButton(t("workflowNav.categoryActions"), "category-menu", categoryMenu, category.id)}

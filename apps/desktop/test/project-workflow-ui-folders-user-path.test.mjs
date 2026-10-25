@@ -19,6 +19,7 @@ import { ProjectWorkflowProvider } from "../../apps/desktop/src/features/project
 import { CategoryNavigation } from "../../apps/desktop/src/features/project-workflow/CategoryNavigation";
 import { openFolderDialog } from "../../apps/desktop/src/features/project-workflow/folder-dialog-store";
 import { useWorkflowSessionMenu } from "../../apps/desktop/src/features/project-workflow/session-menu";
+import { setSidebarListView } from "../../apps/desktop/src/lib/sidebar-view-state";
 import { api } from "../../apps/desktop/src/lib/api";
 import { useAppStore } from "../../apps/desktop/src/stores/app-store";
 await i18n.use(initReactI18next).init({ lng: "en", keySeparator: false, interpolation: { escapeValue: false } });
@@ -105,6 +106,13 @@ function setInput(input,value) { Object.getOwnPropertyDescriptor(HTMLInputElemen
  await until(()=>snapshot.folders[0].name==="Renamed research","rename missing");
  await until(()=>!dialog(),"dialog not dismissed");
  const chatsHeader=()=>document.querySelector('[data-sidebar-category="chats"] .sidebar-category-header');
+ // The 项目 header offers New project then New folder, like the other headers' hover actions.
+ const projectsHeader=document.querySelector('[data-sidebar-category="projects"] .sidebar-category-header');
+ const projectActions=[...projectsHeader.querySelectorAll('[data-action]')].map(item=>item.dataset.action);
+ if(JSON.stringify(projectActions)!==JSON.stringify(["new-project","category-new-folder"])) throw Error("Projects header actions: "+projectActions);
+ click("workflowNav.newFolder",projectsHeader); await until(dialog,"projects folder dialog missing");
+ if(dialog().querySelector("select").value!=="category:projects") throw Error("Projects header New folder must default to the Projects top level");
+ click("common.cancel",dialog().querySelector("form")); await until(()=>!dialog(),"projects folder dialog not dismissed");
  click("workflowNav.newFolder",chatsHeader()); await until(dialog,"create dialog missing"); setInput(dialog().querySelector("input"),"Must not be saved");
  const cancelCount=calls.length; click("common.cancel",dialog().querySelector("form")); await frame();
  if(calls.length!==cancelCount||snapshot.folders.length!==1||dialog()) throw Error("Cancel submitted a folder mutation");
@@ -139,7 +147,22 @@ function setInput(input,value) { Object.getOwnPropertyDescriptor(HTMLInputElemen
  await until(()=>row("session","chat")?.draggable,"Root chat ready");
  flushSync(()=>row("session","chat").querySelector(".thread-item-main").click());
  await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat")?.lastAccessedAt,"Chat did not record its access time");
- if(document.querySelector('[data-action="toggle-session-favorite"]')) throw Error("Favorites left the session menu");
+ // Favourites: the row menu toggles the persisted flag; the Favorites view lists only starred chats and Esc-style toggling returns to the tree.
+ const favoriteToggle=(id)=>document.querySelector('[data-workflow-tree-node="session:'+id+'"] [data-action="toggle-session-favorite"]');
+ if(!favoriteToggle("chat")||!favoriteToggle("other")) throw Error("Favorite toggle missing from the session menu");
+ if(favoriteToggle("chat").textContent!=="Add to Favorites"&&favoriteToggle("chat").textContent!=="workflowNav.addFavorite") throw Error("Favorite toggle label");
+ flushSync(()=>favoriteToggle("chat").click());
+ await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat")?.favorite===true,"Favorite flag was not persisted");
+ flushSync(()=>setSidebarListView("favorites"));
+ await until(()=>document.querySelector('[data-sidebar-view="favorites"]'),"Favorites view missing");
+ const favorites=document.querySelector('[data-sidebar-view="favorites"]');
+ if(!favorites.querySelector('[data-action="toggle-session-favorite"]')||favorites.querySelectorAll(".thread-item-main").length!==1||!favorites.textContent.includes("Existing chat")||favorites.textContent.includes("Another chat")) throw Error("Favorites view must list only the starred chat: "+favorites.textContent);
+ if(document.querySelector('[data-sidebar-category],[data-workflow-folder]')) throw Error("Favorites view replaces the category tree");
+ flushSync(()=>favorites.querySelector('[data-action="toggle-session-favorite"]').click());
+ await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat")?.favorite===false,"Unfavorite from the Favorites view failed");
+ await until(()=>document.querySelector('[data-sidebar-view="favorites"]').textContent.includes("workflowNav.noFavorites"),"Empty Favorites state missing");
+ flushSync(()=>setSidebarListView("tree"));
+ await until(()=>document.querySelector('[data-sidebar-category="chats"]')&&!document.querySelector('[data-sidebar-view="favorites"]'),"Tree did not return");
  await until(()=>row("session","chat")?.draggable,"Chat ready");
  await drag(row("session","chat"),row("folder","folder"));
  await until(()=>snapshot.navigation.find(n=>n.sessionId==="chat").folderId==="folder","Chat could not re-enter folder");
@@ -150,9 +173,17 @@ function setInput(input,value) { Object.getOwnPropertyDescriptor(HTMLInputElemen
  flushSync(()=>dialog().querySelector("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));
  await until(()=>snapshot.navigation.find(n=>n.sessionId==="other").folderId===second.id,"single session move missing");
  await until(()=>!dialog(),"session move dialog not dismissed");
- // A folder menu has Rename, New folder and Remove only; moving a folder is a drag.
+ // A folder menu has Rename, New folder, Move to… and Remove, in that order; dragging stays the pointer path.
  flushSync(()=>document.querySelector('[data-workflow-folder="'+second.id+'"] [data-action="folder-menu"]').click());
- if(["rename-folder","new-subfolder","remove-folder"].some(id=>!menuItem(id))||menuItem("move-folder")) throw Error("Folder menu items changed");
+ const folderMenuIds=[...document.querySelectorAll('.sidebar-row-menu [data-action]')].map(item=>item.dataset.action);
+ if(JSON.stringify(folderMenuIds)!==JSON.stringify(["rename-folder","new-subfolder","move-folder","remove-folder"])) throw Error("Folder menu items changed: "+folderMenuIds);
+ flushSync(()=>menuItem("move-folder").click());
+ await until(dialog,"folder move dialog missing");
+ flushSync(()=>{const select=dialog().querySelector("select");select.value="folder";select.dispatchEvent(new Event("change",{bubbles:true}));});
+ flushSync(()=>dialog().querySelector("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));
+ await until(()=>calls.some(c=>c.kind==="tree.move"&&c.target.kind==="folder"&&c.target.id===second.id&&c.folderId==="folder"),"Folder move from the menu missing");
+ await until(()=>!dialog(),"folder move dialog not dismissed");
+ flushSync(()=>document.querySelector('[data-workflow-folder="'+second.id+'"] [data-action="folder-menu"]').click());
  flushSync(()=>menuItem("new-subfolder").click());
  await until(dialog,"subfolder dialog missing"); setInput(dialog().querySelector("input"),"Nested");
  flushSync(()=>dialog().querySelector("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));
