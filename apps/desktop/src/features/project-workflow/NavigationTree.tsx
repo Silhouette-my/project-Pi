@@ -1,4 +1,4 @@
-import { useState, type DragEvent, type ReactNode } from "react";
+import { useRef, useState, type DragEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { WORKFLOW_CHATS_CATEGORY, WORKFLOW_PROJECTS_CATEGORY, type WorkflowFolder } from "@pi-desktop/shared";
 import { Button, TooltipButton } from "../../components/ui";
@@ -20,6 +20,7 @@ import {
 import { setSidebarDragImage } from "../../lib/sidebar-drag-image";
 import { setSidebarGroupCollapsed, useSidebarCollapsedGroups } from "../../lib/sidebar-category-state";
 import { sidebarMenuAction, type SidebarMenuPanelContent } from "../../lib/sidebar-menu";
+import { autoScrollBlock, useBlockScroll } from "./block-scroll";
 import { openFolderDialog } from "./folder-dialog-store";
 import { NavigationTreeDialog } from "./NavigationTreeDialog";
 import { recentOrder, reorderedCategoryIds, steppedCategoryIds } from "./navigation-category-model";
@@ -78,6 +79,8 @@ export function NavigationTree({
   const { t } = useTranslation();
   const workflow = useProjectWorkflow();
   const snapshot = workflow.snapshot;
+  const treeRef = useRef<HTMLElement>(null);
+  useBlockScroll(treeRef, !!categories);
   const collapsedGroups = useSidebarCollapsedGroups();
   const [dragging, setDragging] = useState<TreeEntry | null>(null);
   const [drop, setDrop] = useState<{ key: string; position: DropPosition } | null>(null);
@@ -581,8 +584,12 @@ export function NavigationTree({
 
   return (
     <section
+      ref={treeRef}
       className="workflow-navigation-tree"
       aria-label={label}
+      onDragOverCapture={(event) => {
+        if (dragging) autoScrollBlock(event);
+      }}
       data-workflow-tree={context.scope}
       data-project-id={context.projectId}
     >

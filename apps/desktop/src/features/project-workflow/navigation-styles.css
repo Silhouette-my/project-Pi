@@ -154,6 +154,30 @@
 }
 .sidebar .workflow-tree-node.is-block .thread-item.active { background: var(--ds-bg-active); }
 
+/* Only the outermost expanded block (category-level folder or project) is height
+   limited: its header row stays outside the scroll area, nested folders scroll
+   with it. No scrollbar and no overscroll containment, so the wheel chains to
+   the sidebar at the ends. Fades (data-fade, set by block-scroll.ts) mark hidden
+   content on the side(s) that have it. */
+.sidebar .workflow-tree-node.is-block > .workflow-tree-children,
+.sidebar .workflow-tree-node.is-block > .workflow-tree-row .sidebar-project-body {
+  --block-fade: calc(var(--sidebar-row-height) * 0.6);
+  max-height: calc(var(--sidebar-row-height) * 8);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.sidebar .workflow-tree-node.is-block > .workflow-tree-children::-webkit-scrollbar,
+.sidebar .workflow-tree-node.is-block > .workflow-tree-row .sidebar-project-body::-webkit-scrollbar { display: none; }
+.sidebar [data-fade="top"] {
+  mask-image: linear-gradient(to bottom, transparent, var(--ds-text-primary) var(--block-fade));
+}
+.sidebar [data-fade="bottom"] {
+  mask-image: linear-gradient(to top, transparent, var(--ds-text-primary) var(--block-fade));
+}
+.sidebar [data-fade="both"] {
+  mask-image: linear-gradient(to bottom, transparent, var(--ds-text-primary) var(--block-fade), var(--ds-text-primary) calc(100% - var(--block-fade)), transparent);
+}
+
 /* ---- drag and drop feedback ---- */
 /* Into: a soft accent tint. Between: a 2px accent line with rounded ends. All
    indicators are overlays or colour changes, so nothing shifts during a drag. */

@@ -113,7 +113,7 @@ async function folderMenuAction(folderId, action) {
 /** Real pointer drag: Chromium hit-tests the press, starts a native drag, and the drag events
  * are dispatched at real coordinates, so the draggable ancestor, dataTransfer and drop target
  * resolution are the ones a user gets. `grab` is where the user presses (defaults to the source). */
-async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName, inspect, releaseAway } = {}) {
+async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName, inspect, releaseAway, via } = {}) {
   const point = async (selector, x = .5, y = .5) => {
     await page.evaluate(`document.querySelector(${json(selector)})?.scrollIntoView({block:'nearest'})`);
     const r = await rectOf(selector); assert.ok(r && r.width > 0 && r.height > 0, `visible ${selector}`);
@@ -137,7 +137,13 @@ async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName
     await page.call("Input.dispatchMouseEvent", { type: "mousePressed", x: from.x, y: from.y, button: "left", buttons: 1, clickCount: 1 });
     for (const step of [4, 8, 14]) await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: from.x + step, y: from.y + step / 2, button: "left", buttons: 1 });
     const dragData = await intercepted;
-    const to = await point(target, fx, fy);
+    // `via`: hover near an edge of a scrollable block until it auto-scrolls, then aim at the (now visible) target without scrolling it into view ourselves.
+    if (via) {
+      const edge = await point(via.selector, .5, via.fy);
+      await page.call("Input.dispatchDragEvent", { type: "dragEnter", x: edge.x, y: edge.y, data: dragData });
+      for (let i = 0; i < via.repeat; i++) { await page.call("Input.dispatchDragEvent", { type: "dragOver", x: edge.x, y: edge.y, data: dragData }); await sleep(60); }
+    }
+    const to = via ? await (async () => { const r = await rectOf(target); assert.ok(r && r.height > 0, "target visible after auto-scroll"); return { x: r.left + r.width * fx, y: r.top + r.height * fy }; })() : await point(target, fx, fy);
     for (const type of ["dragEnter", "dragOver", "dragOver"]) await page.call("Input.dispatchDragEvent", { type, x: to.x, y: to.y, data: dragData });
     if (indicator) await until(() => page.evaluate(`!!document.querySelector(${json(indicator)})`), `drop indicator ${indicator}`, 4000);
     await sleep(250);
@@ -150,6 +156,7 @@ async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName
   } finally { await page.call("Input.setInterceptDrags", { enabled: false }); }
   await sleepFrame();
 }
+const captureBoth = async name => { for (const theme of ["light", "dark"]) { await setTheme(theme); await sleepFrame(); await capture(`${name}-${theme}.png`); } await setTheme("light"); };
 const setTheme = theme => page.evaluate(`document.documentElement.dataset.theme=${json(theme)}`);
 // The user grabs a project by its name and a conversation by its title.
 const projectHandle = id => `${row("project", id)} .sidebar-project-name`;
@@ -301,6 +308,62 @@ try {
   const scroller = await page.evaluate(`(() => { const el=document.querySelector('.sidebar-category-scroll'); return { webkit: getComputedStyle(el,'::-webkit-scrollbar').display, gutter: el.offsetWidth - el.clientWidth } })()`);
   assert.deepEqual(scroller, { webkit: "none", gutter: 0 }, "sidebar list shows no scrollbar");
   await capture("sidebar-after-drops.png");
+
+  // ---- Expanded blocks are height limited and scroll inside, without a scrollbar ----
+  await setTheme("light");
+  await mutate("navigation.expand", { expandedIds: [...(await snapshot()).expandedIds, folderA.id] });
+  const folderRowSel = row("folder", folderA.id), blockSel = `[data-workflow-folder="${folderA.id}"].is-block > .workflow-tree-children`;
+  const inFolder = async () => (await snapshot()).navigation.filter(item => item.folderId === folderA.id).length;
+  // Sessions come from the real Host; the UI path (new chat) reuses the blank draft, so file them with the same navigation command the UI sends.
+  const created = [];
+  for (let n = 0; n < 10; n++) created.push((await invoke("sessionCreate", { projectPath: null })).session.id);
+  await mutate("navigation.move", { sessionIds: created, folderId: folderA.id });
+  await page.call("Page.reload");
+  await until(() => page.evaluate("!!document.querySelector('.app-shell:not(.is-booting)') && !!document.querySelector('[data-sidebar-category]')"), "renderer reload");
+  assert.ok((await inFolder()) > 8, "folder holds more than 8 chats");
+  await until(() => page.evaluate(`!!document.querySelector(${json(blockSel)})`), "expanded folder is a block");
+  const blockInfo = () => page.evaluate(`(() => { const b=document.querySelector(${json(blockSel)}), cs=getComputedStyle(b), box=b.getBoundingClientRect(), head=document.querySelector(${json(folderRowSel)}).getBoundingClientRect(), active=b.querySelector('.thread-item.active')?.getBoundingClientRect(); return { client: b.clientHeight, scroll: b.scrollHeight, top: b.scrollTop, overflowY: cs.overflowY, webkit: getComputedStyle(b,'::-webkit-scrollbar').display, gutter: b.offsetWidth-b.clientWidth, fade: b.dataset.fade, headerAbove: head.bottom <= box.top + 1, activeVisible: active ? active.top >= box.top - 1 && active.bottom <= box.bottom + 1 : null, outer: document.querySelector('.sidebar-category-scroll').scrollTop } })()`);
+  let info = await blockInfo();
+  assert.ok(info.client <= 8 * 32 + 1 && info.scroll > info.client, `block is limited to 8 rows (${json(info)})`);
+  assert.equal(info.overflowY, "auto"); assert.equal(info.webkit, "none"); assert.equal(info.gutter, 0); assert.ok(info.headerAbove, "folder header stays outside the scroll area");
+  assert.ok(["bottom", "both", "top"].includes(info.fade), `fade only where content is hidden (${info.fade})`);
+  // Selecting a chat that is hidden in the block scrolls it into view inside the block, without moving the sidebar.
+  await page.evaluate(`document.querySelector(${json(blockSel)}).scrollTop = 0`);
+  await sleep(200);
+  const outerBeforeSelect = (await blockInfo()).outer;
+  assert.ok(await page.evaluate(`(() => { const rows=[...document.querySelectorAll(${json(blockSel + " [data-workflow-tree-node^='session:'] .thread-item-main")})]; rows.at(-1).click(); return true })()`), "select the last chat");
+  await until(async () => (await blockInfo()).activeVisible === true, "selected chat scrolled into view inside the block");
+  assert.equal((await blockInfo()).outer, outerBeforeSelect, "sidebar did not jump");
+  await page.evaluate(`document.querySelector(${json(blockSel)}).scrollTop = 0`);
+  await captureBoth("folder-scroll");
+  // Wheel scrolls inside first.
+  const wheel = async (selector, deltaY) => { const r = await rectOf(selector); await page.call("Input.dispatchMouseEvent", { type: "mouseWheel", x: r.left + r.width / 2, y: r.top + r.height / 2, deltaX: 0, deltaY }); await sleep(700); };
+  await page.call("Emulation.setDeviceMetricsOverride", { width: 1200, height: 560, deviceScaleFactor: 1, mobile: false });
+  await sleep(300);
+  const outerBefore = (await blockInfo()).outer;
+  await wheel(blockSel, -3000);
+  info = await blockInfo();
+  assert.equal(info.top, 0, "wheel scrolled the block to its top"); assert.equal(info.fade, "bottom"); assert.equal(info.outer, outerBefore, "outer sidebar did not move while the block could scroll");
+  await wheel(blockSel, 3000);
+  info = await blockInfo();
+  assert.ok(info.top + info.client >= info.scroll - 1 && info.fade === "top", `scrolled to the end (${json(info)})`);
+  const outerAtEnd = info.outer;
+  await wheel(blockSel, 3000);
+  const chained = await blockInfo();
+  const outerMax = await page.evaluate("(() => { const el=document.querySelector('.sidebar-category-scroll'); return el.scrollHeight - el.clientHeight })()");
+  if (outerMax > outerAtEnd) assert.ok(chained.outer > outerAtEnd, "wheel chains to the sidebar once the block is at its end");
+  else console.log("note: sidebar did not overflow at 560px; chaining not exercised");
+  await page.call("Emulation.clearDeviceMetricsOverride");
+  await sleep(300);
+  // Drag: hover near the bottom edge auto-scrolls; a row hidden at drag start accepts the drop.
+  await page.evaluate(`document.querySelector(${json(blockSel)}).scrollTop = 0`);
+  await sleep(200);
+  const lastChat = (await snapshot()).navigation.filter(item => item.folderId === folderA.id).sort((a, b) => a.order - b.order).at(-1).sessionId;
+  const hidden = await page.evaluate(`(() => { const b=document.querySelector(${json(blockSel)}).getBoundingClientRect(), r=document.querySelector(${json(row("session", lastChat))}).getBoundingClientRect(); return r.top >= b.bottom || r.bottom <= b.top })()`);
+  assert.ok(hidden, "the last chat starts hidden below the fold");
+  await realDrag(sessionHandle(chat.sessionId), row("session", lastChat), { fy: .9, via: { selector: blockSel, fy: .97, repeat: 40 }, indicator: ".workflow-tree-row.is-drop-after", captureName: "drag-autoscroll-light.png" });
+  await until(async () => { const nav = await sessionRow(chat.sessionId); return nav?.folderId === folderA.id && nav.order > (await sessionRow(lastChat)).order; }, "drop landed after the row that was hidden");
+  assert.ok((await blockInfo()).top > 0, "block auto-scrolled during the drag");
   await writeFile(join(output, "result.json"), json({ ok: true, sourceCommitAtRun, sourceChangesAtRun, interaction: "real pointer drag via CDP Input.dispatchDragEvent" }));
   await Promise.all(["failure.txt", "failure.png"].map(name => rm(join(output, name), { force: true })));
 } catch (error) {
