@@ -67,8 +67,23 @@ destination, chat as the home surface, tools and permissions inline.
   brand and Collapse sidebar at the right; activating the
   brand returns the main pane to chat. The macOS expanded sidebar omits the
   logo/title brand. After the traffic lights (macOS) or the brand, the top bar
-  holds Search (opens the global search dialog), New chat, Pin and Collapse
-  sidebar, with a divider below. While the sidebar is hidden the titlebar shows
+  holds Search (opens the global search dialog; its tooltip shows the
+  configured shortcut), Favorites, New chat, Pin and Collapse sidebar, with a
+  divider below. Favorites toggles the list between the category tree and a
+  **Favorites view**: a "Favorites" header row replacing the tree, then the
+  favourited standalone conversations (persisted `navigation.favorite`, toggled
+  from the session menu) as ordinary rows with status dots and menus, newest
+  activity first; empty shows one muted line. The button shows a pressed state;
+  clicking it again or Esc inside the sidebar returns to the tree. The choice is
+  a per-window preference in local storage, never Host data. Projects have no
+  favourite flag.
+  The project row menu is grouped by dividers: New chat, New folder / Project
+  instructions, Memory / Rename, Pin / Open folder, Copy, Git / Archive /
+  Danger zone. The project row also carries hover actions New chat, New folder
+  and Project Agent (opens the Agent tab and reveals the work panel), then the
+  menu. The Projects category header offers New project and New folder; a
+  folder's menu is Rename, New folder, Move to…, Remove folder (no second
+  confirmation). While the sidebar is hidden the titlebar shows
   Expand sidebar and New chat; a docked sidebar has no second New chat icon. `Codex` remains only an external import source or a
   design-reference term.
 - **Main pane**: exactly one destination at a time; destinations replace the

@@ -103,7 +103,7 @@ export function CategoryNavigation({
         </div>
         <div className="sidebar-category-body">
           {favorites.map((session) => (
-            <div key={session.id} className="workflow-tree-node">
+            <div key={session.id} className="workflow-tree-node" data-workflow-tree-node={`session:${session.id}`}>
               <div className="workflow-tree-row is-session">
                 <div className="workflow-tree-content">{renderChat(session)}</div>
               </div>

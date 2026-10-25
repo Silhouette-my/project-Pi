@@ -136,7 +136,12 @@ try {
   group = await page.evaluate("document.querySelector('[data-sidebar-project-group]').dataset.sidebarProjectGroup");
 
   // Top bar: search / new chat / pin / sidebar toggle, divider below; no duplicate new-chat icon at the main top-left while docked.
-  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-header-actions [data-nav]')].map(el=>el.dataset.nav)"), ["search","new-task","pin-sidebar","toggle-sidebar"]);
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-header-actions [data-nav]')].map(el=>el.dataset.nav)"), ["search","favorites","new-task","pin-sidebar","toggle-sidebar"]);
+  // The search tooltip carries its shortcut like the other shortcut tooltips.
+  const searchRect = await rectOf('.sidebar-header [data-nav="search"]');
+  await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: searchRect.left + searchRect.width / 2, y: searchRect.top + searchRect.height / 2 });
+  await until(() => page.evaluate("/(⌘|Ctrl\\+)K/.test(document.querySelector('.ui-tooltip')?.textContent ?? '')"), "search tooltip shows its shortcut");
+  await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: 400, y: 400 });
   assert.ok(await page.evaluate("getComputedStyle(document.querySelector('.sidebar-header')).borderBottomWidth==='1px'"), "divider below the sidebar top bar");
   assert.equal(await page.evaluate("document.querySelectorAll('.ct-lead [data-nav=new-task]').length>0 && document.querySelector('.conversation-topbar.ct-collapsed')!==null"), false, "no titlebar new-chat while the sidebar is docked");
   assert.ok(await clickSelector('.sidebar-header [data-nav="search"]'));
@@ -151,8 +156,24 @@ try {
   assert.ok(await page.evaluate(`document.querySelector('[data-sidebar-project-group] .sidebar-project-cube').classList.contains('is-active')`), "cube is the active tile on home");
   assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('[data-sidebar-project-group] .sidebar-project-row')).backgroundColor`), "rgba(0, 0, 0, 0)", "no full-row highlight on home");
   assert.ok(await page.evaluate(`document.querySelector('[data-sidebar-project-group] .project-toggle')?.textContent.includes('Project navigation')`),"logical project name must replace root basename");
-  assert.equal(await page.evaluate("!!document.querySelector('[data-sidebar-project-group] [data-project-agent]')"), false, "no Agent icon on the project row");
   await capture("project-home-light.png");
+  // The Project Agent is a hover action on the project row (before the more menu); it reveals the Agent tab in the work panel.
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('[data-sidebar-project-group] .sidebar-project-row .workflow-tree-actions [data-action], [data-sidebar-project-group] .sidebar-project-row .workflow-tree-actions button')].map(el=>el.dataset.action||'more')"), ["project-new-chat","project-new-folder","project-agent","more"]);
+  const projectRowRect = await rectOf('[data-sidebar-project-group] .sidebar-project-row');
+  await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: projectRowRect.left + 90, y: projectRowRect.top + projectRowRect.height / 2 });
+  await until(() => page.evaluate("getComputedStyle(document.querySelector('[data-sidebar-project-group] .sidebar-project-row .workflow-tree-actions')).display==='flex'"), "project row actions revealed by hover");
+  const agentRect = await rectOf('[data-sidebar-project-group] [data-action="project-agent"]');
+  await page.call("Input.dispatchMouseEvent", { type: "mouseMoved", x: agentRect.left + agentRect.width / 2, y: agentRect.top + agentRect.height / 2 });
+  await until(() => page.evaluate("/Project Agent|项目 Agent/.test(document.querySelector('.ui-tooltip')?.textContent ?? '')"), "Agent action tooltip");
+  await capture("project-row-hover-light.png");
+  assert.ok(await clickSelector('[data-sidebar-project-group] [data-action="project-agent"]'));
+  await until(() => page.evaluate("!!document.querySelector('.work-panel [role=tab][aria-selected=true]')"), "work panel revealed with an active tab");
+  assert.match(await page.evaluate("document.querySelector('.work-panel [role=tab][aria-selected=true]').textContent"), /Project Agent|项目 Agent/, "Agent tab label");
+  await until(() => page.evaluate("!!document.querySelector('[data-project-agent-dock] textarea')"), "Agent composer");
+  assert.match(await page.evaluate("document.querySelector('[data-project-agent-dock] textarea').placeholder"), /Discuss with the Project Agent|与项目 Agent 讨论/, "Agent composer placeholder");
+  assert.equal(await page.evaluate("!!document.querySelector('[data-project-agent-dock] .detached-conversation-scope')"), false, "no project-name chip in the Agent composer");
+  await capture("project-agent-tab-light.png");
+  await page.evaluate("document.documentElement.dataset.theme='dark'"); await sleepFrame(); await capture("project-agent-tab-dark.png"); await setTheme("light");
   const toggleOpen = () => page.evaluate(`document.querySelector('[data-sidebar-project-group] .project-toggle').getAttribute('aria-expanded')`);
   assert.equal(await toggleOpen(), "true");
   assert.ok(await clickSelector('[data-sidebar-project-group] .project-toggle'));
@@ -160,10 +181,13 @@ try {
   assert.equal(await page.evaluate("document.querySelector('[data-workflow=console]')!==null"), true, "toggling must not leave project home");
   assert.ok(await clickSelector('[data-sidebar-project-group] .project-toggle'));
   await until(async () => (await toggleOpen()) === "true", "name click expands the project");
-  // Project menu: the approved five first.
+  // Project menu: grouped by dividers, in the approved order.
   assert.ok(await clickSelector('[data-sidebar-project-group] .project-more'));
   await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu')"), "project menu");
-  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu > [role=menuitem], .sidebar-row-menu [data-action]')].map(el=>el.dataset.action).slice(0,5)"), ["new-project-folder","new-project-chat","project-instructions","project-memory","edit-project"]);
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu > [role=menuitem], .sidebar-row-menu [data-action]')].map(el=>el.dataset.action).slice(0,5)"), ["new-project-chat","new-project-folder","project-instructions","project-memory","edit-project"]);
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action], .sidebar-row-menu [data-submenu-trigger]')].map(el=>el.dataset.action||el.dataset.submenuTrigger)"), ["new-project-chat","new-project-folder","project-instructions","project-memory","edit-project","toggle-project-pin","open-project-folder","project-copy","project-git","toggle-project-archive","project-danger"]);
+  assert.equal(await page.evaluate("document.querySelectorAll('.sidebar-row-menu [role=separator]').length"), 5, "five dividers split the project menu into six groups");
+  await captureBoth("project-menu");
   assert.equal(await page.evaluate("!!document.querySelector('.sidebar-row-menu [data-submenu-trigger=\"project-color\"]')"), false, "no project colour in the menu");
   await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
 
@@ -219,9 +243,44 @@ try {
   assert.ok(await clickSelector(`${section} [data-workflow-tree-node="session:${chat.sessionId}"] [data-action="session-menu"]`));
   await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu')"), "session menu");
   const menuIds = await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action], .sidebar-row-menu [data-submenu-trigger]')].map(el=>el.dataset.action||el.dataset.submenuTrigger)");
-  const wanted = ["rename-session","toggle-session-pin","move-session-to-folder","toggle-session-archive","session-copy","session-danger"];
+  const wanted = ["rename-session","toggle-session-pin","toggle-session-favorite","move-session-to-folder","toggle-session-archive","session-copy","session-danger"];
   assert.deepEqual(menuIds.filter(id => wanted.includes(id)), wanted, `session menu order (${json(menuIds)})`);
+  // Favourites: the menu toggles the persisted flag; the star button swaps the tree for the Favorites view.
+  await clickMenuAction("toggle-session-favorite");
+  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === chat.sessionId)?.favorite === true, "favourite persisted");
   await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
+  await capture("sidebar-tree-light.png");
+  assert.ok(await clickSelector('.sidebar-header [data-nav="favorites"]'));
+  await until(() => page.evaluate("!!document.querySelector('[data-sidebar-view=favorites]')"), "Favorites view");
+  assert.equal(await page.evaluate("document.querySelector('.sidebar-header [data-nav=favorites]').getAttribute('aria-pressed')"), "true");
+  assert.equal(await page.evaluate("document.querySelectorAll('[data-sidebar-category]').length"), 0, "the Favorites view replaces the category tree");
+  assert.match(await page.evaluate("document.querySelector('[data-sidebar-view=favorites] .sidebar-favorites-header').textContent"), /Favorites|收藏/);
+  assert.equal(await page.evaluate(`!!document.querySelector('[data-sidebar-view=favorites] [data-sidebar-session-row="${chat.sessionId}"], [data-sidebar-view=favorites] [data-workflow-tree-node="session:${chat.sessionId}"]')`), true, "favourite listed with its row");
+  assert.ok(await page.evaluate(`!!document.querySelector('[data-sidebar-view=favorites] [data-workflow-tree-node="session:${chat.sessionId}"] [data-action="session-menu"]')`), "favourite rows keep their menus");
+  await captureBoth("sidebar-favorites");
+  // Esc inside the sidebar returns to the tree; the button toggles it again; the persisted choice survives a reload later.
+  await page.evaluate("document.querySelector('.sidebar-header [data-nav=favorites]').focus()");
+  await page.call("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await page.call("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await until(() => page.evaluate("!document.querySelector('[data-sidebar-view=favorites]') && !!document.querySelector('[data-sidebar-category=chats]')"), "Esc returns to the tree");
+  assert.equal(await page.evaluate("document.querySelector('.sidebar-header [data-nav=favorites]').getAttribute('aria-pressed')"), "false");
+  assert.ok(await clickSelector('.sidebar-header [data-nav="favorites"]'));
+  await until(() => page.evaluate("!!document.querySelector('[data-sidebar-view=favorites]')"), "Favorites view again");
+  assert.ok(await clickSelector(`[data-sidebar-view=favorites] [data-workflow-tree-node="session:${chat.sessionId}"] [data-action="session-menu"]`));
+  await until(() => clickMenuAction("toggle-session-favorite"), "unfavourite from the Favorites view");
+  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === chat.sessionId)?.favorite === false, "favourite cleared");
+  await until(() => page.evaluate("/Nothing favorited|暂无收藏/.test(document.querySelector('[data-sidebar-view=favorites]')?.textContent ?? '')"), "empty Favorites state");
+  assert.ok(await clickSelector('.sidebar-header [data-nav="favorites"]'));
+  await until(() => page.evaluate("!document.querySelector('[data-sidebar-view=favorites]') && !!document.querySelector('[data-sidebar-category=chats]')"), "button returns to the tree");
+
+  // Projects header: New project then New folder; a folder made there lives in the Projects category.
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('[data-sidebar-category=projects] .sidebar-category-header [data-action]')].map(el=>el.dataset.action)"), ["new-project","category-new-folder"]);
+  assert.ok(await clickSelector('[data-sidebar-category="projects"] [data-action="category-new-folder"]'));
+  await submitDialog("项目文件夹");
+  const projectsFolder = await until(async () => (await snapshot()).folders.find(f => f.name === "项目文件夹"), "folder in the Projects category");
+  assert.equal(projectsFolder.categoryId, "projects");
+  await folderMenuAction(projectsFolder.id, "remove-folder");
+  await until(async () => !(await snapshot()).folders.some(f => f.id === projectsFolder.id), "Projects folder removed");
 
   // Project folders: a project's own tree. Nested folders render flat; remove never deletes chats.
   assert.ok(await clickSelector('[data-sidebar-project-group] [data-action="project-new-folder"]'), "project + folder");
@@ -235,7 +294,7 @@ try {
   await mutate("navigation.expand",{expandedIds:[...(await snapshot()).expandedIds,chats.id,chats2.id,chats3.id]});
   await until(() => page.evaluate(`!!document.querySelector(${json(row("folder",chats3.id))})`),"deep conversation folder visible");
   assert.equal(Math.round((await rectOf(row("folder",chats2.id))).left), Math.round((await rectOf(row("folder",chats3.id))).left), "project subfolders share one indent");
-  // Rename and Remove through the "..." menu (no Move item); new subfolder keeps the parent.
+  // Rename, Move to and Remove through the "..." menu; new subfolder keeps the parent.
   const scratch = await (async () => { await folderMenuAction(chats.id, "new-subfolder"); await submitDialog("临时"); return until(async () => (await snapshot()).folders.find(folder => folder.name === "临时"), "scratch folder"); })();
   await folderMenuAction(scratch.id, "rename-folder");
   await until(() => page.evaluate(`!!document.querySelector(${json(dialogSelector + " input")})`), "rename dialog");
@@ -244,6 +303,13 @@ try {
   await submitForm(dialogSelector + " form");
   await until(async () => (await snapshot()).folders.find(folder => folder.id === scratch.id)?.name === "临时目录", "renamed folder");
   await until(() => page.evaluate(`!document.querySelector(${json(dialogSelector)})`), "rename dialog closed");
+  // Move to... is the keyboard path for relocating a folder.
+  await folderMenuAction(scratch.id, "move-folder");
+  await until(() => page.evaluate(`!!document.querySelector(${json(dialogSelector + " select")})`), "folder move dialog");
+  await page.evaluate(`(() => { const input=document.querySelector(${json(dialogSelector + " select")}); input.value=${json(chats2.id)}; input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await submitForm(dialogSelector + " form");
+  await until(async () => (await snapshot()).folders.find(folder => folder.id === scratch.id)?.parentId === chats2.id, "folder moved through the menu");
+  await until(() => page.evaluate(`!document.querySelector(${json(dialogSelector)})`), "move dialog closed");
   await page.evaluate(`document.querySelector(${json(row("folder",chats.id))}).scrollIntoView({block:'center'})`);
   // Hover with a real pointer so the row's actions are visible, then open its menu.
   const hoverRect = await rectOf(row("folder",chats.id));
@@ -252,7 +318,7 @@ try {
   await capture("folder-row-hover-light.png");
   assert.ok(await clickSelector(`[data-workflow-folder="${chats.id}"] > .workflow-tree-row [data-action="folder-menu"]`));
   await until(() => page.evaluate("!!document.querySelector('.sidebar-row-menu [data-action=\"rename-folder\"]')"), "folder menu");
-  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action]')].map(el=>el.dataset.action)"), ["rename-folder","new-subfolder","remove-folder"], "folder menu: Rename, New folder, Remove");
+  assert.deepEqual(await page.evaluate("[...document.querySelectorAll('.sidebar-row-menu [data-action]')].map(el=>el.dataset.action)"), ["rename-folder","new-subfolder","move-folder","remove-folder"], "folder menu: Rename, New folder, Move to, Remove");
   await captureBoth("folder-menu");
   await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
   await until(() => page.evaluate("!document.querySelector('.sidebar-row-menu')"), "folder menu dismissed");

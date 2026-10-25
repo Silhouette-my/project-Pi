@@ -1282,9 +1282,11 @@ entirely inside the plugin's isolated page:
   amendment. They live in the project-scoped context `project:<projectId>`
   presented on the project page (the page no longer hides the panel) and, for the
   Agent, in the contexts of chats that belong to a workflow project. The Agent
-  tab renders the canonical Agent through `DetachedConversation` (first send
-  creates the session with `agent.open`), with **Send to conversation…** and
-  **Bring in a conversation…** dialogs; the side tab shows purpose, return
+  tab is labelled **Project Agent** and renders the canonical Agent through
+  `DetachedConversation` (first send creates the session with `agent.open`).
+  Its composer placeholder is "Discuss with the Project Agent" and the bottom-left
+  carries no project-name scope chip; the sidebar project row's hover Agent
+  action opens this tab; the side tab shows purpose, return
   policy, source workstream, an Explore review link and open-as-conversation. A
   closed Agent tab is not re-added to that session context. The project context
   has no `+` launcher.
