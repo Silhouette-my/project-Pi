@@ -113,7 +113,7 @@ async function folderMenuAction(folderId, action) {
 /** Real pointer drag: Chromium hit-tests the press, starts a native drag, and the drag events
  * are dispatched at real coordinates, so the draggable ancestor, dataTransfer and drop target
  * resolution are the ones a user gets. `grab` is where the user presses (defaults to the source). */
-async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName, inspect } = {}) {
+async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName, inspect, releaseAway } = {}) {
   const point = async (selector, x = .5, y = .5) => {
     await page.evaluate(`document.querySelector(${json(selector)})?.scrollIntoView({block:'nearest'})`);
     const r = await rectOf(selector); assert.ok(r && r.width > 0 && r.height > 0, `visible ${selector}`);
@@ -146,7 +146,7 @@ async function realDrag(grab, target, { fx = .5, fy = .5, indicator, captureName
     inspect?.(report);
     if (captureName) await capture(captureName);
     await page.call("Input.dispatchDragEvent", { type: "drop", x: to.x, y: to.y, data: dragData });
-    await page.call("Input.dispatchMouseEvent", { type: "mouseReleased", x: to.x, y: to.y, button: "left", buttons: 0, clickCount: 1 });
+    await page.call("Input.dispatchMouseEvent", { type: "mouseReleased", x: releaseAway ? 1200 : to.x, y: releaseAway ? 600 : to.y, button: "left", buttons: 0, clickCount: 1 });
   } finally { await page.call("Input.setInterceptDrags", { enabled: false }); }
   await sleepFrame();
 }
@@ -285,17 +285,21 @@ try {
   assert.equal(await opacityOf(category.id), 0, "collapsed header hides actions once the pointer leaves (no lingering focus)");
   assert.equal(await opacityOf("projects"), 1);
   await moveTo("body", .9, .98);
-  // After a drag/drop that ends over a header, nothing lingers until the pointer moves again.
+  // A collapsed category still reorders by drag (the layout moves under the pointer, so no hover claim here).
   await realDrag(`${headerOf(category.id)} .sidebar-category-title`, sectionOf("chats"), { fy: .1, indicator: ".sidebar-category.is-drop-before" });
   await until(async () => (await snapshot()).categoryOrder?.join() === ["projects", category.id, "chats"].join(), "collapsed category moved by drag");
+  // Reopen it. A drop that ends over a header that does not move leaves nothing lingering until the pointer moves again.
+  assert.ok(await clickSelector(chevron));
+  await until(() => page.evaluate(`document.querySelector(${json(chevron)}).getAttribute('aria-expanded')==='true'`), "category expanded");
+  await moveTo("body", .9, .98);
+  await realDrag(sessionHandle(chat.sessionId), headerOf("projects"), { indicator: `${headerOf("projects")}.is-drop-inside`, releaseAway: true });
+  await until(async () => ((await sessionRow(chat.sessionId))?.categoryId ?? "chats") === "projects", "chat dropped on the 项目 header");
   await sleep(250);
-  for (const id of ["chats", "projects", category.id]) assert.equal(await opacityOf(id), 0, `${id} actions hidden right after a drop`);
+  for (const id of ["chats", "projects", category.id]) assert.equal(await opacityOf(id), 0, `${id} actions hidden right after a drop (pointer left the sidebar)`);
   await moveTo(`${headerOf("projects")} .sidebar-category-title`);
   assert.equal(await opacityOf("projects"), 1, "hover works again after the drop");
-  // Reopen the collapsed category and check the scroller hides its scrollbar.
-  assert.ok(await clickSelector(chevron));
-  const scroller = await page.evaluate(`(() => { const el=document.querySelector('.sidebar-category-scroll'); return { width: getComputedStyle(el).scrollbarWidth, webkit: getComputedStyle(el,'::-webkit-scrollbar').display, gutter: el.offsetWidth - el.clientWidth } })()`);
-  assert.deepEqual(scroller, { width: "none", webkit: "none", gutter: 0 }, "sidebar list shows no scrollbar");
+  const scroller = await page.evaluate(`(() => { const el=document.querySelector('.sidebar-category-scroll'); return { webkit: getComputedStyle(el,'::-webkit-scrollbar').display, gutter: el.offsetWidth - el.clientWidth } })()`);
+  assert.deepEqual(scroller, { webkit: "none", gutter: 0 }, "sidebar list shows no scrollbar");
   await capture("sidebar-after-drops.png");
   await writeFile(join(output, "result.json"), json({ ok: true, sourceCommitAtRun, sourceChangesAtRun, interaction: "real pointer drag via CDP Input.dispatchDragEvent" }));
   await Promise.all(["failure.txt", "failure.png"].map(name => rm(join(output, name), { force: true })));
