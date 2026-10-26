@@ -125,7 +125,7 @@ export const zhTW = {
     closeToTray: "關閉到托盤",
     confirmQuitTitle: "確定退出 PI-Desktop？",
     confirmQuitBody:
-      "退出將停止所有正在進行的會話，未儲存的內容可能會丟失。你確定要退出嗎？",
+      "退出將中斷正在進行的任務，未儲存的內容可能會丟失。你確定要退出嗎？",
     confirmQuit: "退出",
   },
   pluginDesktopConsent: {

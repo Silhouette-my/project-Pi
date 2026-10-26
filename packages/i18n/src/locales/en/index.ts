@@ -125,7 +125,7 @@ export const en = {
     closeToTray: "Close to tray",
     confirmQuitTitle: "Quit PI-Desktop?",
     confirmQuitBody:
-      "Are you sure you want to quit? All running sessions will be stopped and unsaved changes may be lost.",
+      "Are you sure you want to quit? Work in progress will be interrupted and unsaved changes may be lost.",
     confirmQuit: "Quit",
   },
   /**

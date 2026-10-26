@@ -123,7 +123,7 @@ export const es = {
     "askBody": "Cuando cierra la ventana, PI-Desktop puede seguir ejecutándose en la bandeja del sistema para que no se pierda nada. Puedes cambiar esto en cualquier momento en Configuración.",
     "closeToTray": "Cerca de la bandeja",
     "confirmQuitTitle": "¿Salir de PI-Desktop?",
-    "confirmQuitBody": "¿Está seguro de que desea salir? Se detendrán todas las sesiones en ejecución y es posible que se pierdan los cambios no guardados.",
+    "confirmQuitBody": "¿Está seguro de que desea salir? Se interrumpirán las tareas en curso y es posible que se pierdan los cambios no guardados.",
     "confirmQuit": "Salir"
   },
   "pluginDesktopConsent": {

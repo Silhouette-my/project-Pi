@@ -126,7 +126,7 @@ export const ko = {
     closeToTray: "트레이로 닫기",
     confirmQuitTitle: "PI-Desktop을 종료할까요?",
     confirmQuitBody:
-      "정말 종료할까요? 실행 중인 모든 세션이 중지되며 저장하지 않은 변경 사항을 잃을 수 있습니다.",
+      "정말 종료할까요? 진행 중인 작업이 중단되며 저장하지 않은 변경 사항을 잃을 수 있습니다.",
     confirmQuit: "종료",
   },
   /**

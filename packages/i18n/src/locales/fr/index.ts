@@ -123,7 +123,7 @@ export const fr = {
     "askBody": "Lorsque vous fermez la fenêtre, PI-Desktop peut continuer à s'exécuter dans la barre d'état système afin que rien ne soit perdu. Vous pouvez modifier cela à tout moment dans les paramètres.",
     "closeToTray": "Près du bac",
     "confirmQuitTitle": "Quitter PI-Desktop ?",
-    "confirmQuitBody": "Êtes-vous sûr de vouloir arrêter ? Toutes les sessions en cours seront arrêtées et les modifications non enregistrées risquent d'être perdues.",
+    "confirmQuitBody": "Êtes-vous sûr de vouloir quitter ? Les tâches en cours seront interrompues et les modifications non enregistrées risquent d'être perdues.",
     "confirmQuit": "Quitter"
   },
   "pluginDesktopConsent": {

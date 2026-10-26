@@ -123,10 +123,11 @@ test("explicit quit asks for confirmation only while work runs, except probes an
   );
   const body = quitHandler.slice(0, quitHandler.indexOf("shutdownPromise ="));
   assert.match(body, /quitConfirmationDisabled\(\)/);
+  assert.match(body, /hasRunningWork\(\{ activeTurns, getHost, liveCallService \}\)/);
   assert.match(shutdownSource, /PI_DESKTOP_BOOT_PROBE/);
   assert.match(
     body,
-    /!state\.quitConfirmed && !isAutomatedMode && !isUpdateRestart && hasRunningWork/,
+    /!state\.quitConfirmed && !isAutomatedMode && !isUpdateRestart/,
     "automated probes and update restarts are the only confirmation exemptions",
   );
   assert.match(

@@ -90,6 +90,11 @@ export class LiveCallService {
     });
   }
 
+  /** True while a call slot is held (preparing through closing); read by the quit confirmation. */
+  hasActiveCall(): boolean {
+    return this.current !== null;
+  }
+
   async status(): Promise<LiveStatus> {
     const snapshot = await this.readSettings();
     const bindings: LiveBindingReadiness[] = [];

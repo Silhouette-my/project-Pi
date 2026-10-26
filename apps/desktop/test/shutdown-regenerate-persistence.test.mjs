@@ -201,21 +201,25 @@ test("a repeated before-quit cannot bypass the pending renderer confirmation", a
     }
   });
 
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
   assert.equal(requestQuit(), true);
+  await settle();
   assert.equal(confirmationCount, 1);
   assert.equal(requestQuit(), true);
+  await settle();
   assert.equal(confirmationCount, 1);
   assert.equal(state.shutdownPromise, null);
   assert.equal(state.quitting, false);
 
   confirmations[0](false);
-  await Promise.resolve();
+  await settle();
   assert.equal(state.quitConfirmed, false);
   assert.equal(requestQuit(), true);
+  await settle();
   assert.equal(confirmationCount, 2);
 
   confirmations[1](true);
-  await Promise.resolve();
+  await settle();
   assert.ok(state.shutdownPromise);
   await state.shutdownPromise;
   assert.equal(state.shutdownComplete, true);

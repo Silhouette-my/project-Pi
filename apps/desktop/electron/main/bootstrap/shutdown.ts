@@ -16,6 +16,7 @@ import type { McpControlServer } from "../mcp-control";
 import type { McpOAuthManager } from "../mcp-oauth";
 import { getActiveRemoteHostsBoot, setActiveRemoteHostsBoot } from "./remote-hosts";
 import type { LiveCallService } from "../live-voice/call-service";
+import { hasRunningWork } from "./quit-work";
 
 const QUIT_TURN_SETTLE_BUDGET_MS = 2_000;
 /**
@@ -74,7 +75,7 @@ export type ShutdownDependencies = {
   logger: Pick<Logger, "app">;
   confirmQuitDialog: () => Promise<boolean>;
   disposePowerSaveBlockers: () => void;
-  liveCallService?: Pick<LiveCallService, "endForLifecycle">;
+  liveCallService?: Pick<LiveCallService, "endForLifecycle" | "hasActiveCall">;
   disposeSystemProxyRelay?: () => Promise<void>;
   disposeProjectWorkflow?: () => Promise<void>;
 };
@@ -152,7 +153,7 @@ export function registerShutdownHandlers({
     if (state.shutdownPromise || quitConfirmationPending) return;
 
     // Show a confirmation dialog on the first explicit quit (Cmd+Q, tray quit,
-    // application-menu Quit) while a turn is running. The data-saving shutdown
+    // application-menu Quit) while work is running. The data-saving shutdown
     // runs after confirmation.
     // Skip confirmation in automated probe/capture modes where no human is
     // present to interact with the dialog.
@@ -163,32 +164,45 @@ export function registerShutdownHandlers({
     // behind a dialog fails the update. There is no decision left either: the
     // user chose "restart to update" to get here.
     const isUpdateRestart = updater.isInstallingUpdate();
-    // The dialog warns that running sessions will be stopped. With no turn in
-    // flight there is nothing to warn about, and asking anyway makes every quit
-    // from a script, a supervisor or AppleScript wait for a click that nobody
-    // is there to give (the dialog has no timeout once it falls back to native).
-    const hasRunningWork = activeTurns.size > 0;
-    if (!state.quitConfirmed && !isAutomatedMode && !isUpdateRestart && hasRunningWork) {
-      state.quitConfirmed = true;
+    // The dialog warns that work in progress will be interrupted. With nothing
+    // running (no turn, voice call, background task or workflow run) there is
+    // nothing to warn about, and asking anyway makes every quit from a script, a
+    // supervisor or AppleScript wait for a click that nobody is there to give
+    // (the dialog has no timeout once it falls back to native).
+    if (!state.quitConfirmed && !isAutomatedMode && !isUpdateRestart) {
+      // Claim the quit before the (possibly async) work probe so a repeated
+      // before-quit cannot start a second one or bypass the pending answer.
       quitConfirmationPending = true;
-      void confirmQuitDialog().then(
-        (confirmed) => {
+      void hasRunningWork({ activeTurns, getHost, liveCallService }).then(
+        (running) => running,
+        () => false,
+      ).then((running) => {
+        if (!running) {
           quitConfirmationPending = false;
-          if (confirmed) {
-            app.quit();
-          } else {
-            // User cancelled: allow future quit requests to prompt again.
-            state.quitConfirmed = false;
-          }
-        },
-        (error: unknown) => {
-          quitConfirmationPending = false;
-          logger.app("lifecycle", "warn", "quit confirmation failed; allowing shutdown", {
-            data: String(error),
-          });
+          state.quitConfirmed = true;
           app.quit();
-        },
-      );
+          return;
+        }
+        state.quitConfirmed = true;
+        void confirmQuitDialog().then(
+          (confirmed) => {
+            quitConfirmationPending = false;
+            if (confirmed) {
+              app.quit();
+            } else {
+              // User cancelled: allow future quit requests to prompt again.
+              state.quitConfirmed = false;
+            }
+          },
+          (error: unknown) => {
+            quitConfirmationPending = false;
+            logger.app("lifecycle", "warn", "quit confirmation failed; allowing shutdown", {
+              data: String(error),
+            });
+            app.quit();
+          },
+        );
+      });
       return;
     }
 

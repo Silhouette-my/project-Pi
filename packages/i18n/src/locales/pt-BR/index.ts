@@ -123,7 +123,7 @@ export const ptBR = {
     askBody: "Ao fechar a janela, o PI-Desktop pode continuar em execução na bandeja do sistema para que nada seja perdido. Você pode alterar isso a qualquer momento nas Configurações.",
     closeToTray: "Fechar para a bandeja",
     confirmQuitTitle: "Sair do PI-Desktop?",
-    confirmQuitBody: "Tem certeza de que deseja sair? Todas as sessões em execução serão interrompidas e as alterações não salvas poderão ser perdidas.",
+    confirmQuitBody: "Tem certeza de que deseja sair? As tarefas em andamento serão interrompidas e as alterações não salvas poderão ser perdidas.",
     confirmQuit: "Sair"
   },
   pluginDesktopConsent: {

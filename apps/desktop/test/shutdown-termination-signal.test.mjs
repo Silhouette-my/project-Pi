@@ -24,8 +24,11 @@ register(new URL("./helpers/ts-import-hooks.mjs", import.meta.url));
 const { app } = await import("electron");
 const { registerShutdownHandlers, QUIT_SHUTDOWN_HARD_TIMEOUT_MS, quitConfirmationDisabled } =
   await import("../electron/main/bootstrap/shutdown.ts");
+const { QUIT_WORK_PROBE_TIMEOUT_MS } = await import("../electron/main/bootstrap/quit-work.ts");
 
-function wire({ hostDispose = async () => {}, activeTurns = new Map() } = {}) {
+const settle = async () => { for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve)); };
+
+function wire({ hostDispose = async () => {}, activeTurns = new Map(), hostCall = async () => ({}), liveCallService } = {}) {
   app.removeAllListeners();
   process.removeAllListeners("SIGTERM");
   const calls = { confirm: 0, exit: 0, warnings: [], quits: 0 };
@@ -39,7 +42,7 @@ function wire({ hostDispose = async () => {}, activeTurns = new Map() } = {}) {
   app.exit = () => { calls.exit += 1; };
   registerShutdownHandlers({
     hasSingleInstanceLock: true, state,
-    getHost: () => ({ dispose: hostDispose }),
+    getHost: () => ({ dispose: hostDispose, call: hostCall }),
     getSidecar: () => null, getMcpControl: () => null, activeTurns,
     persistenceOutbox: { flush: async () => {}, size: () => 0 },
     inflightCheckpointer: { flushAll: async () => {}, dispose },
@@ -49,6 +52,7 @@ function wire({ hostDispose = async () => {}, activeTurns = new Map() } = {}) {
     pluginViews: { dispose: async () => {} },
     updater: { dispose, isInstallingUpdate: () => false },
     logger: { app: (_a, level, event) => { if (level === "warn") calls.warnings.push(event); } },
+    liveCallService,
     confirmQuitDialog: () => { calls.confirm += 1; return new Promise(() => {}); },
     disposePowerSaveBlockers: dispose,
   });
@@ -68,11 +72,12 @@ test("SIGTERM quits without waiting on the confirmation dialog", async (t) => {
   assert.equal(state.shutdownComplete, true);
 });
 
-test("a plain app.quit asks for confirmation while a turn is running", (t) => {
+test("a plain app.quit asks for confirmation while a turn is running", async (t) => {
   delete process.env.PI_DESKTOP_SKIP_QUIT_CONFIRM;
   t.after(() => { app.removeAllListeners(); process.removeAllListeners("SIGTERM"); });
   const { state, calls } = wire({ activeTurns: new Map([["session", "turn"]]) });
   app.quit();
+  await settle();
   assert.equal(calls.confirm, 1);
   assert.equal(state.shutdownPromise, null);
 });
@@ -82,6 +87,7 @@ test("an idle app quits without a confirmation nobody is there to answer", async
   t.after(() => { app.removeAllListeners(); process.removeAllListeners("SIGTERM"); });
   const { state, calls } = wire();
   app.quit();
+  await settle();
   assert.equal(calls.confirm, 0);
   await state.shutdownPromise;
   assert.ok(state.quitting);
@@ -114,4 +120,53 @@ test("a repeated SIGTERM during shutdown exits immediately", async (t) => {
   await new Promise((resolve) => setImmediate(resolve));
   process.emit("SIGTERM", "SIGTERM");
   assert.equal(calls.exit, 1);
+});
+
+const idleVoice = { hasActiveCall: () => false, endForLifecycle: async () => {} };
+const sources = [
+  ["a live voice call", { liveCallService: { hasActiveCall: () => true, endForLifecycle: async () => {} } }],
+  ["a running background task", { liveCallService: idleVoice, hostCall: async (method) => method === "backgroundTasks.list" ? { tasks: [{ id: "t", state: "running" }] } : {} }],
+  ["an executing project workflow", { liveCallService: idleVoice, hostCall: async (method) => method === "project.workflow.snapshot" ? { workstreams: [{ id: "w", status: "executing" }] } : {} }],
+];
+for (const [name, options] of sources) {
+  test(`quit asks for confirmation while ${name} is running`, async (t) => {
+    delete process.env.PI_DESKTOP_SKIP_QUIT_CONFIRM;
+    t.after(() => { app.removeAllListeners(); process.removeAllListeners("SIGTERM"); });
+    const { state, calls } = wire(options);
+    app.quit();
+    await settle();
+    assert.equal(calls.confirm, 1);
+    assert.equal(state.shutdownPromise, null);
+  });
+}
+
+const quiet = [
+  ["finished tasks and paused workflows", { liveCallService: idleVoice, hostCall: async (method) => method === "backgroundTasks.list" ? { tasks: [{ state: "exited" }, { state: "stopped" }] } : { workstreams: [{ status: "paused" }, { status: "completed" }] } }],
+  ["a host that fails", { liveCallService: idleVoice, hostCall: async () => { throw new Error("host down"); } }],
+];
+for (const [name, options] of quiet) {
+  test(`quit does not ask with ${name}`, async (t) => {
+    delete process.env.PI_DESKTOP_SKIP_QUIT_CONFIRM;
+    t.after(() => { app.removeAllListeners(); process.removeAllListeners("SIGTERM"); });
+    const { state, calls } = wire(options);
+    app.quit();
+    await settle();
+    assert.equal(calls.confirm, 0);
+    assert.ok(state.shutdownPromise);
+  });
+}
+
+test("a host that never answers the work probe fails open to no confirmation", async (t) => {
+  delete process.env.PI_DESKTOP_SKIP_QUIT_CONFIRM;
+  t.after(() => { app.removeAllListeners(); process.removeAllListeners("SIGTERM"); });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { state, calls } = wire({ liveCallService: idleVoice, hostCall: () => new Promise(() => {}) });
+  app.quit();
+  await settle();
+  assert.equal(calls.confirm, 0);
+  assert.equal(state.shutdownPromise, null, "still probing inside the budget");
+  t.mock.timers.tick(QUIT_WORK_PROBE_TIMEOUT_MS);
+  await settle();
+  assert.equal(calls.confirm, 0);
+  assert.ok(state.shutdownPromise, "the quit proceeds once the budget is spent");
 });

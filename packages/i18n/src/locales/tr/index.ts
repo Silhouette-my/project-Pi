@@ -126,7 +126,7 @@ export const tr = {
     closeToTray: "Tepsiye kapat",
     confirmQuitTitle: "PI-Desktop'tan çıkılsın mı?",
     confirmQuitBody:
-      "Çıkmak istediğinizden emin misiniz? Tüm çalışan oturumlar durdurulur ve kaydedilmemiş değişiklikler kaybolabilir.",
+      "Çıkmak istediğinizden emin misiniz? Devam eden görevler kesintiye uğrar ve kaydedilmemiş değişiklikler kaybolabilir.",
     confirmQuit: "Çık",
   },
   /**

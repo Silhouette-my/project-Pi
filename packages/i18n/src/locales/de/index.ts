@@ -123,7 +123,7 @@ export const de = {
     "askBody": "Wenn Sie das Fenster schließen, kann PI-Desktop in der Taskleiste weiterlaufen, sodass nichts verloren geht. Sie können dies jederzeit in den Einstellungen ändern.",
     "closeToTray": "In der Taskleiste",
     "confirmQuitTitle": "PI-Desktop beenden?",
-    "confirmQuitBody": "Sind Sie sicher, dass Sie beenden möchten? Alle laufenden Sitzungen werden gestoppt und nicht gespeicherte Änderungen gehen möglicherweise verloren.",
+    "confirmQuitBody": "Sind Sie sicher, dass Sie beenden möchten? Laufende Aufgaben werden unterbrochen und nicht gespeicherte Änderungen gehen möglicherweise verloren.",
     "confirmQuit": "Beenden"
   },
   "pluginDesktopConsent": {
