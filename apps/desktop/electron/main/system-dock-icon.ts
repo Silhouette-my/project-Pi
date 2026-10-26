@@ -4,6 +4,9 @@ import { join } from "node:path";
 /** Read the OS preference directly; nativeTheme may be overridden by the app theme. */
 export function installSystemDockIcon(): void {
   if (process.platform !== "darwin" || !app.dock) return;
+  // macOS 26 picks the light/dark icon from the bundle's Assets.car itself;
+  // an explicit Dock image would pin one appearance and add a legacy tile.
+  if (app.isPackaged && Number.parseInt(process.getSystemVersion?.() ?? "0", 10) >= 26) return;
   const root = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "build");
   const light = nativeImage.createFromPath(join(root, "icon_1024.png"));
   const dark = nativeImage.createFromPath(join(root, "icon-dark_1024.png"));

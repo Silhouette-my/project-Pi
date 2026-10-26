@@ -35,13 +35,16 @@ notifications or taskbar groups. The Windows package additionally pins the
 and preserve developer workspace defaults despite the branded executable name.
 The first `pnpm dev` on Electron 43+ downloads the Electron binary on demand
 (the package no longer installs it during `pnpm install`).
-Packaged lanes use `build/icon.icns` through electron-builder on macOS and
-`build/icon.ico` for the Windows executable and native window icon. The
-renderer imports the same PNG through `BrandLogo`. The PNG is canonical;
-`scripts/make-icon.py` derives the multi-size Windows ICO, the 512px
-Windows/Linux package PNG, the
-transparent monochrome `build/tray-icon-mac.png` template, and the iconset/ICNS
-when macOS `iconutil` is available, without overwriting the canonical source.
+Packaged lanes use `build/icon.icon` (Icon Composer, monochrome: white tile
+with black mark, black tile with white mark in dark appearance) through
+electron-builder on macOS, which compiles it into `Assets.car` for macOS 26
+appearance-aware icons plus a fallback `icon.icns`; `build/after-pack-icon.cjs`
+restores the full-resolution light `build/icon.icns`. `build/icon.ico` serves
+the Windows executable and native window icon. Before macOS 26 the runtime
+switches the Dock between `icon_1024.png` and `icon-dark_1024.png`.
+`scripts/make-icon.py` renders the `.icon` document into those PNGs, the ICO,
+the 512px Windows/Linux PNG, the black template `build/tray-icon-mac.png`, and
+the ICNS (needs Xcode 26 `ictool` and `iconutil`).
 
 ## 2. Prerequisites (release lane)
 
@@ -85,8 +88,8 @@ when macOS `iconutil` is available, without overwriting the canonical source.
 - Chromium locale packs for English, Simplified Chinese, Traditional Chinese,
   Turkish, German, Spanish, French, and Korean. Product catalogs remain bundled
   independently of Chromium locales.
-- App icons `build/icon.icns` and `build/icon.ico` (derived from canonical
-  `build/icon_1024.png` by `scripts/make-icon.py`).
+- App icons `build/icon.icon` (macOS 26 light/dark), `build/icon.icns` and `build/icon.ico` (derived from
+  `build/icon.icon` by `scripts/make-icon.py`).
 - macOS menu bar template `build/tray-icon-mac.png`, derived from the dark PI
   mark with a transparent background; Windows/Linux use the product PNG tray
   resource.
