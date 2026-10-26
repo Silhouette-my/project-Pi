@@ -137,6 +137,10 @@
   min-width: 0;
 }
 .project-session-detail h2 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   font-size: var(--text-lg);
   font-weight: var(--font-weight-strong);
   overflow-wrap: anywhere;
@@ -148,6 +152,14 @@
 .project-session-detail > .workflow-section-heading {
   align-items: flex-start;
   gap: 12px;
+}
+.project-session-detail > .workflow-section-heading > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.project-session-detail > .workflow-section-heading > .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .project-session-detail h3 {
   display: flex;

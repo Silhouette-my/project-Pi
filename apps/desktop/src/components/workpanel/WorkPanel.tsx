@@ -58,6 +58,11 @@ import { FilesTab } from "./FilesTab";
 import { PluginViewTab } from "./PluginViewTab";
 import { SubagentTranscriptTab } from "./SubagentTranscriptTab";
 import { SideChatTab } from "../../features/chat/side-chat/SideChatTab";
+import {
+  openWholeConversationSideChat,
+  selectCanOpenSideChat,
+  selectSideChatAnchorId,
+} from "../../features/chat/side-chat/side-chat-entry";
 import { ProjectAgentTab } from "../../features/project-panel/ProjectAgentTab";
 import { ProjectSideTab } from "../../features/project-panel/ProjectSideTab";
 import { ProjectPanelEmpty } from "../../features/project-panel/ProjectPanelEmpty";
@@ -315,6 +320,11 @@ function LocalWorkPanel({
   const activateTab = useAppStore((s) => s.activateWorkPanelTab);
   const reorderTabs = useAppStore((s) => s.reorderWorkPanelTabs);
   const closeTab = useAppStore((s) => s.closeWorkPanelTab);
+  // A side chat about the whole conversation is offered only on a chat page.
+  const canSideChat = useAppStore(
+    (s) => s.page === "chat" && selectCanOpenSideChat(s),
+  );
+  const sideChatEmpty = !useAppStore(selectSideChatAnchorId);
   const openWorkPanelTab = useAppStore((s) => s.openWorkPanelTab);
   const openNewWorkPanelTab = useAppStore((s) => s.openNewWorkPanelTab);
   const replaceWorkPanelTab = useAppStore((s) => s.replaceWorkPanelTab);
@@ -1328,6 +1338,24 @@ function LocalWorkPanel({
                   role="group"
                   aria-label={t("panel.toolsAndPanels")}
                 >
+                  {canSideChat ? (
+                    <button
+                      type="button"
+                      className="work-panel-launcher-row"
+                      data-work-panel-launcher-item="side-chat"
+                      disabled={sideChatEmpty}
+                      title={sideChatEmpty ? t("workPanel.sideChatEmpty") : undefined}
+                      onClick={() => {
+                        const launcherId = activeTab?.kind === "new" ? activeTab.id : undefined;
+                        if (openWholeConversationSideChat() && launcherId) closeTab(launcherId);
+                      }}
+                    >
+                      <span className="work-panel-launcher-icon" aria-hidden>
+                        <IconChat size={16} />
+                      </span>
+                      <span className="work-panel-launcher-label">{t("workPanel.newSideChat")}</span>
+                    </button>
+                  ) : null}
                   {tools.map((item) => (
                     <button
                       key={item.id}

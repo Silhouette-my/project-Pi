@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { sessionDisplayTitle } from "../../lib/session-display-title";
 import { useTranslation } from "react-i18next";
 import type { ProjectWorkflowSnapshot } from "@pi-desktop/shared";
 import { Badge, Button, TooltipButton } from "../../components/ui";
@@ -55,7 +56,7 @@ export function SessionStructureView({
   const title = (node: StructureSession) =>
     node.agent
       ? t("workflow.agentTitle")
-      : node.session?.title || t("projectStructure.unavailableSession");
+      : sessionDisplayTitle(node.session?.title) || t("projectStructure.unavailableSession");
   const role = (node: StructureSession) =>
     node.agent
       ? t("workflow.discussion")
@@ -181,7 +182,7 @@ export function SessionStructureView({
               <div className="workflow-section-heading">
                 <div>
                   <small>{role(selected)}</small>
-                  <h2 title={selected.session?.projectPath}>{title(selected)}</h2>
+                  <h2 title={title(selected)}>{title(selected)}</h2>
                 </div>
                 <Button
                   disabled={opening || !selected.session}
