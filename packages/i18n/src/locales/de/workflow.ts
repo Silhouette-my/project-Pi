@@ -83,6 +83,9 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskDetails: "Name und Abnahme (optional)",
+    titleAutoHint: "Wird bei leerem Feld aus der Aufgabe erstellt.",
+    taskPlaceholder: "Beschreibe, was der Agent erledigen soll…",
     taskRecords: "Aufgabenverlauf",
     acceptanceOptionalHint: "Optional, eine Bedingung pro Zeile. Abnahme und Agent-Abschluss werden getrennt erfasst.",
     sessionExecutionHint: "Verwendet Modell, Werkzeuge und Berechtigungen der ausgewählten Unterhaltung.",

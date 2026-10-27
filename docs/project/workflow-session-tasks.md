@@ -30,6 +30,12 @@ records remain the way to inspect changes and checks.
 ## Compatibility and completion
 
 - New creation entry points explicitly set `executionMode: "session"`.
+- Task creation asks for the goal first. A blank title is generated from the
+  first goal line (up to 80 Unicode characters); name and optional acceptance
+  are available in a disclosure. Assignment, priority, dependencies and next
+  action are not user form inputs. Creation keeps the existing neutral defaults;
+  editing only patches title, goal and acceptance, preserving stored scheduling
+  metadata and concurrent Agent updates.
 - A missing field retains the legacy bounded behavior. Existing records are not
   migrated into broader authority. A Run freezes its Workstream's mode.
 - Session-backed tasks use ordinary Agent startup, tools and ask/auto behavior;

@@ -83,6 +83,9 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskDetails: "Nombre y criterios de aceptación (opcional)",
+    titleAutoHint: "Si se deja vacío, se genera a partir de la tarea.",
+    taskPlaceholder: "Describe lo que quieres que haga el agente…",
     taskRecords: "Registro de la tarea",
     acceptanceOptionalHint: "Opcional, una condición por línea. La aceptación y la finalización del Agent se registran por separado.",
     sessionExecutionHint: "Usa el modelo, las herramientas y los permisos de la conversación seleccionada.",

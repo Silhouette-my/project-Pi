@@ -83,6 +83,9 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskDetails: "名稱與驗收條件（選填）",
+    titleAutoHint: "留空時根據任務描述自動產生。",
+    taskPlaceholder: "描述你希望 Agent 完成的事情…",
     taskRecords: "任務記錄",
     acceptanceOptionalHint: "選填，每行一項。驗收狀態與 Agent 是否結束任務分別記錄。",
     sessionExecutionHint: "沿用所選對話的模型、工具與權限設定。",

@@ -297,9 +297,9 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                       <div className="workflow-detail-head">
                         <div>
                           <h2>{shown.title} <WorkflowStatusBadge status={shown.status} executionMode={shown.executionMode} /></h2>
-                          <p className="workflow-muted">
+                          {shown.executionMode !== "session" && <p className="workflow-muted">
                             {t("projectStructure.ownedBy", { owner: workflowOwnerLabel(shown.owner, sessions, t) })} · {t("workflow.revision", { revision: shown.revision })}
-                          </p>
+                          </p>}
                         </div>
                         <div className="workflow-detail-actions">
                           {shown.mainSessionId && (

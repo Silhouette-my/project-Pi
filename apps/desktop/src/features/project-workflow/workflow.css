@@ -82,6 +82,12 @@
   grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
   gap: 14px;
 }
+.workflow-task-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 16px;
+}
 .workflow-form fieldset {
   border: 0;
   padding: 0;

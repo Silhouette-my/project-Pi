@@ -83,6 +83,9 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskDetails: "Ad ve kabul koşulları (isteğe bağlı)",
+    titleAutoHint: "Boş bırakılırsa görev açıklamasından oluşturulur.",
+    taskPlaceholder: "Agent’ın yapmasını istediğiniz işi açıklayın…",
     taskRecords: "Görev kayıtları",
     acceptanceOptionalHint: "İsteğe bağlı, her satıra bir koşul. Kabul ve Agent’ın işi bitirmesi ayrı kaydedilir.",
     sessionExecutionHint: "Seçili sohbetin modelini, araçlarını ve izinlerini kullanır.",

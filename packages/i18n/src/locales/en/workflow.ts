@@ -83,6 +83,9 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskDetails: "Name and acceptance (optional)",
+    titleAutoHint: "Generated from your task if left blank.",
+    taskPlaceholder: "Describe what you want the Agent to do…",
     taskRecords: "Task records",
     acceptanceOptionalHint: "Optional, one condition per line. Track these separately from the Agent’s completion.",
     sessionExecutionHint: "Uses the selected conversation’s model, tools and permissions.",

@@ -80,6 +80,9 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskDetails: "名称与验收条件（选填）",
+    titleAutoHint: "留空时根据任务描述自动生成。",
+    taskPlaceholder: "描述你希望 Agent 完成的事情…",
     taskRecords: "任务记录",
     acceptanceOptionalHint: "可选，每行一项。验收状态与 Agent 是否结束任务分别记录。",
     sessionExecutionHint: "沿用所选对话的模型、工具和权限设置。",

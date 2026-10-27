@@ -83,6 +83,9 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskDetails: "이름 및 승인 조건 (선택 사항)",
+    titleAutoHint: "비워 두면 작업 설명에서 자동으로 생성됩니다.",
+    taskPlaceholder: "Agent가 수행할 작업을 설명하세요…",
     taskRecords: "작업 기록",
     acceptanceOptionalHint: "선택 사항입니다. 한 줄에 조건 하나를 입력하세요. 인수 상태와 Agent 작업 종료는 별도로 기록됩니다.",
     sessionExecutionHint: "선택한 대화의 모델, 도구 및 권한 설정을 사용합니다.",

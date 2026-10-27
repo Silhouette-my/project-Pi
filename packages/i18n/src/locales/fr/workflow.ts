@@ -83,6 +83,9 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskDetails: "Nom et critères d’acceptation (facultatif)",
+    titleAutoHint: "Généré à partir de la tâche si ce champ reste vide.",
+    taskPlaceholder: "Décrivez ce que vous souhaitez confier à l’agent…",
     taskRecords: "Historique de la tâche",
     acceptanceOptionalHint: "Facultatif, une condition par ligne. L’acceptation et la fin du travail de l’Agent sont suivies séparément.",
     sessionExecutionHint: "Utilise le modèle, les outils et les autorisations de la conversation sélectionnée.",

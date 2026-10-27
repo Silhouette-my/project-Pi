@@ -481,11 +481,12 @@ Object.assign(window, {
     const edit = document.querySelector('[data-workflow="workstream-editor"]')!;
     field("workflow.title", edit).focus();
     check(document.activeElement === field("workflow.title", edit), "Title not keyboard-focusable");
-    fill("workflow.nextAction", "Review exact candidate and preserve reading position", edit);
+    check(!edit.querySelector("select, input[type='number'], fieldset"), "Task editor still asks users to schedule or assign work");
+    fill("workflow.goal", "Review exact candidate and preserve reading position", edit);
     submit(edit);
     await until(
       () =>
-        durable.workstreams[0].nextAction ===
+        durable.workstreams[0].goal ===
         "Review exact candidate and preserve reading position",
       "Edit not persisted through IPC",
     );
@@ -495,6 +496,8 @@ Object.assign(window, {
     const concurrentEditor = document.querySelector('[data-workflow="workstream-editor"]')!;
     fill("workflow.title", longTitle + " (reviewed)", concurrentEditor);
     durable.workstreams[0].nextAction = "Background checkpoint must survive title editing";
+    durable.workstreams[0].owner = { kind: "agent", ref: "updated-agent-owner" };
+    durable.workstreams[0].priority = 17;
     durable.workstreams[0].revision++;
     durable.revision++;
     emit();
@@ -518,10 +521,15 @@ Object.assign(window, {
       titleMutation.kind === "workstream.update" && !("nextAction" in titleMutation.patch),
       "Editor submitted an untouched stale field",
     );
+    check(titleMutation.kind === "workstream.update" &&
+      ["owner", "priority", "dependencyIds"].every((key) => !(key in titleMutation.patch)),
+      "Task editor submitted agent-managed fields");
+    check(durable.workstreams[0].owner.ref === "updated-agent-owner" && durable.workstreams[0].priority === 17,
+      "Task editing reset existing assignment or scheduling metadata");
     click("workflow.editWorkstream", detail());
     const conflictingEditor = document.querySelector('[data-workflow="workstream-editor"]')!;
-    fill("workflow.nextAction", "User draft from old checkpoint", conflictingEditor);
-    durable.workstreams[0].nextAction = "New authoritative checkpoint";
+    fill("workflow.goal", "User draft from old checkpoint", conflictingEditor);
+    durable.workstreams[0].goal = "New authoritative checkpoint";
     durable.workstreams[0].revision++;
     durable.revision++;
     emit();
@@ -539,27 +547,27 @@ Object.assign(window, {
     );
     check(
       mutations.length === beforeConflict &&
-        durable.workstreams[0].nextAction === "New authoritative checkpoint",
+        durable.workstreams[0].goal === "New authoritative checkpoint",
       "Stale field escaped the editor",
     );
     click("workflow.retry", conflictingEditor);
     check(
-      field("workflow.nextAction", conflictingEditor).value === "New authoritative checkpoint",
+      field("workflow.goal", conflictingEditor).value === "New authoritative checkpoint",
       "Reload did not restore current field",
     );
     click("workflow.close", conflictingEditor);
     click("workflow.newWorkstream");
     const create = document.querySelector('[data-workflow="workstream-editor"]')!;
     check(create.closest('[role="dialog"][aria-modal="true"]'), "Work editor was not a modal dialog");
-    field("workflow.title", create).focus();
-    flushSync(() => field("workflow.title", create).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+    check(document.activeElement === field("workflow.goal", create), "New task does not focus its description");
+    check(!create.querySelector("details[open]"), "Optional task details should start collapsed");
+    check(!create.querySelector("select, input[type='number'], fieldset"), "New task asks users for assignment, priority or dependencies");
+    flushSync(() => field("workflow.goal", create).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
     check(document.activeElement === findButton("workflow.close", create), "Dialog focus escaped backwards");
     flushSync(() => findButton("workflow.close", create).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })));
-    check(document.activeElement === field("workflow.title", create), "Dialog focus escaped forwards");
-    fill("workflow.title", "Independent validation", create);
-    fill("workflow.goal", "Validate after restart", create);
+    check(document.activeElement === field("workflow.goal", create), "Dialog focus escaped forwards");
+    fill("workflow.goal", "Validate after restart\nKeep the current task context.", create);
     check(!(field("workflow.acceptance", create) as HTMLTextAreaElement).required, "New task still requires acceptance");
-    fill("workflow.owner", "validation-owner", create);
     submit(create);
     await until(() => durable.workstreams.length === 2, "Workstream creation missing");
     await until(
@@ -568,6 +576,8 @@ Object.assign(window, {
     );
     const sessionTask = durable.workstreams[1];
     check(sessionTask.executionMode === "session" && sessionTask.acceptance.length === 0, "New task did not preserve lightweight semantics");
+    check(sessionTask.title === "Validate after restart", "Task title was not generated from its description");
+    check(sessionTask.owner.kind === "user" && sessionTask.owner.ref === "user" && sessionTask.priority === 0 && sessionTask.dependencyIds.length === 0 && sessionTask.nextAction === "", "New task defaults require user scheduling");
     const sessionDetail = () => document.querySelector(`[data-workstream-id="${sessionTask.id}"]`)!;
     await until(sessionDetail, "New task detail missing");
     check(![...sessionDetail().querySelectorAll("button")].some((button) => button.textContent === t("workflow.authority")), "New task exposes a second authorization form");
@@ -753,12 +763,13 @@ Object.assign(window, {
     // Boundary rejection must remain visible and must not fabricate a mutation.
     click("workflow.editWorkstream", detail());
     const rejectedEditor = document.querySelector('[data-workflow="workstream-editor"]')!;
-    fill("workflow.owner", "must-not-apply", rejectedEditor);
+    const priorGoal = durable.workstreams[0].goal;
+    fill("workflow.goal", "must-not-apply", rejectedEditor);
     rejectMutation = true;
     submit(rejectedEditor);
     await until(() => document.querySelector('[role="alert"]'), "Mutation rejection hidden");
     check(
-      durable.workstreams[0].owner.ref === "continuity-owner",
+      durable.workstreams[0].goal === priorGoal,
       "Rejected mutation applied optimistically",
     );
     click("workflow.close", rejectedEditor);
@@ -801,7 +812,7 @@ Object.assign(window, {
     click("workflow.allWorkstreams");
     const otherWorkstream = [
       ...document.querySelectorAll<HTMLButtonElement>(".workflow-workstream"),
-    ].find((button) => button.textContent?.includes("Independent validation"))!;
+    ].find((button) => button.textContent?.includes("Validate after restart"))!;
     flushSync(() => otherWorkstream.click());
     await until(
       () => document.querySelector(`[data-workstream-id="${durable.workstreams[1].id}"]`),
@@ -935,6 +946,8 @@ Object.assign(window, {
   },
   async consoleScreenshot(theme: string, target = "top") {
     document.documentElement.dataset.theme = theme;
+    const editor = document.querySelector('[data-workflow="workstream-editor"]');
+    if (editor) click("workflow.close", editor);
     const searchToggle = findButton("workflow.search", document.querySelector(".workflow-header")!);
     if (searchToggle.getAttribute("aria-expanded") === "true") flushSync(() => searchToggle.click());
     if (target === "top") click("workflow.overview");
@@ -960,6 +973,12 @@ Object.assign(window, {
         () => document.querySelector('[data-workflow-artifact="candidate-7"]'),
         "Candidate screenshot missing",
       );
+    }
+    if (target === "new" || target === "new-details") {
+      click("workflow.newWorkstream");
+      const form = document.querySelector('[data-workflow="workstream-editor"]')!;
+      fill("workflow.goal", "Update the project documentation to match the current application.", form);
+      if (target === "new-details") flushSync(() => form.querySelector("summary")!.click());
     }
     await frame();
     document.getAnimations().forEach((animation) => animation.finish());
