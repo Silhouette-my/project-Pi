@@ -131,3 +131,13 @@ Targeted regressions cover this case and interrupted return integration. Queue
 admission alone is not consumption; `none` and stale decisions remain excluded.
 The final side-delivery diff and regression assertions also passed an independent
 read-only point-check; the production journey above supplies its execution evidence.
+
+## Subsequent local application integration
+
+On 2026-10-27 the user authorized combining this change with the archived
+conversation manager and producing a new application. The implementation was
+committed locally, the archive changes were integrated, and the macOS arm64
+application was built and smoke-tested. See
+[Integrated local application](local-app-20261027.md) for the application path,
+source commits and packaged-app verification. This later authorization supersedes
+the initial no-commit/no-packaging scope; installed applications remain unchanged.

@@ -13,7 +13,7 @@
 | 通道 | 命令 | 签名 | 用途 |
 |---|---|---|---|
 | 开发 | `pnpm dev` | 无 | 日常开发 |
-| 本地打包 | `pnpm --filter @pi-desktop/desktop pack` | 未配置证书时未签名 | 打包冒烟测试（`--dir` 输出） |
+| 本地打包 | `pnpm --filter @pi-desktop/desktop run pack` | 未配置证书时未签名 | 打包冒烟测试（`--dir` 输出） |
 | 本地 DMG | `pnpm --filter @pi-desktop/desktop dist` | 未配置证书时未签名 | 本地安装测试 |
 | 发布 | `scripts/release-macos.sh` | Developer ID + 强制公证 | 可分发产物 |
 
