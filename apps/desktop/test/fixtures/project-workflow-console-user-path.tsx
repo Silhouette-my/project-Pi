@@ -561,6 +561,15 @@ Object.assign(window, {
     check(create.closest('[role="dialog"][aria-modal="true"]'), "Work editor was not a modal dialog");
     check(document.activeElement === field("workflow.goal", create), "New task does not focus its description");
     check(!create.querySelector("details[open]"), "Optional task details should start collapsed");
+    const visibleTaskInputs = () => [...create.querySelectorAll<HTMLElement>("input, textarea, select")]
+      .filter((element) => element.getClientRects().length > 0);
+    check(visibleTaskInputs().length === 1 && visibleTaskInputs()[0] === field("workflow.goal", create),
+      "Collapsed task form still exposes optional inputs");
+    flushSync(() => create.querySelector("summary")!.click());
+    check(visibleTaskInputs().length === 3, "Task details did not reveal name and acceptance");
+    flushSync(() => create.querySelector("summary")!.click());
+    check(visibleTaskInputs().length === 1, "Closing task details did not hide optional inputs");
+    field("workflow.goal", create).focus();
     check(!create.querySelector("select, input[type='number'], fieldset"), "New task asks users for assignment, priority or dependencies");
     flushSync(() => field("workflow.goal", create).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
     check(document.activeElement === findButton("workflow.close", create), "Dialog focus escaped backwards");
