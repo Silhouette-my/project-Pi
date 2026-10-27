@@ -1276,7 +1276,7 @@ function LocalWorkPanel({
               role="tabpanel"
               aria-labelledby={`work-panel-tab-${activeTab.id}`}
             >
-              <ReviewTab />
+              <ReviewTab projectId={projectContext ? projectId : undefined} />
             </div>
           )}
           {activeTab?.kind === "file" && (

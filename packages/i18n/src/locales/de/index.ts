@@ -2159,6 +2159,14 @@ sklm: {
     "empty": {
     },
     "review": {
+      workspaceChanges: "Arbeitsverzeichnis",
+      toolHistory: "Werkzeugverlauf",
+      gitScope: "Aktuelle Git-Änderungen einschließlich vorhandener Bearbeitungen.",
+      staged: "Vorgemerkt",
+      unstaged: "Nicht vorgemerkt und nicht erfasst",
+      clean: "Keine ausstehenden Änderungen",
+      notRepository: "Dieser Arbeitsbereich ist kein Git-Repository",
+      refresh: "Git-Änderungen aktualisieren",
       "filesChanged_one": "1 Datei geändert",
       "filesChanged_other": "{{count}} Dateien geändert",
       "changes_one": "1 aufgezeichnete Änderung",

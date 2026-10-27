@@ -2180,6 +2180,14 @@ sklm: {
     empty: {
     },
     review: {
+      workspaceChanges: "Working tree",
+      toolHistory: "Tool history",
+      gitScope: "Current Git changes, including existing edits.",
+      staged: "Staged",
+      unstaged: "Unstaged & untracked",
+      clean: "Working tree is clean",
+      notRepository: "This workspace is not a Git repository",
+      refresh: "Refresh Git changes",
       filesChanged_one: "1 file changed",
       filesChanged_other: "{{count}} files changed",
       changes_one: "1 recorded change",

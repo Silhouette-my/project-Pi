@@ -197,11 +197,14 @@ test("rollback outcomes reach the toast instead of a second card row", () => {
   assert.doesNotMatch(cardSource, /panel\.review\.rollbackConflict/);
 });
 
-test("Review is a session change history and no longer refreshes a Git diff", () => {
+test("Review defaults to current Git changes and preserves separate durable tool history", () => {
   assert.match(reviewSource, /reviewChangesFromMessages\(messages\)/);
   assert.match(reviewSource, /<ReviewChangeCard/);
   assert.match(reviewSource, /panel\.review\.noChanges/);
-  assert.doesNotMatch(reviewSource, /workspaceDiff|refreshWorkspaceDiff|api\.workspaceDiff/);
+  assert.match(reviewSource, /useState<"git" \| "history">\("git"\)/);
+  assert.match(reviewSource, /api\.workspaceDiff\(sessionId\)/);
+  assert.match(reviewSource, /source === "history"/);
+  assert.match(reviewSource, /stagedFiles[\s\S]*unstagedFiles/);
   assert.doesNotMatch(appSource, /reviewRev|refreshWorkspaceDiff|workspaceDiff/);
 });
 

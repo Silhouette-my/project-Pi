@@ -314,8 +314,12 @@ type ReviewChange = {
 };
 ```
 
-- The renderer persists and displays this record with the tool message; it
-  does not recompute Review from Git, `HEAD`, or the current dirty tree.
+- The renderer persists and displays this record with the tool message and in
+  Review's Tool history. These historical snapshots are not recomputed from Git.
+  Review's default Working tree view separately reads current Git status and
+  staged/unstaged/untracked patches through the existing workspace-diff channel.
+  It includes pre-existing changes and does not attribute them to the Agent.
+  Live Git rows have no historical snapshot rollback action.
 - Scratch-root, failed, denied, and unresolvable writes have no `review`
   record. Binary or oversized content may omit hunks and be non-reversible.
 - Rollback is host-owned and hash-guarded. It restores the captured previous

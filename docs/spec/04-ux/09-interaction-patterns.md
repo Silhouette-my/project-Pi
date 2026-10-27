@@ -589,9 +589,9 @@ may be retained while exactly one workspace supplies the visible shell context.
   transcript bottom and never shared with another session. Its status badge
   covers added, modified, and deleted changes, while counts and expandable
   hunks come from that message's result, not a current Git diff.
-- The transcript cards and Review consume the active session's persisted
+- The transcript cards and Review's Tool history consume the active session's persisted
   message history. A commit, workspace focus change, or external Git state
-  change cannot remove or rewrite an old card. Review is a chronological
+  change cannot remove or rewrite an old card. Tool history is a chronological
   snapshot history and each reversible card exposes host-guarded rollback;
   conflicts are reported without replacing a later edit. Scratch, failed,
   denied, and unstructured results do not render a card. A background
@@ -599,6 +599,13 @@ may be retained while exactly one workspace supplies the visible shell context.
   after that session is selected; its event never renders in the currently
   visible session. A successful workspace artifact cannot create or activate
   the singleton Review tab; it appears only after the user opens it.
+- Review opens on Working tree: current Git changes including existing user,
+  Shell, script and plugin edits. It separates staged from unstaged/untracked
+  patches and never uses snapshot rollback on these live rows. Refresh rereads
+  the current session's actual workspace; an isolated session reads its Host-owned
+  worktree. Project-page Review can select among that project's registered roots.
+  Git failures are shown as failures, not a clean tree. Non-Git projects retain
+  their Tool history.
 - Each session retains `{open, tabs, activeTabId, browserResource}` in renderer
   memory. Selecting another session swaps the visible context atomically and
   switching back restores it; selecting a workspace without an active

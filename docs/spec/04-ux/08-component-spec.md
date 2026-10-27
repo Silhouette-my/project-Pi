@@ -1261,8 +1261,13 @@ entirely inside the plugin's isolated page:
   successful workspace Write/Edit result. The renderer reads that record from
   the owning transcript message, so status, counts, and hunks describe exactly
   what that row changed and remain available after a commit, restart, or
-  workspace switch. The Review tab is the same session's chronological change
-  history, not a current-worktree scan; it reuses the same message-owned cards
+  workspace switch. Review defaults to the current Git working tree, with staged
+  and unstaged/untracked sections, an explicit refresh control, and refresh on
+  focus and tool/turn completion. Session reads resolve the durable session's
+  workspace or isolated worktree; project-page reads resolve that project's
+  registered roots, not an unrelated active session. Non-Git and read failures
+  have distinct visible states. Tool history remains a separate chronological
+  view; it reuses the same message-owned cards
   as flat one-line rows under a borderless summary bar (`recorded N changes`
   plus the run's `+`/`−` totals), each collapsed by default until the user
   expands it. Its rollback action

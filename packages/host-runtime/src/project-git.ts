@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { realpath } from "node:fs/promises";
 import type { ProjectGitRepository, ProjectStructureRoot, WorkspaceDiff } from "@pi-desktop/shared";
-import { parseFilePatch, parseStatusZ, splitUnifiedDiff } from "./workspace-diff.js";
+import { collectWorkspaceDiff, parseFilePatch, splitUnifiedDiff } from "./workspace-diff.js";
 
 const MAX_COMMITS = 200;
 const MAX_FILES = 100;
@@ -51,31 +51,14 @@ async function repositoryRoot(rootPath: string): Promise<boolean> {
 export async function readProjectGitDiff(rootPath: string, commit?: string): Promise<WorkspaceDiff> {
   if (commit) validateCommitOid(commit);
   if (!await repositoryRoot(rootPath)) return { repo: false, clean: true, files: [] };
-  let base: string, target: string | undefined;
-  let untracked: string[] = [];
-  if (commit) {
-    const resolved = (await required(rootPath, ["rev-parse", "--verify", `${commit}^{commit}`])).trim();
-    if (resolved.toLowerCase() !== commit.toLowerCase()) throw new Error("Object is not a commit");
-    const parents = (await required(rootPath, ["rev-list", "--parents", "-n", "1", commit, "--"])).trim().split(" ");
-    base = parents[1] ?? (await required(rootPath, ["hash-object", "-t", "tree", "--stdin"])).trim();
-    target = commit;
-  } else {
-    const head = await git(rootPath, ["rev-parse", "--verify", "HEAD"]);
-    // No -w: compute the repository-format empty tree without writing an object.
-    base = head.code === 0 ? head.stdout.trim() : (await required(rootPath, ["hash-object", "-t", "tree", "--stdin"])).trim();
-    const status = parseStatusZ(await required(rootPath, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]));
-    untracked = status.filter((entry) => entry.untracked).map((entry) => entry.path);
-  }
-  const raw = await required(rootPath, ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", "--unified=3", base, ...(target ? [target] : []), "--"]);
+  if (!commit) return collectWorkspaceDiff(rootPath);
+  const resolved = (await required(rootPath, ["rev-parse", "--verify", `${commit}^{commit}`])).trim();
+  if (resolved.toLowerCase() !== commit.toLowerCase()) throw new Error("Object is not a commit");
+  const parents = (await required(rootPath, ["rev-list", "--parents", "-n", "1", commit, "--"])).trim().split(" ");
+  const base = parents[1] ?? (await required(rootPath, ["hash-object", "-t", "tree", "--stdin"])).trim();
+  const raw = await required(rootPath, ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", "--unified=3", base, commit, "--"]);
   const files = splitUnifiedDiff(raw).flatMap((chunk) => { const file = parseFilePatch(chunk); return file ? [file] : []; });
-  const total = files.length + untracked.length;
-  for (const path of untracked.slice(0, Math.max(0, MAX_FILES - files.length))) {
-    const diff = await git(rootPath, ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--unified=3", "--no-index", "--", "/dev/null", path]);
-    if (diff.code > 1) throw new Error(diff.stderr.trim() || "Untracked file diff failed");
-    const chunk = splitUnifiedDiff(diff.stdout)[0];
-    const file = chunk ? parseFilePatch(chunk, "untracked") : null;
-    files.push(file ?? { path, status: "untracked", additions: 0, deletions: 0, hunks: [] });
-  }
+  const total = files.length;
   return { repo: true, clean: total === 0, files: files.slice(0, MAX_FILES), truncated: total > MAX_FILES || undefined };
 }
 

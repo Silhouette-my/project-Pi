@@ -653,6 +653,16 @@
   flex-direction: column;
 }
 
+.review-source-toolbar { justify-content: space-between; flex-wrap: wrap; }
+.review-git-scope, .review-git-note { margin: 8px 12px; color: var(--ds-text-muted); font-size: var(--text-sm); }
+.review-git-scroll section > h3 { margin: 12px 4px 6px; font-size: var(--text-sm); color: var(--ds-text-secondary); }
+.review-git-file > summary { display: flex; align-items: center; gap: 8px; padding: 9px 4px; font-size: var(--text-sm); cursor: pointer; }
+.review-git-file > summary code { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-git-file > summary > span { flex: 0 0 auto; font-size: var(--text-xs); }
+.review-git-caret { flex: 0 0 auto; }
+.review-git-file[open] > summary .review-git-caret { transform: rotate(90deg); }
+.review-git-file > p { margin: 8px; font-size: var(--text-sm); color: var(--ds-text-muted); }
+
 .review-toolbar {
   display: flex;
   flex: 0 0 auto;

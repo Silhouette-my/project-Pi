@@ -2175,6 +2175,14 @@ sklm: {
     empty: {
     },
     review: {
+      workspaceChanges: "작업 트리 변경",
+      toolHistory: "도구 기록",
+      gitScope: "기존 수정을 포함한 현재 Git 변경 사항입니다.",
+      staged: "스테이징됨",
+      unstaged: "스테이징되지 않음 및 추적되지 않음",
+      clean: "커밋되지 않은 변경 사항 없음",
+      notRepository: "이 작업 공간은 Git 저장소가 아닙니다",
+      refresh: "Git 변경 새로고침",
       filesChanged_one: "파일 1개 변경됨",
       filesChanged_other: "파일 {{count}}개 변경됨",
       changes_one: "기록된 변경 1개",

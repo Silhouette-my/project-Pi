@@ -18,7 +18,7 @@ import {
   loadComposerTemplates,
   type ComposerTemplate,
 } from "@pi-desktop/agent-runtime";
-import { remoteWorkspaceForFiles } from "../remote/workspace-file-scope";
+import { remoteWorkspaceForFiles, workspacePathForFiles } from "../remote/workspace-file-scope";
 import { getActiveRemoteHostsBoot } from "../bootstrap/remote-hosts";
 import { cloneGitRepository } from "../git-clone";
 import {
@@ -678,10 +678,7 @@ export function registerWorkspaceIpc({
     const remote = await remoteFileWorkspace(input.sessionId);
     if (remote) return readRemoteFiles(remote, "diff");
     if (!host) throw new Error("host unavailable");
-    const res = (await host.call("workspace.get")) as {
-      workspace: { path: string } | null;
-    };
-    const cwd = res.workspace?.path;
+    const cwd = await workspacePathForFiles(getHost, input.sessionId);
     if (!cwd) {
       return { repo: false, clean: true, files: [] };
     }

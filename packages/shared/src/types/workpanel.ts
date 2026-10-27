@@ -76,6 +76,10 @@ export type WorkspaceDiff = {
   /** No pending changes (only meaningful when repo). */
   clean: boolean;
   files: DiffFile[];
+  /** Current index vs HEAD, when the reader supports separate Git layers. */
+  stagedFiles?: DiffFile[];
+  /** Current working files vs index, including untracked files. */
+  unstagedFiles?: DiffFile[];
   /** File list hit the cap; more changes exist than listed. */
   truncated?: boolean;
 };

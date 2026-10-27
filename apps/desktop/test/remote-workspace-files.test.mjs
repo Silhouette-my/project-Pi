@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
 register(new URL("./helpers/ts-import-hooks.mjs", import.meta.url));
-const { remoteWorkspaceForFiles } = await import("../electron/main/remote/workspace-file-scope.ts");
+const { remoteWorkspaceForFiles, workspacePathForFiles } = await import("../electron/main/remote/workspace-file-scope.ts");
 const remote = { hostKey: "ssh", path: "/home/app" };
 function hostFor(sessions, selected = "/local/app", groups = [{ primaryPath: "remote-project:group", remote }]) {
   const calls = [];
@@ -19,6 +19,29 @@ test("a retained remote file view follows its own group while a local project is
   assert.deepEqual(await remoteWorkspaceForFiles(() => host, "remote"), remote);
   assert.equal(await remoteWorkspaceForFiles(() => host, "local"), null);
   assert.equal(host.calls.some(call => call.method === "workspace.get"), false);
+});
+test("local Git reads use the retained session workspace rather than the globally selected project", async () => {
+  const host = hostFor({ a: { projectPath: "/project/a" }, temporary: {} }, "/project/b");
+  assert.equal(await workspacePathForFiles(() => host, "a"), "/project/a");
+  assert.equal(await workspacePathForFiles(() => host, "temporary"), null);
+  assert.equal(host.calls.some(call => call.method === "workspace.get"), false);
+  assert.equal(await workspacePathForFiles(() => host), "/project/b");
+});
+test("an isolated session reads its actual Host-owned worktree, never the owner checkout", async () => {
+  const calls = [];
+  const host = { async call(method, params) {
+    calls.push({ method, params });
+    if (method === "session.get") return { session: { projectPath: "/owner", worktree: { status: "active" } } };
+    if (method === "worktree.location") return { path: "/isolated/worktree" };
+    assert.fail(method);
+  } };
+  assert.equal(await workspacePathForFiles(() => host, "isolated"), "/isolated/worktree");
+  assert.deepEqual(calls.at(-1), { method: "worktree.location", params: { sessionId: "isolated" } });
+  const missing = { async call(method) {
+    if (method === "session.get") return { session: { projectPath: "/owner", worktree: { status: "missing" } } };
+    throw Object.assign(new Error("worktree missing"), { errorCode: "WORKTREE_MISSING" });
+  } };
+  await assert.rejects(workspacePathForFiles(() => missing, "isolated"), { errorCode: "WORKTREE_MISSING" });
 });
 test("a home file view resolves the currently selected remote group without a remote session", async () => {
   const host = hostFor({}, "remote-project:group");

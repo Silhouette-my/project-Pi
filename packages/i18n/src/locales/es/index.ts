@@ -2159,6 +2159,14 @@ sklm: {
     "empty": {
     },
     "review": {
+      workspaceChanges: "Cambios de trabajo",
+      toolHistory: "Historial de herramientas",
+      gitScope: "Cambios actuales de Git, incluidas las ediciones existentes.",
+      staged: "Preparados",
+      unstaged: "Sin preparar y sin seguimiento",
+      clean: "No hay cambios pendientes",
+      notRepository: "Este espacio no es un repositorio Git",
+      refresh: "Actualizar cambios de Git",
       "filesChanged_one": "1 archivo cambiado",
       "filesChanged_other": "{{count}} archivos cambiados",
       "changes_one": "1 cambio registrado",

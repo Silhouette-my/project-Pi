@@ -2159,6 +2159,14 @@ sklm: {
     "empty": {
     },
     "review": {
+      workspaceChanges: "Modifications locales",
+      toolHistory: "Historique des outils",
+      gitScope: "Modifications Git actuelles, y compris les modifications préexistantes.",
+      staged: "Indexées",
+      unstaged: "Non indexées et non suivies",
+      clean: "Aucune modification en attente",
+      notRepository: "Cet espace n’est pas un dépôt Git",
+      refresh: "Actualiser les modifications Git",
       "filesChanged_one": "1 fichier modifié",
       "filesChanged_other": "{{count}} fichiers modifiés",
       "changes_one": "1 modification enregistrée",

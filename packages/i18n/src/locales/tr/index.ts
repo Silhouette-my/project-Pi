@@ -2169,6 +2169,14 @@ sklm: {
     empty: {
     },
     review: {
+      workspaceChanges: "Çalışma ağacı",
+      toolHistory: "Araç geçmişi",
+      gitScope: "Mevcut düzenlemeler dahil geçerli Git değişiklikleri.",
+      staged: "Hazırlanan",
+      unstaged: "Hazırlanmamış ve izlenmeyen",
+      clean: "Bekleyen değişiklik yok",
+      notRepository: "Bu çalışma alanı bir Git deposu değil",
+      refresh: "Git değişikliklerini yenile",
       filesChanged_one: "1 dosya değişti",
       filesChanged_other: "{{count}} dosya değişti",
       changes_one: "1 kayıtlı değişiklik",

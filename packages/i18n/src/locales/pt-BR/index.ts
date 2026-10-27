@@ -2125,6 +2125,14 @@ export const ptBR = {
     empty: {
     },
     review: {
+      workspaceChanges: "Alterações locais",
+      toolHistory: "Histórico de ferramentas",
+      gitScope: "Alterações atuais do Git, incluindo edições existentes.",
+      staged: "Preparadas",
+      unstaged: "Não preparadas e não rastreadas",
+      clean: "Nenhuma alteração pendente",
+      notRepository: "Este espaço não é um repositório Git",
+      refresh: "Atualizar alterações do Git",
       filesChanged_one: "1 arquivo alterado",
       filesChanged_other: "{{count}} arquivos alterados",
       changes_one: "1 alteração gravada",

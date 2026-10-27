@@ -2154,6 +2154,14 @@ sklm: {
     empty: {
     },
     review: {
+      workspaceChanges: "工作區變更",
+      toolHistory: "工具記錄",
+      gitScope: "目前 Git 變更，包含工作區原有修改。",
+      staged: "已暫存",
+      unstaged: "未暫存與未追蹤",
+      clean: "工作區沒有未提交變更",
+      notRepository: "此工作區不是 Git 儲存庫",
+      refresh: "重新整理 Git 變更",
       filesChanged_one: "1 個檔案有改動",
       filesChanged_other: "{{count}} 個檔案有改動",
       changes_one: "記錄了 1 項改動",
