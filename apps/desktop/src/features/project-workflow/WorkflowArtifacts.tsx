@@ -317,8 +317,10 @@ export function WorkflowArtifacts({
               <dd>{item.workstreamRevision}</dd>
               <dt>{t("workflowArtifacts.decisionRevision")}</dt>
               <dd>{item.decisionRevision}</dd>
-              <dt>{t("workflowArtifacts.authorization")}</dt>
-              <dd>{item.authorizationId}</dd>
+              {item.authorizationId ? <>
+                <dt>{t("workflowArtifacts.authorization")}</dt>
+                <dd>{item.authorizationId}</dd>
+              </> : null}
               <dt>{t("workflowContext.updatedAt")}</dt>
               <dd><time dateTime={item.updatedAt} title={item.updatedAt}>{formatWorkflowTime(item.updatedAt, i18n.language)}</time></dd>
             </dl>

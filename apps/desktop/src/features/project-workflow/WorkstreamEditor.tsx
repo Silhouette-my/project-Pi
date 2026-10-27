@@ -17,6 +17,7 @@ export function WorkstreamEditor({
 }) {
   const { t } = useTranslation();
   const { snapshot, mutate, busy } = useProjectWorkflow();
+  const sessionTask = !workstream || workstream.executionMode === "session";
   const [title, setTitle] = useState(workstream?.title ?? "");
   const [goal, setGoal] = useState(workstream?.goal ?? "");
   const [acceptance, setAcceptance] = useState(
@@ -89,6 +90,7 @@ export function WorkstreamEditor({
           kind: "workstream.create",
           workstream: {
             ...fields,
+            executionMode: "session",
             id,
             projectId,
             status: "draft",
@@ -136,9 +138,9 @@ export function WorkstreamEditor({
           onChange={(event) => setGoal(event.target.value)}
         />
       </Field>
-      <Field label={t("workflow.acceptance")} hint={t("workflow.acceptanceHint")}>
+      <Field label={t("workflow.acceptance")} hint={t(sessionTask ? "workflow.acceptanceOptionalHint" : "workflow.acceptanceHint")}>
         <Textarea
-          required
+          required={!sessionTask}
           rows={3}
           value={acceptance}
           onChange={(event) => setAcceptance(event.target.value)}
@@ -197,7 +199,7 @@ export function WorkstreamEditor({
         <Button
           type="submit"
           variant="primary"
-          disabled={busy || !title.trim() || !goal.trim() || !acceptance.trim() || !ownerRef.trim()}
+          disabled={busy || !title.trim() || !goal.trim() || (!sessionTask && !acceptance.trim()) || !ownerRef.trim()}
         >
           {t("workflow.save")}
         </Button>

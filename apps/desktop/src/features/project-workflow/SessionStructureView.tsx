@@ -6,6 +6,7 @@ import { Badge, Button, TooltipButton } from "../../components/ui";
 import { StructurePicker, StructureToolbar } from "./StructureToolbar";
 import { IconChat, IconChevronDown, IconChevronRight } from "../../components/icons";
 import { sessionArchived } from "../../lib/sidebar-session-groups";
+import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { useAppStore } from "../../stores/app-store";
 import {
   projectSessionStructure,
@@ -263,7 +264,7 @@ export function SessionStructureView({
                       onClick={() => onOpenWorkstream(work.id)}
                     >
                       {work.title}
-                      <Badge>{t(`workflow.status.${work.status}`)}</Badge>
+                      <WorkflowStatusBadge status={work.status} executionMode={work.executionMode} />
                       <IconChevronRight size={12} />
                     </Button>
                   ))}

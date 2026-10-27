@@ -124,6 +124,9 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   // detail; a stacked one shows the list until a workstream is chosen.
   const shown = selected ?? (splitWork ? workstreams[0] : undefined);
   const candidate = snapshot?.artifacts.find((item) => item.id === shown?.currentCandidateId);
+  const hasTaskRecords = shown && snapshot &&
+    [snapshot.artifacts, snapshot.deliveries, snapshot.runs].some((items) =>
+      items.some((item) => item.projectId === projectId && item.workstreamId === shown.id));
   useEffect(() => {
     if (!searchTarget) return;
     const attribute =
@@ -293,7 +296,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                     <section className="workflow-detail" data-workstream-id={shown.id} data-workflow-workstream={shown.id}>
                       <div className="workflow-detail-head">
                         <div>
-                          <h2>{shown.title} <WorkflowStatusBadge status={shown.status} /></h2>
+                          <h2>{shown.title} <WorkflowStatusBadge status={shown.status} executionMode={shown.executionMode} /></h2>
                           <p className="workflow-muted">
                             {t("projectStructure.ownedBy", { owner: workflowOwnerLabel(shown.owner, sessions, t) })} · {t("workflow.revision", { revision: shown.revision })}
                           </p>
@@ -310,6 +313,9 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                         </div>
                       </div>
                       {shown.goal ? <p className="workflow-detail-goal">{shown.goal}</p> : null}
+                      {shown.executionMode === "session" && shown.status === "completed" ? (
+                        <p className="workflow-muted">{t("workflow.agentFinishedHint")}</p>
+                      ) : null}
                       {shown.blocker && (
                         <div className="workflow-blocker">
                           <strong>{shown.blocker.reason}</strong>
@@ -317,11 +323,11 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                           <span>{t("workflow.resumeWhen", { condition: shown.blocker.resumeWhen })}</span>
                         </div>
                       )}
-                      {!candidate ? (
+                      {!candidate ? (shown.executionMode !== "session" ? (
                         <div className="workflow-candidate-summary">
                           <span className="workflow-muted">{t("workflow.noCandidate")}</span>
                         </div>
-                      ) : (
+                      ) : null) : (
                         <div className="workflow-candidate-summary">
                           <div>
                             <h3>{t("workflow.currentCandidate")}</h3>
@@ -362,6 +368,7 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                         const sides = snapshot.conversations
                           .filter((item) => item.workstreamId === shown.id && item.relation !== "main")
                           .sort((left, right) => left.order - right.order);
+                        if (shown.executionMode === "session" && !sides.length) return null;
                         return (
                           <section className="workflow-detail-sides" aria-label={t("workflow.sideConversations")}>
                             <div className="project-section-label">
@@ -387,10 +394,10 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
                           </section>
                         );
                       })()}
-                      <section className="workflow-detail-outputs" aria-label={t("workflow.artifacts")}>
-                        <div className="project-section-label"><h3>{t("workflow.artifacts")}</h3></div>
+                      {(shown.executionMode !== "session" || hasTaskRecords) && <section className="workflow-detail-outputs" aria-label={t(shown.executionMode === "session" ? "workflow.taskRecords" : "workflow.artifacts")}>
+                        <div className="project-section-label"><h3>{t(shown.executionMode === "session" ? "workflow.taskRecords" : "workflow.artifacts")}</h3></div>
                         <WorkflowArtifacts projectId={projectId} workstreamId={shown.id} onOpenReference={openReference} />
-                      </section>
+                      </section>}
                     </section>
                   </div>
                 ) : null}

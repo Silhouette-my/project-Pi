@@ -139,7 +139,8 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                     }
                 }
             }
-            if work["status"] == "completed"
+            if work["executionMode"] != "session"
+                && work["status"] == "completed"
                 && (rows(&work, "acceptance").is_empty()
                     || rows(&work, "acceptance")
                         .iter()
@@ -295,7 +296,9 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                 // Historical feedback remains attached to history; it must not reopen a new candidate.
                 if value["workstreams"][wi]["currentCandidateId"] == row["candidateId"] {
                     value["workstreams"][wi]["acceptance"][ai]["status"] = json!("reopened");
-                    if value["workstreams"][wi]["status"] == "completed" {
+                    if value["workstreams"][wi]["executionMode"] != "session"
+                        && value["workstreams"][wi]["status"] == "completed"
+                    {
                         value["workstreams"][wi]["status"] = json!("ready");
                     }
                     touch(&mut value["workstreams"][wi]);

@@ -4,7 +4,7 @@ import type { HostRpc } from "@pi-desktop/host-runtime";
 import type { UiMessage, WorkflowRun } from "@pi-desktop/shared";
 import type { WorkflowExecutionPort, WorkflowObservation } from "./project-workflow-runtime";
 import { DESKTOP_PRINCIPAL } from "../agent-host-bridge";
-import { workflowTurnId } from "./project-workflow-receipt";
+import { workflowAssignment, workflowTurnId } from "./project-workflow-receipt";
 
 type SessionCreator = WorkflowExecutionPort["createSession"];
 export type WorkflowExecutionDependencies = {
@@ -16,14 +16,23 @@ export type WorkflowExecutionDependencies = {
   /** Flush the existing transcript queue before reading a settled outcome. */
   flushTranscript: () => Promise<boolean>;
 };
-const messageId = (runId: string) => `workflow-run:${runId}`;
-function toolEffectState(message: UiMessage): WorkflowRun["effects"][number]["state"] {
+const messageId = (run: WorkflowRun) => {
+  if (run.executionMode !== "session") return `workflow-run:${run.id}`;
+  const id = workflowAssignment(run).userMessageId;
+  if (!id) throw new Error("Session workflow dispatch receipt has no user message identity");
+  return id;
+};
+function toolEffectState(message: UiMessage, sessionExecution: boolean): WorkflowRun["effects"][number]["state"] {
   const details = (message.toolResult as { details?: { code?: unknown; approvalScope?: unknown; exitCode?: unknown } } | null)?.details;
   if (message.toolStatus === "denied" || details?.code === "WORKFLOW_RESOURCE_DENIED"
     || (details?.approvalScope === "workflow-shell" && (details.code === "TOOL_DENIED" || details.code === "TOOL_ABORTED"))) return "failed";
   // A normal nonzero exit is a completed execution receipt, not proof of a
   // passed check and not an uncertain dispatch. Signals/aborts have no exit code.
   if (message.toolName === "Bash") return typeof details?.exitCode === "number" && Number.isInteger(details.exitCode) ? "confirmed" : "unknown";
+  // A failed read/search has a known outcome and no write to reconcile. Keep
+  // legacy bounded observations unchanged and retain uncertainty for mutations.
+  if (sessionExecution && ["Read", "Glob", "Grep", "asktool"].includes(message.toolName ?? "")
+    && message.toolStatus === "error") return "failed";
   return message.toolStatus === "success" ? "confirmed" : "unknown";
 }
 
@@ -40,7 +49,10 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
     // A session can be explicitly repurposed while its Explore turn is still
     // draining. Its transient read receipt must never identify a real Work run.
     const readTurn = run.id === `side:${run.sessionId}` ? readTurns.get(run.sessionId) : undefined;
-    const userMessageId = readTurn?.messageId ?? messageId(run.id);
+    if (run.id === `side:${run.sessionId}` && !readTurn) {
+      return { state: "unknown", content: "Explore turn identity is unavailable; inspect its session before continuing", effects: run.effects };
+    }
+    const userMessageId = readTurn?.messageId ?? messageId(run);
     const queueEntry = agentHost.queue.list(run.sessionId).find((entry) => entry.userMessageId === userMessageId);
     if (queueEntry) return { state: "queued", content: "", effects: run.effects };
     const expectedTurnId = workflowTurnId(run) ?? readTurn?.turnId;
@@ -61,14 +73,17 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
       }
     }
     const start = messages.findIndex((message) => message.id === userMessageId);
-    const next = start < 0 ? -1 : messages.findIndex((message, index) => index > start && message.role === "user");
+    // Steering and promoted queued inputs belong to the current ordinary turn.
+    // They cannot be used as the next-turn boundary for its final answer.
+    const next = start < 0 ? -1 : messages.findIndex((message, index) => index > start && message.role === "user" && !message.steering);
     const rows = start < 0 ? [] : messages.slice(start + 1, next < 0 ? undefined : next);
     const effects: WorkflowRun["effects"] = [...run.effects.filter((effect) => !effect.action.startsWith("tool:")), ...rows.filter((message) => message.toolName).map((message) => ({
       id: message.toolCallId ?? message.id, action: `tool:${message.toolName}`, resource: `message:${message.id}`,
-      state: toolEffectState(message),
+      state: toolEffectState(message, run.executionMode === "session"),
       detail: `Transcript ${run.sessionId}/${message.id}; tool status ${message.toolStatus ?? "unknown"}`,
     }))];
-    const final = rows.filter((message) => message.role === "assistant" && message.status === "complete" && !message.parentToolCallId).at(-1);
+    const final = rows.filter((message) => message.role === "assistant" && message.status === "complete" && !message.parentToolCallId
+      && !message.id.startsWith("workflow-context:")).at(-1);
     if (terminal === "failed" || terminal === "interrupted" || terminal === "canceled") {
       return { state: terminal === "failed" ? "failed" : terminal === "canceled" ? "cancelled" : "interrupted",
         content: terminalError ?? rows.findLast((message) => message.error)?.error?.message ?? final?.content ?? terminal, effects,
@@ -92,15 +107,15 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
   return {
     createSession: deps.createSession,
     appendContext: async (sessionId, content, id) => {
-      const message: UiMessage = { id, role: "assistant", content, createdAt: new Date().toISOString(), status: "complete" };
+      const message: UiMessage = { id: `workflow-context:${id}`, role: "assistant", content, createdAt: new Date().toISOString(), status: "complete" };
       await deps.getHost().call("session.appendMessage", { sessionId, message });
     },
     start: async ({ run, content, authorization }) => {
       await deps.assertExecutableSession(run.sessionId);
       const result = await deps.getAgentHost().startTurn(DESKTOP_PRINCIPAL, { sessionId: run.sessionId,
-        workflowRunId: run.id,
-        permissionCeiling: authorization.permissionCeiling, admission: "queue", idempotencyKey: run.id,
-        input: { text: content, userMessageId: messageId(run.id) }, context: { requestId: run.id } });
+        ...(run.executionMode === "session" ? {} : { workflowRunId: run.id, permissionCeiling: authorization!.permissionCeiling }),
+        admission: "queue", idempotencyKey: run.id,
+        input: { text: content, userMessageId: messageId(run) }, context: { requestId: run.id } });
       return { turnId: result.turn.id, queued: result.turn.status === "queued" };
     },
     read: async ({ sessionId, content, key, observeOutcome }) => {
@@ -123,11 +138,11 @@ export function createProjectWorkflowExecution(deps: WorkflowExecutionDependenci
             if ((error as { code?: string }).code !== "CONFLICT") throw error;
           }
         }
-        if (pausePendingShell) {
+        if (pausePendingShell && run.executionMode !== "session") {
           await deps.getAgentHost().stopWorkflowTurn(DESKTOP_PRINCIPAL, turn);
           return { cancelledBeforeStart: false };
         }
-        if (cancel) await deps.getAgentHost().interruptTurn(DESKTOP_PRINCIPAL, turn);
+        if (cancel || (run.executionMode === "session" && pausePendingShell)) await deps.getAgentHost().interruptTurn(DESKTOP_PRINCIPAL, turn);
         else await deps.getAgentHost().stopTurn(DESKTOP_PRINCIPAL, turn);
       } catch (error) {
         if ((error as { code?: string }).code !== "NOT_FOUND") throw error;

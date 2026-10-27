@@ -83,6 +83,12 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskRecords: "Görev kayıtları",
+    acceptanceOptionalHint: "İsteğe bağlı, her satıra bir koşul. Kabul ve Agent’ın işi bitirmesi ayrı kaydedilir.",
+    sessionExecutionHint: "Seçili sohbetin modelini, araçlarını ve izinlerini kullanır.",
+    agentFinished: "Agent bitirdi",
+    agentFinishedHint: "Agent bu görevi bitirdi. Sonuçlar ve kontroller için sohbete bakın; kabul koşulları kendi durumlarını korur.",
+    agentFinishedCount: "{{count}} Agent görevi bitti",
     agentTitle: "Proje Agent",
     dockTabs: "Proje konuşmaları",
     agentTabShort: "Ajan",

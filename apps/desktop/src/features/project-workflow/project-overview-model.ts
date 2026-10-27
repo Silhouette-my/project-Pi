@@ -29,6 +29,7 @@ export function projectOverview(snapshot: ProjectWorkflowSnapshot, projectId: st
     attentionWork,
     activeWork: current.filter((item) => !attentionIds.has(item.id)),
     completed: workstreams.filter((item) => item.status === "completed").length,
+    agentFinished: workstreams.filter((item) => item.status === "completed" && item.executionMode === "session").length,
     blockers: current.filter(
       (item) => item.blocker || item.status === "blocked" || item.status === "awaiting_user",
     ),

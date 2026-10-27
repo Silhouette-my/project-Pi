@@ -85,6 +85,12 @@ sidecar's workspace file resolver remain restricted to the session workspace.
 
 ## 4. Workspace sandbox
 
+New session-backed Workflow tasks (`executionMode: "session"`) use the selected
+Agent session's existing permission mode and tool/plugin configuration. They do
+not add workflow resource grants, a second Shell approval layer, or an OS sandbox.
+Old tasks without that marker retain their bounded resource/authorization and
+exact-command Shell approval contracts; upgrades never silently widen them.
+
 - File tools are restricted to the project root by default; an explicit path
   outside the session workspace and scratch roots requires the host permission
   decision described in `03-runtime/03-tools-and-permissions.md`

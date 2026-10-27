@@ -80,6 +80,12 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskRecords: "任务记录",
+    acceptanceOptionalHint: "可选，每行一项。验收状态与 Agent 是否结束任务分别记录。",
+    sessionExecutionHint: "沿用所选对话的模型、工具和权限设置。",
+    agentFinished: "Agent 已结束",
+    agentFinishedHint: "Agent 已结束此任务。结果和实际检查见对话；验收条件保留各自状态。",
+    agentFinishedCount: "{{count}} 项 Agent 任务已结束",
     agentTitle: "项目 Agent",
     dockTabs: "项目对话",
     agentTabShort: "Agent",

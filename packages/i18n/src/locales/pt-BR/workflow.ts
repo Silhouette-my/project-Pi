@@ -83,6 +83,12 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskRecords: "Registros da tarefa",
+    acceptanceOptionalHint: "Opcional, uma condição por linha. A aceitação e a conclusão do Agent são registradas separadamente.",
+    sessionExecutionHint: "Usa o modelo, as ferramentas e as permissões da conversa selecionada.",
+    agentFinished: "Agent finalizado",
+    agentFinishedHint: "O Agent terminou esta tarefa. Consulte os resultados e as verificações na conversa; os critérios de aceitação mantêm seu próprio estado.",
+    agentFinishedCount: "{{count}} tarefas do Agent finalizadas",
     agentTitle: "Agente do projeto",
     dockTabs: "Conversas do projeto",
     agentTabShort: "Agente",

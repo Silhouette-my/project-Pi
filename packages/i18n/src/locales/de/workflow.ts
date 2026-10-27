@@ -83,6 +83,12 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskRecords: "Aufgabenverlauf",
+    acceptanceOptionalHint: "Optional, eine Bedingung pro Zeile. Abnahme und Agent-Abschluss werden getrennt erfasst.",
+    sessionExecutionHint: "Verwendet Modell, Werkzeuge und Berechtigungen der ausgewählten Unterhaltung.",
+    agentFinished: "Agent fertig",
+    agentFinishedHint: "Der Agent hat die Aufgabe beendet. Ergebnisse und Prüfungen stehen in der Unterhaltung; Abnahmekriterien behalten ihren eigenen Status.",
+    agentFinishedCount: "{{count}} Agent-Aufgaben beendet",
     agentTitle: "Projekt-Agent",
     dockTabs: "Projektgespräche",
     agentTabShort: "Agent",

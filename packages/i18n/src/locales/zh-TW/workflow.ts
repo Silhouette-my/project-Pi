@@ -83,6 +83,12 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskRecords: "任務記錄",
+    acceptanceOptionalHint: "選填，每行一項。驗收狀態與 Agent 是否結束任務分別記錄。",
+    sessionExecutionHint: "沿用所選對話的模型、工具與權限設定。",
+    agentFinished: "Agent 已結束",
+    agentFinishedHint: "Agent 已結束此任務。結果與實際檢查請見對話；驗收條件保留各自狀態。",
+    agentFinishedCount: "{{count}} 項 Agent 任務已結束",
     agentTitle: "專案 Agent",
     dockTabs: "專案對話",
     agentTabShort: "Agent",

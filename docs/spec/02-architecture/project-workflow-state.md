@@ -55,15 +55,24 @@ command.
 
 ## Workflow invariants
 
+- New task creation explicitly sets `executionMode: "session"`; Runs freeze the
+  same marker. Missing markers retain the bounded contract below. The marker is
+  immutable after creation; existing snapshots and records are not migrated to
+  broader authority.
 - A proposal becomes effective only through an explicit adoption with a source.
   Adoption advances the workstream decision revision.
-- A run records the workstream and decision revisions plus its authorization
+- A bounded run records the workstream and decision revisions plus its authorization
   at start. A later decision fences conflicting stale results; stale delivery
   may be retained as evidence but cannot replace effective state.
 - Authorization names a user source, action/resource scope, permission ceiling,
   run budget and stop conditions. It cannot grant more than existing host or
   tool permissions; a session transcript or model proposal is not authority.
-- Run completion is not workstream acceptance. Evidence is tied to an exact
+- Session-backed tasks use ordinary Agent tools, plugins, delegates, model and
+  session permission mode. They require no workflow authorization or structured
+  checkpoint. A successful current main Run with a terminal receipt and known
+  effects completes the task; optional acceptance items are not auto-satisfied.
+  Completion means the Agent turn ended, not user acceptance or passing tests.
+- Bounded Run completion is not workstream acceptance. Evidence is tied to an exact
   candidate revision, environment and acceptance item. Completion requires an
   explicit acceptance update and current-candidate passed evidence for every
   condition.
@@ -74,14 +83,22 @@ command.
 - Unknown external effects remain `unknown` for reconciliation and are not
   replayed. Pause, cancel, blocked and awaiting-user states apply to affected
   work; unrelated work remains independent.
-- Startup first observes and persists all existing runs, then admits authorized
+- Startup first observes and persists all existing runs, then admits bounded authorized
   continuations. Terminal callbacks arriving during recovery are retained and
   drained before public actions become ready. Recovery failure keeps admission
   disabled; retry preserves the accepted checkpoint's exact next step and scope.
+  Session-backed tasks never infer or replay a successor during startup. Their
+  normal final reply is retained in the existing transcript and result delivery.
 
-## Turn-bound tool authority
+## Session-backed and turn-bound tool authority
 
-`session.beginTurn` accepts optional `workflowRunId`. Host validates the active
+Session-backed Runs use ordinary AgentHost turn admission without `workflowRunId`
+or an extra permission ceiling. Host captures no workflow resource scope for
+them, and the normal session/Host/plugin permission paths remain authoritative.
+The project is the normal working directory, not an additional filesystem
+sandbox. New and historical bounded Runs cannot exchange their execution mode.
+
+For bounded Runs, `session.beginTurn` accepts optional `workflowRunId`. Host validates the active
 run, session, project, decision revision and user authorization before persisting
 its binding to the real turn. The initial dispatch resources are immutable;
 later tool receipts cannot expand them. Queue persistence retains this identity.

@@ -83,6 +83,12 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskRecords: "작업 기록",
+    acceptanceOptionalHint: "선택 사항입니다. 한 줄에 조건 하나를 입력하세요. 인수 상태와 Agent 작업 종료는 별도로 기록됩니다.",
+    sessionExecutionHint: "선택한 대화의 모델, 도구 및 권한 설정을 사용합니다.",
+    agentFinished: "Agent 작업 종료",
+    agentFinishedHint: "Agent가 이 작업을 마쳤습니다. 결과와 실제 검사는 대화에서 확인하세요. 인수 조건은 각각의 상태를 유지합니다.",
+    agentFinishedCount: "Agent 작업 {{count}}개 종료",
     agentTitle: "프로젝트 Agent",
     dockTabs: "프로젝트 대화",
     agentTabShort: "에이전트",

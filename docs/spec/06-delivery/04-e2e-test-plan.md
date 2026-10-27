@@ -11182,6 +11182,8 @@ This test plan spec is accepted when:
 
 ### E2E-PROJECT-workflow-durable-loop
 
+- **Compatibility scope:** Unmarked legacy bounded Workstreams and Runs. New
+  session-backed tasks are covered by E2E-PROJECT-session-backed-task below.
 - **Preconditions**: A task-candidate build, an isolated profile and SQLite
   database with an existing ProjectGroup, existing Chat sessions, and a local
   project root. Use synthetic runtime/provider boundaries; no real account,
@@ -11246,6 +11248,27 @@ This test plan spec is accepted when:
   are component-level evidence only; they do not establish rendered journeys,
   runtime lifecycle, restart recovery or integrated acceptance. Record results
   against the exact task candidate after those paths are exercised.
+
+### E2E-PROJECT-session-backed-task
+
+- **Preconditions:** An isolated task-candidate build, local scripted model and
+  configured Agent conversations in Ask and Auto mode. Existing unmarked records
+  remain the legacy bounded fixtures.
+- **Steps:** Create a new task with empty acceptance and no Workflow grant. Run
+  native search/read/edit, recover from a missing-file read and a failed check,
+  and finish with natural-language text. Exercise ordinary Ask approval scopes
+  and Auto behavior, existing subagent entry points, explicit continuation with
+  a side result, pause/cancel and application restart. Edit a completed task title.
+- **Expected:** The new task uses its selected conversation's model/tools/permissions,
+  with no extra Workflow boundary. It finishes without checkpoint/Candidate/Evidence.
+  Optional acceptance remains unchanged; the UI distinguishes Agent completion
+  from legacy acceptance. Errors and uncertain effects remain truthful and are not
+  replayed. Side-context messages cannot replace the main turn's actual final reply.
+  Unmarked legacy tasks retain their old authorization, checkpoint and completion
+  conditions.
+- **Coverage:** `scripts/e2e-project-workflow.mjs`, runtime lifecycle and Host
+  compatibility tests, and the Project Console renderer user-path test.
+- **Status:** Record actual results in `docs/project/workflow-session-tasks.md`.
 
 ### E2E-PROJECT-delete-removes-project-and-owned-sessions
 

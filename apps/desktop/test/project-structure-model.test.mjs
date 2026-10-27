@@ -109,7 +109,7 @@ test("sessions derive only real parent edges and preserve unlinked, archived and
     ["main"],
   );
 });
-test("overview projects Host acceptance, never completion of a run", () => {
+test("overview projects legacy Host acceptance, never completion of a run", () => {
   const snapshot = empty();
   snapshot.workstreams = [
     work("open", {
@@ -133,6 +133,7 @@ test("overview projects Host acceptance, never completion of a run", () => {
   snapshot.decisions = [{ id: "d", projectId: "p", state: "proposed", createdAt: "2026" }];
   const view = projectOverview(snapshot, "p");
   assert.equal(view.completed, 1);
+  assert.equal(view.agentFinished, 0);
   assert.equal(view.current[0].acceptance[0].status, "pending");
   assert.equal(view.blockers[0].blocker.owner, "user");
   assert.deepEqual(
@@ -140,6 +141,19 @@ test("overview projects Host acceptance, never completion of a run", () => {
     ["unknown-effect"],
   );
   assert.equal(view.decisions.length, 1);
+});
+test("overview distinguishes Agent-finished tasks from accepted legacy work", () => {
+  const snapshot = empty();
+  snapshot.workstreams = [
+    work("legacy", { status: "completed" }),
+    work("session", { executionMode: "session", status: "completed", acceptance: [{ status: "pending" }] }),
+    work("still-working", { executionMode: "session", status: "executing" }),
+  ];
+  const view = projectOverview(snapshot, "p");
+  assert.equal(view.completed, 2);
+  assert.equal(view.agentFinished, 1);
+  assert.equal(view.completed - view.agentFinished, 1);
+  assert.equal(snapshot.workstreams[1].acceptance[0].status, "pending");
 });
 test("Git graph connects merges to both actual parents and marks truncated ancestry", () => {
   const commits = [

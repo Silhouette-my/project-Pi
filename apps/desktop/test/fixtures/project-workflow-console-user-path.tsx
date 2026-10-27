@@ -558,7 +558,7 @@ Object.assign(window, {
     check(document.activeElement === field("workflow.title", create), "Dialog focus escaped forwards");
     fill("workflow.title", "Independent validation", create);
     fill("workflow.goal", "Validate after restart", create);
-    fill("workflow.acceptance", "Reload restores state", create);
+    check(!(field("workflow.acceptance", create) as HTMLTextAreaElement).required, "New task still requires acceptance");
     fill("workflow.owner", "validation-owner", create);
     submit(create);
     await until(() => durable.workstreams.length === 2, "Workstream creation missing");
@@ -566,6 +566,41 @@ Object.assign(window, {
       () => !document.querySelector('[data-workflow="workstream-editor"]'),
       "Creation did not settle",
     );
+    const sessionTask = durable.workstreams[1];
+    check(sessionTask.executionMode === "session" && sessionTask.acceptance.length === 0, "New task did not preserve lightweight semantics");
+    const sessionDetail = () => document.querySelector(`[data-workstream-id="${sessionTask.id}"]`)!;
+    await until(sessionDetail, "New task detail missing");
+    check(![...sessionDetail().querySelectorAll("button")].some((button) => button.textContent === t("workflow.authority")), "New task exposes a second authorization form");
+    check(!sessionDetail().textContent?.includes(t("workflow.noCandidate")), "New task requires a candidate");
+    check(!sessionDetail().querySelector(".workflow-detail-outputs"), "New task exposes an empty evidence section");
+    check(!findButton("workflow.start", sessionDetail()).disabled, "New task cannot start with its available Agent conversation");
+    click("workflow.start", sessionDetail());
+    await until(() => actions.at(-1)?.kind === "start", "New task start missing");
+    const sessionStart = actions.at(-1)!;
+    check(sessionStart.kind === "start" && sessionStart.sessionId === "main-chat" && !sessionStart.authorizationId, "New task failed to reuse session without Workflow authority");
+    await until(() => !findButton("workflow.discuss", sessionDetail()).disabled, "New task start stayed busy");
+    click("workflow.newSide", sessionDetail());
+    const sessionSide = document.querySelector('[data-workflow="side-editor"]')!;
+    fill("workflow.purpose", "work", sessionSide);
+    fill("workflow.assignment", "Use the selected Agent configuration", sessionSide);
+    check(!findButton("workflow.createSide", sessionSide).disabled, "New side work requires a legacy grant");
+    submit(sessionSide);
+    await until(() => !document.querySelector('[data-workflow="side-editor"]'), "New side work did not settle");
+    const sessionSideAction = actions.at(-1)!;
+    check(sessionSideAction.kind === "side.create" && sessionSideAction.sourceSessionId === "main-chat" && !sessionSideAction.authorizationId, "New side work changed session authority");
+    click("workflow.editWorkstream", sessionDetail());
+    const optionalEditor = document.querySelector('[data-workflow="workstream-editor"]')!;
+    fill("workflow.acceptance", "Optional user review", optionalEditor);
+    submit(optionalEditor);
+    await until(() => !document.querySelector('[data-workflow="workstream-editor"]'), "Optional acceptance edit did not settle");
+    check(durable.workstreams[1].executionMode === "session", "Editing changed execution mode");
+    durable.workstreams[1].status = "completed";
+    durable.workstreams[1].revision++;
+    durable.revision++;
+    emit();
+    await until(() => sessionDetail()?.textContent?.includes(t("workflow.agentFinished")), "Agent completion label missing");
+    check(durable.workstreams[1].acceptance[0].status === "pending", "Agent completion fabricated acceptance");
+    check(sessionDetail().textContent?.includes(t("workflow.agentFinishedHint")), "Agent completion meaning is not visible");
     await selectPrimary();
     click("workflow.authority", detail());
     const authority = document.querySelector('[data-workflow="authorization-editor"]')!;
@@ -906,6 +941,16 @@ Object.assign(window, {
     if (target === "controls") {
       click("workflow.overview");
       await selectPrimary();
+    }
+    if (target === "session") {
+      // This fixture's fixed-width panel does not implement AppShell docking.
+      // Close it to inspect the task itself at the requested viewport width.
+      flushSync(() => useAppStore.setState({ workPanelTabs: [] }));
+      click("workflow.workstreams");
+      const row = document.querySelector<HTMLButtonElement>(`.workflow-workstream[data-workflow-workstream="${durable.workstreams[1].id}"]`);
+      check(row, "Session task screenshot row missing");
+      flushSync(() => row.click());
+      await until(() => document.querySelector(`[data-workstream-id="${durable.workstreams[1].id}"]`), "Session task screenshot missing");
     }
     if (target === "artifacts") {
       click("workflow.overview");

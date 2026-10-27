@@ -31,7 +31,9 @@ export function WorkflowControls({
   const { snapshot, action, mutate, busy } = useProjectWorkflow();
   const sessions = useAppStore((state) => state.sessions);
   const providers = useAppStore((state) => state.providers);
-  const [executionSessionId, setExecutionSessionId] = useState(workstream.mainSessionId ?? "");
+  const activeSessionId = useAppStore((state) => state.activeSessionId);
+  const sessionTask = workstream.executionMode === "session";
+  const [executionSessionId, setExecutionSessionId] = useState(workstream.mainSessionId);
   const executors = sessions.filter((session) => {
     const provider = providers.find((item) => item.id === session.providerId);
     const link = snapshot?.conversations.find((item) => item.sessionId === session.id);
@@ -46,7 +48,11 @@ export function WorkflowControls({
       (!link || link.workstreamId === workstream.id)
     );
   });
-  const selectedExecutor = executors.find((item) => item.id === executionSessionId);
+  const selectedExecutor = executors.find((item) => item.id === executionSessionId)
+    ?? (sessionTask && executionSessionId === undefined
+      ? executors.find((item) => item.id === activeSessionId)
+        ?? (executors.length === 1 ? executors[0] : undefined)
+      : undefined);
   const [panel, setPanel] = useState<"side" | "authority" | null>(null);
   const [purpose, setPurpose] = useState<WorkflowConversation["purpose"]>("ask");
   const [visibility, setVisibility] = useState<WorkflowConversation["visibility"]>("project");
@@ -84,7 +90,7 @@ export function WorkflowControls({
       task: task.trim(),
       readContext: { selection: selection.trim(), resourceIds, includeDecisions, includeArtifacts },
       sourceSessionId: purpose === "work" ? selectedExecutor?.id : workstream.mainSessionId,
-      ...(purpose === "work" && selectedAuthorization
+      ...(purpose === "work" && !sessionTask && selectedAuthorization
         ? { authorizationId: selectedAuthorization.id }
         : {}),
     });
@@ -117,9 +123,9 @@ export function WorkflowControls({
   return (
     <section className="workflow-controls" aria-label={t("workflow.controls")}>
       <div className="workflow-control-row">
-        <Field label={t("workflow.executionSession")}>
+        <Field label={t("workflow.executionSession")} hint={sessionTask ? t("workflow.sessionExecutionHint") : undefined}>
           <Select
-            title={t("workflow.executionHint")}
+            title={t(sessionTask ? "workflow.sessionExecutionHint" : "workflow.executionHint")}
             value={selectedExecutor?.id ?? ""}
             onChange={(event) => setExecutionSessionId(event.target.value)}
           >
@@ -140,17 +146,17 @@ export function WorkflowControls({
       <div className="workflow-actions workflow-primary-actions">
         <Button
           variant="primary"
-          title={!selectedAuthorization ? t("workflow.authorityRequired") : undefined}
+          title={!sessionTask && !selectedAuthorization ? t("workflow.authorityRequired") : undefined}
           disabled={
-            busy || !selectedAuthorization || !selectedExecutor || workstream.status === "executing"
+            busy || (!sessionTask && !selectedAuthorization) || !selectedExecutor || workstream.status === "executing"
           }
           onClick={() =>
-            selectedAuthorization &&
+            (sessionTask || selectedAuthorization) &&
             selectedExecutor &&
             void run({
               kind: "start",
               ...scope,
-              authorizationId: selectedAuthorization.id,
+              ...(!sessionTask && selectedAuthorization ? { authorizationId: selectedAuthorization.id } : {}),
               sessionId: selectedExecutor.id,
             })
           }
@@ -200,16 +206,16 @@ export function WorkflowControls({
         >
           {t("workflow.cancelWork")}
         </Button>
-        <Button
+        {!sessionTask && <Button
           variant="ghost"
           disabled={busy}
           aria-expanded={panel === "authority"}
           onClick={() => setPanel(panel === "authority" ? null : "authority")}
         >
           {t("workflow.authority")}
-        </Button>
+        </Button>}
       </div>
-      {authorizations.length > 1 ? (
+      {!sessionTask && authorizations.length > 1 ? (
         <Field label={t("workflow.selectedAuthority")}>
           <Select
             value={selectedAuthorization?.id ?? ""}
@@ -223,7 +229,7 @@ export function WorkflowControls({
           </Select>
         </Field>
       ) : null}
-      {selectedAuthorization && (
+      {!sessionTask && selectedAuthorization && (
         <details className="workflow-authority-details">
           <summary><IconChevronRight size={12} className="project-disclosure-icon" />{t("workflow.selectedAuthority")}</summary>
           <dl>
@@ -341,7 +347,7 @@ export function WorkflowControls({
               disabled={
                 busy ||
                 !task.trim() ||
-                (purpose === "work" && (!selectedAuthorization || !selectedExecutor))
+                (purpose === "work" && ((!sessionTask && !selectedAuthorization) || !selectedExecutor))
               }
             >
               {t("workflow.createSide")}
@@ -352,7 +358,7 @@ export function WorkflowControls({
           </div>
         </form>
       )}
-      {panel === "authority" && (
+      {!sessionTask && panel === "authority" && (
         <form
           className="workflow-form"
           data-workflow="authorization-editor"

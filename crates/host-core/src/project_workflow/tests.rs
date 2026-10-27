@@ -2,6 +2,8 @@
 mod return_tests;
 #[path = "tree_tests.rs"]
 mod tree_tests;
+#[path = "session_execution_tests.rs"]
+mod session_execution_tests;
 use super::*;
 
 #[test]

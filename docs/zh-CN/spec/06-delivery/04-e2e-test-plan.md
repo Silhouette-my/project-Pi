@@ -6508,6 +6508,8 @@ eleven-tool-round desktop paths are verified by
 
 ### E2E-PROJECT-workflow-durable-loop
 
+- **Compatibility scope:** Unmarked legacy bounded Workstreams and Runs. New
+  session-backed tasks are covered by E2E-PROJECT-session-backed-task below.
 - **前提条件**：任务候选构建、隔离的 profile 与 SQLite 数据库，其中已有 ProjectGroup、Chat 会话和本地项目根目录。使用合成 runtime/provider 边界；不使用真实账户、付费模型调用、已安装应用或用户 profile。
 - **步骤**：将普通 Chat 归入文件夹，移动一个会话并移除一个文件夹；重启后继续已有 Chat。未选中任何会话时打开 Project Console，检查真实 workstream、负责人、阻塞项、下一步和候选产物。采纳带来源的决策并授予明确用户授权，然后开始工作。创建具有独立上下文/写回策略的 Ask 和 Explore 分支，确认未采纳的提案不会影响 Work。在 Chat 讨论执行证据、采纳新决策，并在同一 workstream 中继续。发布侧会话结果，关闭其父会话，再在 workstream 中消费并集成。让旧 run 结果与较新的已采纳决策竞争，并把用户反例附加到精确候选和验收项。搜索消息与 artifact，通过 breadcrumb 跳转，并确认后台活动不改变手动导航顺序。工作期间暂停并重启；协调实际 run 状态，保留未知外部副作用但不重放，并保持无关工作可用。没有活动会话时打开精确记录的候选和资源，写入绑定 revision/environment 的反馈，并确认本地测试不会被标成线上部署。拒绝项目根目录之外的本地引用，以及被现有 URL gate 拒绝的 HTTP(S) 引用。最后验证现有 Agent/Plan、Chat 转录、项目指令/记忆、权限、session fork 和历史入口仍可使用。
 - **预期**：文件夹操作无损且重启后仍有效；项目身份与转录语义不变。Console 和搜索读取持久化 host 状态，不显示伪造进度。用户命令与 runtime 观察按能力分离并使用 revision 控制。只有明确用户授权才能启动工作；采纳会推进决策 fence。Run 完成、交付、消费和验收互不混同。过期结果只保留为证据，不覆盖有效状态。打开引用须通过既有 host 路径/URL gate，并返回记录的 revision。未知副作用不会重放。
@@ -6532,6 +6534,27 @@ eleven-tool-round desktop paths are verified by
 - **关联规格**：[项目工作流状态](/zh-CN/spec/02-architecture/project-workflow-state)、`docs/project-workflow-mvp/PRODUCT.md`、[ADR](/adr/project-workflow-durable-state)。
 - **验收范围**：项目工作流 MVP AC01–AC12。
 - **状态**：已定义，尚未验收。shared schema、Host 和 IPC 测试只是组件级证据，不能证明渲染旅程、runtime 生命周期、重启恢复或集成验收。完成这些路径后，按精确任务候选记录结果。
+
+### E2E-PROJECT-session-backed-task
+
+- **Preconditions:** An isolated task-candidate build, local scripted model and
+  configured Agent conversations in Ask and Auto mode. Existing unmarked records
+  remain the legacy bounded fixtures.
+- **Steps:** Create a new task with empty acceptance and no Workflow grant. Run
+  native search/read/edit, recover from a missing-file read and a failed check,
+  and finish with natural-language text. Exercise ordinary Ask approval scopes
+  and Auto behavior, existing subagent entry points, explicit continuation with
+  a side result, pause/cancel and application restart. Edit a completed task title.
+- **Expected:** The new task uses its selected conversation's model/tools/permissions,
+  with no extra Workflow boundary. It finishes without checkpoint/Candidate/Evidence.
+  Optional acceptance remains unchanged; the UI distinguishes Agent completion
+  from legacy acceptance. Errors and uncertain effects remain truthful and are not
+  replayed. Side-context messages cannot replace the main turn's actual final reply.
+  Unmarked legacy tasks retain their old authorization, checkpoint and completion
+  conditions.
+- **Coverage:** `scripts/e2e-project-workflow.mjs`, runtime lifecycle and Host
+  compatibility tests, and the Project Console renderer user-path test.
+- **Status:** Record actual results in `docs/project/workflow-session-tasks.md`.
 
 ### E2E-PROJECT-delete-removes-project-and-owned-sessions
 

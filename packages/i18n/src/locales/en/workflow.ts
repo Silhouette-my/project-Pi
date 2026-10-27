@@ -83,6 +83,12 @@ export const workflowCatalog = {
     },
   },
   workflow: {
+    taskRecords: "Task records",
+    acceptanceOptionalHint: "Optional, one condition per line. Track these separately from the Agent’s completion.",
+    sessionExecutionHint: "Uses the selected conversation’s model, tools and permissions.",
+    agentFinished: "Agent finished",
+    agentFinishedHint: "The Agent finished this task. See the conversation for results and checks; acceptance conditions keep their own status.",
+    agentFinishedCount: "{{count}} Agent tasks finished",
     agentTitle: "Project Agent",
     dockTabs: "Project conversations",
     agentTabShort: "Agent",

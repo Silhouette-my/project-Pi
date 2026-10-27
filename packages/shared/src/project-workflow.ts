@@ -27,6 +27,8 @@ export const WorkflowAcceptanceSchema = object({
 export const WorkflowOwnerSchema = object({ kind: literals("user", "session", "agent"), ref: id });
 export const WorkflowWorkstreamSchema = object({
   id, projectId: id, title: id, goal: text, acceptance: Type.Array(WorkflowAcceptanceSchema),
+  /** Absent records retain bounded authorization and checkpoint semantics. */
+  executionMode: Type.Optional(Type.Literal("session")),
   owner: WorkflowOwnerSchema,
   status: literals("draft", "ready", "executing", "paused", "blocked", "awaiting_user", "completed", "cancelled"),
   priority: Type.Integer(), order: Type.Number(), dependencyIds: strings,
@@ -87,7 +89,8 @@ export const WorkflowEffectSchema = object({
 });
 export const WorkflowRunSchema = object({
   id, projectId: id, workstreamId: id, sessionId: id, executor: id,
-  workstreamRevision: revision, decisionRevision: revision, authorizationId: id,
+  executionMode: Type.Optional(Type.Literal("session")),
+  workstreamRevision: revision, decisionRevision: revision, authorizationId: optionalId,
   state: literals("queued", "executing", "paused", "completed", "failed", "cancelled", "interrupted", "unknown"),
   outcome: text, effects: Type.Array(WorkflowEffectSchema),
   startedAt: id, updatedAt: id, completionKey: optionalId,
@@ -214,7 +217,7 @@ export type ProjectWorkflowChanged = { revision: number; commandId: string; kind
 const actionBase = { ...common, ...scope };
 export const ProjectWorkflowActionSchema = Type.Union([
   object({ ...common, kind: Type.Literal("agent.open"), projectId: id }),
-  object({ ...actionBase, kind: Type.Literal("start"), sessionId: optionalId, authorizationId: id }),
+  object({ ...actionBase, kind: Type.Literal("start"), sessionId: optionalId, authorizationId: optionalId }),
   object({ ...actionBase, kind: Type.Literal("discuss"), sessionId: optionalId, pause: Type.Boolean() }),
   object({ ...actionBase, kind: Type.Literal("adopt"), decisionId: id, source: WorkflowSourceSchema }),
   object({ ...actionBase, kind: Type.Literal("pause") }),

@@ -60,11 +60,19 @@ describe("project workflow boundary", () => {
     expect(isProjectWorkflowCommand({ ...runtime, expectedRevision: -1 })).toBe(false);
     expect(isProjectWorkflowCommand({ ...runtime, status: "done" })).toBe(false);
   });
-  it("requires explicit action scope and authorization at execution start", () => {
+  it("lets Host distinguish ordinary session starts from legacy authorization requirements", () => {
     const start = { kind: "start", commandId: "start-1", expectedRevision: 0, projectId: "project-1", workstreamId: "work-1" };
-    expect(isProjectWorkflowAction(start)).toBe(false);
+    expect(isProjectWorkflowAction(start)).toBe(true);
     expect(isProjectWorkflowAction({ ...start, authorizationId: "grant-1" })).toBe(true);
     expect(isProjectWorkflowAction({ ...start, kind: "pause" })).toBe(true);
+  });
+  it("keeps the new execution mode explicit and immutable on the user update surface", () => {
+    const create = { kind: "workstream.create", commandId: "session-create", expectedRevision: 0,
+      workstream: { ...workflowFixtureWorkstream, executionMode: "session", acceptance: [] } };
+    expect(isProjectWorkflowUserCommand(create)).toBe(true);
+    expect(isProjectWorkflowUserCommand({ ...create, workstream: { ...create.workstream, executionMode: "free" } })).toBe(false);
+    expect(isProjectWorkflowUserCommand({ kind: "workstream.update", commandId: "change-mode", expectedRevision: 0,
+      projectId: "project-1", workstreamId: "work-1", patch: { executionMode: "session" } })).toBe(false);
   });
   it("exposes only named workflow channels through preload", () => {
     for (const name of ["projectWorkflowSnapshot", "projectWorkflowMutate", "projectWorkflowAction", "projectWorkflowSearch"] as const) {

@@ -38,7 +38,8 @@ export function ProjectOverview({
     t("projectStructure.openWork", { count: view.current.length }),
     view.executing ? t("projectStructure.executingRuns", { count: view.executing }) : null,
     attention ? t("projectStructure.awaitingCount", { count: attention }) : null,
-    t("projectStructure.completedWork", { count: view.completed }),
+    t("projectStructure.completedWork", { count: view.completed - view.agentFinished }),
+    view.agentFinished ? t("workflow.agentFinishedCount", { count: view.agentFinished }) : null,
   ].filter(Boolean);
   return (
     <section className="workflow-overview project-overview" data-project-overview={projectId}>
@@ -129,7 +130,7 @@ export function ProjectOverview({
                   <span className="project-card-copy">
                     <span className="project-card-title">
                       <strong>{work.title}</strong>
-                      <WorkflowStatusBadge status={work.status} />
+                      <WorkflowStatusBadge status={work.status} executionMode={work.executionMode} />
                     </span>
                     <span className="project-card-meta-line">
                       {t("projectStructure.ownedBy", {

@@ -36,7 +36,16 @@ const shellDeniedCommand = `printf 'unsafe' > ${json(join(canonicalWorkspace, "u
 const unknownMarker = join(canonicalWorkspace, "unknown-timeout.txt");
 const unknownCommand = `printf 'started\\n' >> ${json(unknownMarker)}; sleep 5; printf 'after\\n' >> ${json(unknownMarker)}`;
 const pendingCommand = key => `printf '${key}\\n' >> ${json(join(canonicalWorkspace, `pending-${key}.txt`))}`;
-const hostBinary = join(root, "target/debug/pi-desktop-host-core");
+const sessionResource = join(canonicalWorkspace, "session-auto");
+const sessionCandidate = join(sessionResource, "candidate.txt");
+const sessionCheckCommand = `grep -q 'candidate-v2' ${json(sessionCandidate)}`;
+const sessionOutsidePath = join(scratch, "outside-project.txt");
+const sessionAskPath = join(canonicalWorkspace, "session-ask.txt");
+const sessionAskCommand = `printf 'first\\n' >> ${json(sessionAskPath)}`;
+const sessionAskSecondCommand = `printf 'second\\n' >> ${json(sessionAskPath)}`;
+const sessionUnknownMarker = join(canonicalWorkspace, "session-unknown-timeout.txt");
+const sessionUnknownCommand = `printf 'started\\n' >> ${json(sessionUnknownMarker)}; sleep 5; printf 'after\\n' >> ${json(sessionUnknownMarker)}`;
+const hostBinary = process.env.PI_DESKTOP_HOST_BIN || join(root, "target/debug/pi-desktop-host-core");
 const requests = [], checkpoints = [], coverage = [], conflictRefreshes = [];
 const held = new Map(), runRequests = new Map();
 let sequence = 0, log = "", fixtureFailure, heldMain, projectId, main, page, child;
@@ -105,6 +114,10 @@ const model = createServer(async (req, res) => {
     const toolResults = tail.filter(message => message.role === "tool");
     const runId = prompt.match(/Run identity: ([^\n]+)/)?.[1];
     res.writeHead(200, { "content-type": "text/event-stream" });
+    if (prompt.includes("SESSION_CHILD_MARKER")) {
+      reply(res, body.model, "SESSION_CHILD_RESULT: The bounded fixture inspection is complete.");
+      return;
+    }
     if (!runId) {
       reply(res, body.model, prompt.includes("ADOPT_EXPLORE") ? checkpoint("NEW_DECISION_MARKER: Use the newly adopted bounded decision.") : prompt.includes("DISCUSSION_MARKER") ? "DISCUSSION_MARKER: Work remains independent while discussing." : prompt.includes("EXPLORE_MARKER") ? checkpoint("EXPLORE_PROPOSAL: Prefer measured value 42.") : "ASK_ONLY_MARKER: A local explanation; no project changes.");
       return;
@@ -115,7 +128,55 @@ const model = createServer(async (req, res) => {
         reply(res, body.model, null, { id: `discover-${id}`, name: "ToolSearch", args: { query: name } });
       } else reply(res, body.model, null, { id, name, args });
     };
-    if (prompt.includes("UNKNOWN_TIMEOUT")) {
+    if (prompt.includes("SESSION_AUTO_PIPELINE")) {
+      const result = id => toolResults.find(item => item.tool_call_id === id);
+      if (!result("session-missing-read")) invokeTool("session-missing-read", "Read", { path: join(sessionResource, "not-created.txt") });
+      else if (!result("session-glob")) {
+        assert.doesNotMatch(result("session-missing-read").content, /WORKFLOW_RESOURCE_DENIED/, "a normal failed Read is not rejected by Workflow scope");
+        invokeTool("session-glob", "Glob", { path: sessionResource, pattern: "**/*.txt" });
+      }
+      else if (!result("session-grep")) {
+        assert.match(result("session-glob").content, /candidate\.txt/, "ordinary Glob returns the fixture candidate");
+        invokeTool("session-grep", "Grep", { path: sessionCandidate, pattern: "candidate-v1" });
+      } else if (!result("session-check-failed")) {
+        assert.match(result("session-grep").content, /candidate-v1/, "ordinary Grep reads the actual unfixed candidate");
+        invokeTool("session-check-failed", "Bash", { command: sessionCheckCommand });
+      } else if (!result("session-fix")) {
+        assert.equal(JSON.parse(result("session-check-failed").content).exitCode, 1, "the ordinary check actually fails before repair");
+        invokeTool("session-fix", "Write", { path: sessionCandidate, content: "candidate-v2" });
+      } else if (!result("session-check-passed")) invokeTool("session-check-passed", "Bash", { command: sessionCheckCommand });
+      else if (!result("session-write-outside")) {
+        assert.equal(JSON.parse(result("session-check-passed").content).exitCode, 0, "the ordinary check actually passes after repair");
+        invokeTool("session-write-outside", "Write", { path: sessionOutsidePath, content: "ordinary-session-authority" });
+      } else if (!result("session-task")) invokeTool("session-task", "Task", { agent: "workflow-fixture-reader", task: "SESSION_CHILD_MARKER: Reply with the fixture inspection result only; do not use tools." });
+      else if (!result("session-task-wait")) {
+        const delegationId = result("session-task").content.match(/Delegation ([a-f0-9-]+) started:/)?.[1];
+        assert.ok(delegationId, "Task returns the actual delegation identity");
+        invokeTool("session-task-wait", "TaskWait", { delegationIds: [delegationId] });
+      }
+      else {
+        assert.match(result("session-task-wait").content, /SESSION_CHILD_RESULT/, "the normal Task/TaskWait report returns to its parent");
+        reply(res, body.model, "SESSION_AUTO_FINISHED: Found the file, observed a failing check, repaired it, reran the check successfully and collected the child report. No structured checkpoint was required.");
+      }
+    } else if (prompt.includes("SESSION_ASK_PIPELINE")) {
+      if (!toolResults.some(result => result.tool_call_id === "session-ask-first")) invokeTool("session-ask-first", "Bash", { command: sessionAskCommand });
+      else if (!toolResults.some(result => result.tool_call_id === "session-ask-second")) invokeTool("session-ask-second", "Bash", { command: sessionAskSecondCommand });
+      else reply(res, body.model, "SESSION_ASK_FINISHED: Both commands completed under the conversation's own permission policy.");
+    } else if (prompt.includes("SESSION_SIDE_WORK")) {
+      reply(res, body.model, "SESSION_SIDE_RESULT: The independent fixture inspection measured 42.");
+    } else if (prompt.includes("SESSION_SIDE_MAIN")) {
+      assert.match(json(body.messages), /SESSION_SIDE_RESULT/, "the explicitly started ordinary main task receives the natural-language side result");
+      assert.match(json(body.messages), /measured 42/, "the actual delivered measurement reaches the main task");
+      reply(res, body.model, "SESSION_SIDE_MAIN_FINISHED: I incorporated the independently returned measurement, 42.");
+    } else if (prompt.includes("SESSION_UNKNOWN_TIMEOUT")) {
+      if (!toolResults.some(result => result.tool_call_id === "session-unknown-timeout")) {
+        assert.equal(runRequests.get(runId), 1, "the ordinary uncertain Shell operation is dispatched once");
+        reply(res, body.model, null, { id: "session-unknown-timeout", name: "Bash", args: { command: sessionUnknownCommand, timeout: 1 } });
+      } else {
+        assert.equal(runRequests.get(runId), 2, "the model may explain the timeout but must not replay the command");
+        reply(res, body.model, "SESSION_UNKNOWN_STOPPED: The command timed out after a partial effect. Its result is uncertain; I did not retry it.");
+      }
+    } else if (prompt.includes("UNKNOWN_TIMEOUT")) {
       assert.equal(runRequests.get(runId), 1, "an uncertain post-start Shell effect never causes another model request");
       reply(res, body.model, null, { id: "unknown-timeout", name: "Bash", args: { command: unknownCommand, timeout: 1 } });
     } else if (prompt.includes("SHELL_PENDING_PAUSE") || prompt.includes("SHELL_PENDING_CANCEL")) {
@@ -321,10 +382,24 @@ async function shellApproval(sessionId, command, label) {
 async function clickShellDecision(allow) {
   await page.evaluate(`document.querySelectorAll('.permission-card-actions button')[${allow ? 1 : 0}].click()`);
 }
+async function ordinaryShellApproval(sessionId, command) {
+  const permission = await until(() => page.evaluate(`window.__workflowPermissionEvents.filter(envelope => envelope.sessionId === ${json(sessionId)}).map(envelope => envelope.event.request).find(request => request.argsPreview?.command === ${json(command)})`), "normal ask-session Shell permission");
+  assert.notEqual(permission.approvalScope, "workflow-shell", "a session task does not add the legacy Workflow Shell authority");
+  await page.evaluate(`window.__PI_DESKTOP__.setPage('chat'); window.__PI_DESKTOP__.selectSession(${json(sessionId)})`);
+  const card = await until(() => page.evaluate(`(() => { const card=document.querySelector('.permission-card'); if (!card?.querySelector('.permission-card-args')?.textContent.includes(${json(command)})) return null; return { note:card.querySelector('[role="note"]')?.textContent, buttons:[...card.querySelectorAll('.permission-card-actions button')].map(button=>button.textContent) }; })()`), "normal ask-session permission card");
+  assert.equal(card.note, undefined, "ordinary permission does not show the Workflow-only warning");
+  assert.equal(card.buttons.length, 3, "the ordinary permission card retains allow-for-chat");
+  await writeFile(join(output, "session-ask-approval.json"), json({ permission, card }, null, 2));
+  return permission;
+}
 let lastSnapshot;
 try {
   const seed = new Host(hostBinary, data, { env: { HOME: home }, quiet: true });
-  try { await seed.start(); projectId = (await seed.call("project.group.create", { name: "Production Workflow E2E", folders: [canonicalWorkspace] })).group.id; }
+  try {
+    await seed.start();
+    projectId = (await seed.call("project.group.create", { name: "Production Workflow E2E", folders: [canonicalWorkspace] })).group.id;
+    await seed.call("agents.create", { name: "workflow-fixture-reader", description: "A local scripted inspection fixture.", tools: ["Read"], body: "Use the configured loopback fixture model. Report the requested inspection and do not write files." });
+  }
   finally { await seed.stop(); }
   await startApp();
   const setup = await main.evaluate(`globalThis.__PI_DESKTOP_PLAN_UI_PROBE({operation:'liveSetup',workspace:${json(canonicalWorkspace)}})`);
@@ -481,6 +556,93 @@ try {
   await until(async () => runsFor(await snapshot(), "work-survivor").every(run => run.state === "completed" && run.completionKey), "unrelated survivor completes normally");
   coverage.push("Pause revokes pending Shell without effects; Resume (no Start/auth change) retains assignment, requires fresh approval, executes once and terminates; Cancel independently revokes pending Shell without execution or continuation; unrelated Work survives and completes");
 
+  const createSessionTask = async (id, goal, permissionMode) => {
+    const created = await invoke("sessionCreate", { title: id, mode: "agent", providerId: setup.providerId, modelId: setup.modelId, projectPath: canonicalWorkspace, permissionMode });
+    const sessionId = created.session.id;
+    await invoke("sessionConfigure", sessionId, { mode: "agent", permissionMode });
+    await reloadRenderer();
+    await mutate("workstream.create", { workstream: { ...workstream(id, sessionId, goal), executionMode: "session", acceptance: [] } });
+    return { sessionId, start: () => action("start", { sessionId }, id) };
+  };
+  const expectSessionComplete = (id, description) => until(async () => {
+    const state = await snapshot(), work = state.workstreams.find(item => item.id === id);
+    if (work?.status === "completed") return state;
+    const runs = runsFor(state, id);
+    if (["awaiting_user", "blocked", "cancelled"].includes(work?.status) && runs.length && runs.every(run => !active(run) && run.completionKey)) {
+      assert.fail(`${description}: terminal runs did not complete the task: ${json({ work, runs })}`);
+    }
+    return null;
+  }, description);
+  await mkdir(sessionResource);
+  await writeFile(sessionCandidate, "candidate-v1");
+  const automatic = await createSessionTask("session-auto", "SESSION_AUTO_PIPELINE: Search for the candidate, check it, repair the observed failure, check again, exercise ordinary session authority and collect a child inspection.", "auto");
+  await automatic.start();
+  const automaticFinished = await expectSessionComplete("session-auto", "ordinary auto Workflow search → failed check → repair → passing check → natural-language completion");
+  const automaticRuns = runsFor(automaticFinished, "session-auto");
+  assert.equal(automaticRuns.length, 1, "the ordinary Agent owns the tool loop in one Workflow Run");
+  assert.equal(automaticRuns[0].executionMode, "session");
+  assert.equal(automaticRuns[0].authorizationId, undefined, "no artificial Workflow authorization is created");
+  assert.match(automaticRuns[0].outcome, /SESSION_AUTO_FINISHED/);
+  assert.doesNotMatch(automaticRuns[0].outcome, /```project-workflow-checkpoint/);
+  assert.equal(automaticFinished.workstreams.find(work => work.id === "session-auto").currentCandidateId, undefined);
+  assert.equal(automaticFinished.artifacts.filter(item => item.workstreamId === "session-auto").length, 0);
+  assert.equal(automaticFinished.evidence.filter(item => item.workstreamId === "session-auto").length, 0);
+  assert.equal(await readFile(sessionCandidate, "utf8"), "candidate-v2");
+  assert.equal(await readFile(sessionOutsidePath, "utf8"), "ordinary-session-authority", "the project path is a default workspace, not a new filesystem sandbox");
+  assert.equal(await page.evaluate(`window.__workflowPermissionEvents.filter(envelope=>envelope.sessionId===${json(automatic.sessionId)}).length`), 0, "auto retains normal no-prompt permissions");
+  const automaticSession = await invoke("sessionGet", { id: automatic.sessionId });
+  assert.equal(automaticSession.session.permissionMode, "auto");
+  assert.ok(automaticSession.session.messages.some(message => message.toolName === "Task" && message.toolStatus === "success"), "normal native delegation executes without Workflow tool denial");
+  await writeFile(join(output, "session-auto.json"), json({ workstream: automaticFinished.workstreams.find(work => work.id === "session-auto"), run: automaticRuns[0], session: automaticSession.session }, null, 2));
+  coverage.push("New session-mode task uses the ordinary auto Agent tool loop: a failed Read recovered through real Glob/Grep, failing Shell check, Write repair, passing check, out-of-project temporary-file write, Task/TaskWait local child report and natural-language completion; no Workflow authorization, forced approval, Candidate or Evidence");
+
+  const asking = await createSessionTask("session-ask", "SESSION_ASK_PIPELINE: Run two local fixture commands under this conversation's existing ask permissions.", "ask");
+  const optionalAcceptance = [{ id: "session-optional-acceptance", title: "User reviews the result", status: "pending", evidenceIds: [] }];
+  await mutate("workstream.update", { projectId, workstreamId: "session-ask", patch: { acceptance: optionalAcceptance } });
+  await asking.start();
+  await ordinaryShellApproval(asking.sessionId, sessionAskCommand);
+  assert.equal(await absent(sessionAskPath), true, "ask-session work does not execute before its ordinary approval");
+  await page.evaluate("document.querySelectorAll('.permission-card-actions button')[1].click()");
+  const askingFinished = await expectSessionComplete("session-ask", "allow-for-chat preserves the ordinary session permission path");
+  assert.equal(await readFile(sessionAskPath, "utf8"), "first\nsecond\n");
+  assert.equal((await invoke("sessionGet", { id: asking.sessionId })).session.permissionMode, "ask", "starting a Workflow never rewrites the conversation's selected permission mode");
+  assert.equal(await page.evaluate(`window.__workflowPermissionEvents.filter(envelope=>envelope.sessionId===${json(asking.sessionId)}).length`), 1, "ordinary allow-for-chat is not replaced with mandatory per-command Workflow approvals");
+  assert.equal(runsFor(askingFinished, "session-ask").length, 1);
+  assert.deepEqual(askingFinished.workstreams.find(work => work.id === "session-ask").acceptance, optionalAcceptance, "normal Agent completion does not manufacture satisfaction of an optional user acceptance condition");
+  coverage.push("New ask-session task retains its own ask mode, ordinary permission reason and allow-for-chat decision; no effects precede approval, the session grant covers the next command and no extra Workflow permission layer appears");
+
+  const returning = await createSessionTask("session-side", "SESSION_SIDE_MAIN: Incorporate the delivered independent inspection result and explain the conclusion in prose.", "auto");
+  const returnedSide = await action("side.create", { purpose: "work", visibility: "project", sourceSessionId: returning.sessionId,
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true }, task: "SESSION_SIDE_WORK: Independently inspect the fixture and return its measurement in prose." }, "session-side");
+  const deliveredSide = await until(async () => {
+    const state = await snapshot();
+    const sideRun = runsFor(state, "session-side").find(run => run.sessionId === returnedSide.sessionId && run.state === "completed" && run.completionKey);
+    const delivery = sideRun && state.deliveries.find(item => item.sourceRunId === sideRun.id && item.state === "delivered");
+    return delivery ? { state, delivery } : null;
+  }, "ordinary side work publishes a natural-language result without a checkpoint");
+  assert.equal(deliveredSide.state.conversations.find(item => item.sessionId === returnedSide.sessionId)?.returnPolicy, "delivery", "this side Work is explicitly configured to return its result");
+  assert.equal(runsFor(deliveredSide.state, "session-side").length, 1, "a returned side result never silently starts its main task");
+  await returning.start();
+  const returnedMain = await expectSessionComplete("session-side", "explicit main start incorporates the ordinary side result");
+  assert.equal(runsFor(returnedMain, "session-side").length, 2);
+  assert.equal(returnedMain.deliveries.find(item => item.id === deliveredSide.delivery.id)?.state, "consumed");
+  assert.equal(returnedMain.artifacts.filter(item => item.workstreamId === "session-side").length, 0);
+  coverage.push("Session-mode side Work returns normal prose without authorization or checkpoint; no automatic main dispatch occurs, and an explicit main start consumes the returned result in the existing delivery path");
+
+  const sessionUnknown = await createSessionTask("session-unknown", "SESSION_UNKNOWN_TIMEOUT: Execute the fixture command once, report its actual timeout and never retry its uncertain effects.", "auto");
+  const sessionUnknownStart = await sessionUnknown.start();
+  const sessionUnknownStartedAt = Date.now();
+  const sessionUnknownState = await until(async () => {
+    const state = await snapshot();
+    return runsFor(state, "session-unknown").some(run => !active(run) && run.completionKey && run.effects.some(effect => effect.state === "unknown")) ? state : null;
+  }, "new ordinary-session Shell timeout retains its real unknown effect");
+  assert.equal(await readFile(sessionUnknownMarker, "utf8"), "started\n");
+  assert.equal(runsFor(sessionUnknownState, "session-unknown").length, 1);
+  assert.ok(["awaiting_user", "blocked"].includes(sessionUnknownState.workstreams.find(work => work.id === "session-unknown").status), "a normal turn ending cannot turn uncertain effects into completed work");
+  assert.ok(runRequests.get(sessionUnknownStart.runId) <= 2, "the timeout is never retried as a new model/tool attempt");
+  const sessionUnknownBeforeRecord = runsFor(sessionUnknownState, "session-unknown")[0];
+  coverage.push("New auto session actually starts a Shell effect then times out; the work remains blocked with an unknown effect rather than completed, and the command is not retried");
+
   // Feedback is retained after the user explicitly closes the old execution grant.
   // This tests candidate identity without accidentally authorizing correction work.
   await mutate("authorization.revoke", { projectId, workstreamId: "work-main", authorizationId: "auth-main" });
@@ -522,11 +684,20 @@ try {
   await until(() => Date.now() >= unknownApprovedAt + 6500, "past the original command's delayed after-write deadline", 10000);
   assert.equal(await readFile(unknownMarker, "utf8"), "started\n", "unknown command is not replayed and its delayed after-write never executes");
   assert.equal(requests.length, countBeforeRestart, "unknown recovery sends no model request even after the original command's effect window");
+  assert.equal(runsFor(lastSnapshot, "session-unknown").length, 1, "new session-mode recovery does not create a successor");
+  assert.ok(runsFor(lastSnapshot, "session-unknown")[0].effects.some(effect => effect.state === "unknown"));
+  assert.ok(["awaiting_user", "blocked"].includes(lastSnapshot.workstreams.find(work => work.id === "session-unknown").status));
+  assert.ok(Date.now() >= sessionUnknownStartedAt + 6500, "the new ordinary-session delayed effect window has elapsed");
+  assert.equal(await readFile(sessionUnknownMarker, "utf8"), "started\n", "new message identity and normal queue recovery never replay the uncertain command or leave its delayed writer running");
+  await writeFile(join(output, "session-unknown-recovery.json"), json({ builtCommit, command: sessionUnknownCommand,
+    before: sessionUnknownBeforeRecord, after: runsFor(lastSnapshot, "session-unknown")[0], marker: await readFile(sessionUnknownMarker, "utf8"),
+    modelRequestsBeforeRestart: countBeforeRestart, modelRequestsAfterRecovery: requests.length }, null, 2));
   await writeFile(join(output, "unknown-recovery.json"), json({ builtCommit, command: unknownCommand, timeoutSeconds: 1, before: unknownBeforeRecord, after: runsFor(lastSnapshot, "work-unknown")[0], marker: await readFile(unknownMarker, "utf8"), modelRequestsBeforeRestart: countBeforeRestart, modelRequestsAfterRecovery: requests.length, delayedEffectWindowObserved: true }, null, 2));
   coverage.push("Actual app/profile restart preserves candidate/evidence/feedback and unknown run, sends no new model request, retains exactly one started marker and never performs delayed after-write");
+  coverage.push("The changed session-mode ordinary-queue recovery path also preserves its unknown effect and one started marker across app restart, without model requests, successor runs or delayed after-writes");
   const shot = await page.call("Page.captureScreenshot", { format: "png" });
   await writeFile(join(output, "production-renderer.png"), Buffer.from(shot.data, "base64"));
-  await writeFile(join(output, "result.json"), json({ ok: true, builtCommit, output, scratch, projectId, coverage, scope: "Production cross-process workflow and real permission-card journey; Project Console visual evidence is maintained separately", gaps: ["No live account or deployment"], modelRequests: requests.length }, null, 2));
+  await writeFile(join(output, "result.json"), json({ ok: true, builtCommit, output, scratch, projectId, coverage, scope: "Production cross-process legacy and session-mode Workflow, real permission cards and native Task fixture; Project Console visual evidence is maintained separately", gaps: ["No real-model quality evaluation, live account or deployment", "User-installed Session Orchestrator is not exercised; delegation uses the isolated native Task fixture"], modelRequests: requests.length }, null, 2));
   console.log(`PASS production workflow ${output}`);
 } catch (error) {
   const diagnostics = [];
