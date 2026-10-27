@@ -790,6 +790,18 @@ export const tr = {
     dismiss: "Kapat",
   },
   settings: {
+    archivedChats: {
+      title: "Arşivlenmiş konuşmalar",
+      description: "Kenar çubuğunda gizlenen konuşmaları görüntüleyin veya geri yükleyin.",
+      manage: "Yönet",
+      search: "Başlık veya proje ara…",
+      open: "Aç",
+      restore: "Arşivden çıkar",
+      empty: "Arşivlenmiş konuşma yok.",
+      noResults: "Eşleşen konuşma yok.",
+      restored: "“{{title}}” arşivden çıkarıldı.",
+      projectStillArchived: "Konuşma geri yüklendi. Projesi hâlâ arşivde.",
+    },
     storage: {
       unavailableHint: "Depolama dizini şu anda kullanılamıyor. Başlatmadan önce sürücüyü yeniden bağlayın; uygulama boş veri oluşturmaz veya başka bir dizine geçmez.",
       browserSource: "Tarayıcı verisi kaynağı",

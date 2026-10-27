@@ -786,6 +786,18 @@ export const zhCN = {
     dismiss: "关闭",
   },
   settings: {
+    archivedChats: {
+      title: "归档对话",
+      description: "查看或恢复已从侧栏隐藏的对话。",
+      manage: "管理",
+      search: "搜索标题或项目…",
+      open: "打开",
+      restore: "取消归档",
+      empty: "暂无归档对话。",
+      noResults: "没有匹配的对话。",
+      restored: "已取消归档「{{title}}」。",
+      projectStillArchived: "对话已恢复，其所属项目仍处于归档状态。",
+    },
     storage: {
       unavailableHint: "保存目录暂时不可用。请重新连接磁盘后启动；应用不会创建空白数据或切换到其他目录。",
       browserSource: "浏览器数据来源",

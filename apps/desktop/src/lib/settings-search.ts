@@ -67,6 +67,8 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
       "settings.storage.cache",
       "settings.storage.clearCache",
       "settings.storage.backup",
+      "settings.archivedChats.title",
+      "settings.archivedChats.description",
       "settings.theme",
       "settings.language",
       "settings.languageAuto",

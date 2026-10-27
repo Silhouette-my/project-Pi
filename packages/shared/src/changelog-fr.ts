@@ -5,6 +5,7 @@ export const frEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Retrouvez, ouvrez et désarchivez vos conversations dans Paramètres → Général → Conversations archivées.",
       "Des visualisations interactives directement dans la conversation : les fragments HTML écrits par l'assistant s'affichent comme des cartes en bac à sable, interactives et propices aux questions de suivi.",
       "La connexion ChatGPT affiche la vérification et les erreurs, puis charge les modèles de votre compte plutôt qu’une liste fixe.",
       "Discutez avec votre abonnement ChatGPT dans l’interface native après une connexion dans le navigateur.",

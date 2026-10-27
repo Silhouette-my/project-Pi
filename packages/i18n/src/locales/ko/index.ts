@@ -790,6 +790,18 @@ export const ko = {
     dismiss: "닫기",
   },
   settings: {
+    archivedChats: {
+      title: "보관된 대화",
+      description: "사이드바에서 숨긴 대화를 보거나 복원합니다.",
+      manage: "관리",
+      search: "제목 또는 프로젝트 검색…",
+      open: "열기",
+      restore: "보관 해제",
+      empty: "보관된 대화가 없습니다.",
+      noResults: "일치하는 대화가 없습니다.",
+      restored: "“{{title}}” 보관을 해제했습니다.",
+      projectStillArchived: "대화를 복원했습니다. 프로젝트는 아직 보관 중입니다.",
+    },
     storage: {
       unavailableHint: "저장 폴더를 현재 사용할 수 없습니다. 드라이브를 다시 연결한 후 시작하세요. 앱은 빈 데이터를 생성하거나 다른 폴더로 전환하지 않습니다.",
       browserSource: "브라우저 데이터 원본",

@@ -780,6 +780,18 @@ export const ptBR = {
     dismiss: "Dispensar"
   },
   settings: {
+    archivedChats: {
+      title: "Conversas arquivadas",
+      description: "Veja ou restaure conversas ocultas da barra lateral.",
+      manage: "Gerenciar",
+      search: "Buscar títulos ou projetos…",
+      open: "Abrir",
+      restore: "Desarquivar",
+      empty: "Nenhuma conversa arquivada.",
+      noResults: "Nenhuma conversa encontrada.",
+      restored: "“{{title}}” foi desarquivada.",
+      projectStillArchived: "Conversa restaurada. Seu projeto ainda está arquivado.",
+    },
     storage: {
       unavailableHint: "O diretório de armazenamento está indisponível no momento. Reconecte a unidade antes de iniciar; o aplicativo não criará dados vazios nem mudará para outro diretório.",
       browserSource: "Origem dos dados do navegador",

@@ -794,6 +794,18 @@ export const en = {
     dismiss: "Dismiss",
   },
   settings: {
+    archivedChats: {
+      title: "Archived conversations",
+      description: "View or restore conversations hidden from the sidebar.",
+      manage: "Manage",
+      search: "Search titles or projects…",
+      open: "Open",
+      restore: "Unarchive",
+      empty: "No archived conversations.",
+      noResults: "No matching conversations.",
+      restored: "Unarchived “{{title}}”.",
+      projectStillArchived: "Conversation restored. Its project is still archived.",
+    },
     storage: {
       unavailableHint: "The storage directory is currently unavailable. Reconnect the drive before starting; the app will not create empty data or switch to another directory.",
       browserSource: "Browser data source",

@@ -781,6 +781,18 @@ export const es = {
     "dismiss": "Descartar"
   },
   "settings": {
+    "archivedChats": {
+      "title": "Conversaciones archivadas",
+      "description": "Consulta o restaura conversaciones ocultas de la barra lateral.",
+      "manage": "Administrar",
+      "search": "Buscar títulos o proyectos…",
+      "open": "Abrir",
+      "restore": "Desarchivar",
+      "empty": "No hay conversaciones archivadas.",
+      "noResults": "No hay conversaciones coincidentes.",
+      "restored": "Se desarchivó «{{title}}».",
+      "projectStillArchived": "Conversación restaurada. Su proyecto sigue archivado.",
+    },
     storage: {
       unavailableHint: "El directorio de almacenamiento no está disponible. Vuelve a conectar la unidad antes de iniciar; la aplicación no creará datos vacíos ni cambiará a otro directorio.",
       browserSource: "Origen de los datos del navegador",

@@ -5,6 +5,7 @@ export const enEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Find, open, and unarchive conversations from Settings → General → Archived conversations.",
       "See interactive visualizations inline: HTML fragments the assistant writes render as sandboxed cards you can explore and ask follow-up questions from.",
       "ChatGPT login now reports verification and failures, then loads your account’s model choices without a static model list.",
       "Chat with your ChatGPT subscription in the native transcript after a one-time browser login.",

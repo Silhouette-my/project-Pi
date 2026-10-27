@@ -781,6 +781,18 @@ export const fr = {
     "dismiss": "Ignorer"
   },
   "settings": {
+    "archivedChats": {
+      "title": "Conversations archivées",
+      "description": "Consultez ou restaurez les conversations masquées dans la barre latérale.",
+      "manage": "Gérer",
+      "search": "Rechercher un titre ou un projet…",
+      "open": "Ouvrir",
+      "restore": "Désarchiver",
+      "empty": "Aucune conversation archivée.",
+      "noResults": "Aucune conversation correspondante.",
+      "restored": "« {{title}} » a été désarchivée.",
+      "projectStillArchived": "Conversation restaurée. Son projet est toujours archivé.",
+    },
     storage: {
       unavailableHint: "Le dossier de stockage est actuellement indisponible. Reconnectez le disque avant de démarrer ; l’application ne créera pas de données vides et ne changera pas de dossier.",
       browserSource: "Source des données du navigateur",

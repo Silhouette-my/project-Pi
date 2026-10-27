@@ -10838,6 +10838,13 @@ This test plan spec is accepted when:
   sidebar-footer destination.
 - Drag the empty 46px top band over either the rail or content pane; the native
   window moves while Back, search, and navigation remain clickable.
+- In General, choose Archived conversations → Manage. Expect archived ordinary
+  conversations with project/date, excluding visible chats and scheduled runs.
+  Search by title and project; check no-results and empty states. Unarchive a
+  conversation and expect its archive flag to clear while project/pin/order
+  persist. An archived parent project stays archived and a notice explains it.
+  Open another conversation and expect its transcript without unarchiving it.
+  Verify Escape/focus restoration and readable light, dark, and narrow layouts.
 
 ### US-UI-27 Dark destination pages
 - Force dark theme and open Plugins and Settings → Project archive.

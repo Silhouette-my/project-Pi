@@ -5,6 +5,7 @@ export const deEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Archivierte Unterhaltungen unter Einstellungen → Allgemein finden, öffnen und aus dem Archiv holen.",
       "Interaktive Visualisierungen direkt in der Unterhaltung: Vom Assistenten geschriebene HTML-Fragmente erscheinen als sandboxisierte Karten, mit denen du interagieren und Nachfragen stellen kannst.",
       "Die ChatGPT-Anmeldung zeigt Prüfungen und Fehler an und lädt anschließend die Modellauswahl des Kontos statt einer festen Liste.",
       "Nach einmaliger Browser-Anmeldung mit dem ChatGPT-Abonnement in der nativen Unterhaltung chatten.",

@@ -108,6 +108,14 @@ Settings is a **full-window page** that replaces the app sidebar + main chrome (
 
 ### General
 
+- **Archived conversations → Manage** opens a searchable dialog listing archived
+  conversations with their project and last-updated date, newest first. Search
+  matches titles and project labels. **Open** reads the conversation without
+  changing its archive state; **Unarchive** restores its existing sidebar entry
+  without changing its project, pin, or order. An archived parent project stays
+  archived, with a notice after restoration. Scheduled-run transcripts are not
+  listed. The dialog has empty/no-results states, Escape/backdrop dismissal,
+  contained keyboard focus, and focus restoration. Settings search finds this row.
 - **Storage** shows the effective application data path and the reclaimable cache
   size. It is included in settings search. Choose directory uses the native picker;
   confirmation displays both application and browser source paths, the target,

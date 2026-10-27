@@ -781,6 +781,18 @@ export const de = {
     "dismiss": "Verwerfen"
   },
   "settings": {
+    "archivedChats": {
+      "title": "Archivierte Unterhaltungen",
+      "description": "Aus der Seitenleiste ausgeblendete Unterhaltungen ansehen oder wiederherstellen.",
+      "manage": "Verwalten",
+      "search": "Titel oder Projekte suchen…",
+      "open": "Öffnen",
+      "restore": "Wiederherstellen",
+      "empty": "Keine archivierten Unterhaltungen.",
+      "noResults": "Keine passenden Unterhaltungen.",
+      "restored": "„{{title}}“ wiederhergestellt.",
+      "projectStillArchived": "Unterhaltung wiederhergestellt. Das Projekt ist weiterhin archiviert.",
+    },
     storage: {
       unavailableHint: "Das Speicherverzeichnis ist derzeit nicht verfügbar. Verbinden Sie das Laufwerk vor dem Start erneut. Die App erstellt keine leeren Daten und wechselt nicht in ein anderes Verzeichnis.",
       browserSource: "Quelle der Browserdaten",

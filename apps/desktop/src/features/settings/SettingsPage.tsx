@@ -65,6 +65,7 @@ import { CloseBehaviorSection, DeveloperSection } from "./developer-sections";
 import { PluginScenicThemesDestination } from "../../components/settings/PluginScenicThemesDestination";
 import { ConfigSyncPage } from "../../components/settings/ConfigSyncPage";
 import { StorageSettingsSection } from "./StorageSettingsSection";
+import { ArchivedConversationsSection } from "./ArchivedConversationsSection";
 
 type SettingsTab = ReturnType<typeof useAppStore.getState>["settingsTab"];
 
@@ -495,6 +496,8 @@ export function SettingsPage() {
               <NetworkProxySection settings={settings} saveSettings={saveSettings} />
 
               <StorageSettingsSection />
+
+              <ArchivedConversationsSection />
 
               <SettingsCard title={t("settings.power")}>
                 <SettingsRow

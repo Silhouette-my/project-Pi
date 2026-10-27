@@ -786,6 +786,18 @@ export const zhTW = {
     dismiss: "關閉",
   },
   settings: {
+    archivedChats: {
+      title: "封存對話",
+      description: "查看或還原已從側欄隱藏的對話。",
+      manage: "管理",
+      search: "搜尋標題或專案…",
+      open: "開啟",
+      restore: "取消封存",
+      empty: "尚無封存對話。",
+      noResults: "沒有符合的對話。",
+      restored: "已取消封存「{{title}}」。",
+      projectStillArchived: "對話已還原，其所屬專案仍處於封存狀態。",
+    },
     storage: {
       unavailableHint: "儲存目錄暫時無法使用。請重新連接磁碟後啟動；應用程式不會建立空白資料或切換到其他目錄。",
       browserSource: "瀏覽器資料來源",

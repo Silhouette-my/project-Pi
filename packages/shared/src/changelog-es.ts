@@ -5,6 +5,7 @@ export const esEntries: ChangelogEntry[] = [
     version: "0.21.0",
     date: "2026-10-16",
     highlights: [
+      "Busca, abre y desarchiva conversaciones desde Ajustes → General → Conversaciones archivadas.",
       "Visualizaciones interactivas en la conversación: los fragmentos HTML que escribe el asistente se muestran como tarjetas aisladas con las que puedes interactuar y hacer preguntas de seguimiento.",
       "El inicio de sesión de ChatGPT muestra la verificación y los errores y después carga los modelos de tu cuenta, sin una lista fija.",
       "Chatea con tu suscripción de ChatGPT en la interfaz nativa tras iniciar sesión una vez en el navegador.",
