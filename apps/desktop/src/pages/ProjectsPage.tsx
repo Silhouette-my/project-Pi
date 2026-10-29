@@ -93,6 +93,7 @@ export function ProjectsPage() {
     roots: ProjectGroupRecord["roots"];
   } | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const knowledgeSourceRequest = useRef(0);
   const [instructionsFor, setInstructionsFor] = useState<{
     name: string;
     path: string;
@@ -223,6 +224,35 @@ export function ProjectsPage() {
       }
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e), { variant: "error" });
+    }
+  };
+
+  const openKnowledgeSource = async (sessionId: string, messageId: string) => {
+    const request = ++knowledgeSourceRequest.current;
+    const selectedProject = memoryFor;
+    if (!selectedProject || !(await activate(selectedProject.path))) return;
+    if (knowledgeSourceRequest.current !== request) return;
+    if (
+      normalizeProjectPath(useAppStore.getState().workspace?.path) !==
+      normalizeProjectPath(selectedProject.path)
+    ) {
+      return;
+    }
+    try {
+      await selectSession(sessionId);
+      let state = useAppStore.getState();
+      if (knowledgeSourceRequest.current !== request || state.activeSessionId !== sessionId) return;
+      if (state.sessionMeta[sessionId]?.archived === true) {
+        restoreSession(sessionId);
+        state = useAppStore.getState();
+      }
+      if (knowledgeSourceRequest.current !== request || state.activeSessionId !== sessionId) return;
+      await state.navigateTranscript({ sessionId, messageId, query: "" });
+      if (knowledgeSourceRequest.current === request) setMemoryFor(null);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error), {
+        variant: "error",
+      });
     }
   };
 
@@ -618,6 +648,7 @@ export function ProjectsPage() {
         <ProjectMemoryDialog
           project={memoryFor}
           onClose={() => setMemoryFor(null)}
+          onOpenSource={(sessionId, messageId) => void openKnowledgeSource(sessionId, messageId)}
           onSaved={() => showToast(t("project.memorySaved"), { variant: "success" })}
           onError={(error) =>
             showToast(error instanceof Error ? error.message : String(error), {

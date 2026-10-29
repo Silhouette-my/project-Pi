@@ -256,6 +256,7 @@ import type { CustomSystemPrompt } from "./custom-system-prompt.js";
 import { chatSystemPromptContent } from "./chat-instructions.js";
 import { withChatWorkflowContext } from "./chat-workflow-context.js";
 import { projectMemoryPrompt } from "./project-memory-prompt.js";
+import { projectKnowledgeDescriptions, projectKnowledgeParameters, projectKnowledgePrompt } from "./project-knowledge.js";
 import {
   pluginSkillsPrompt,
   pluginSkillsPromptSections,
@@ -780,6 +781,8 @@ const PATH_SCOPED_INSTRUCTION_TOOLS = new Set([
 const PATH_MUTATING_TOOLS = new Set(["Write", "Edit"]);
 const CHAT_CORE_TOOL_NAMES = new Set(["Read", "Glob", "Grep", ASK_TOOL_NAME]);
 const AGENT_CORE_TOOL_NAMES = new Set([
+  "ProjectKnowledgeRead",
+  "ProjectKnowledgeWrite",
   "Read",
   "Glob",
   "Grep",
@@ -1053,6 +1056,7 @@ export type AgentRuntimeOptions = {
   projectInstructions?: ProjectInstructions;
   /** Durable project context loaded from host-owned project memory. */
   projectMemory?: string;
+  projectKnowledge?: import("@pi-desktop/shared").ProjectKnowledgeSnapshot;
   /** Project Agent conversations have no executable tools, in every mode. */
   discussionOnly?: boolean;
   /** Persisted transcript to seed the agent with (session isolation: each
@@ -1127,6 +1131,7 @@ export type RuntimeMatchConfig = {
   chatWorkflowContext?: string;
   projectInstructions?: ProjectInstructions;
   projectMemory?: string;
+  projectKnowledge?: import("@pi-desktop/shared").ProjectKnowledgeSnapshot;
   projectPath?: string;
   /** Remote tool root. Model requests and runtime state remain on this machine. */
   remoteWorkspace?: { hostKey: string; path: string };
@@ -1911,6 +1916,7 @@ export class DesktopAgentRuntime {
   private builtinTools = new WeakSet<AgentTool>();
   private instructionExecution = new AsyncLocalStorage<(instructions: ProjectInstructions | undefined) => void>();
   private projectMemory?: string;
+  private projectKnowledge?: import("@pi-desktop/shared").ProjectKnowledgeSnapshot;
   /** Per-prompt claims prevent repeated path-resolution RPCs for one directory. */
   private pathInstructionClaims = new Map<
     string,
@@ -2113,6 +2119,7 @@ export class DesktopAgentRuntime {
     this.baseProjectInstructions = opts.projectInstructions;
     this.projectInstructions = opts.projectInstructions;
     this.projectMemory = opts.projectMemory?.trim() || undefined;
+    this.projectKnowledge = opts.projectKnowledge;
     this.compactionEnabled = compactionEnabled(opts.compactionSettings);
     this.compactionStrategy = resolveCompactionStrategy(opts.compactionStrategy);
 
@@ -2190,7 +2197,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
       identity: DESKTOP_AGENT_IDENTITY,
       streamFn: (m, context, options) => {
         if (this.provider.apiStyle === "chatgpt_conversation") {
-          context = withChatWorkflowContext(context, this.chatWorkflowContext);
+          context = withChatWorkflowContext(context, [this.chatWorkflowContext, projectKnowledgePrompt(this.projectKnowledge,false)].filter(Boolean).join("\n\n"));
         }
         this.setAgentActivity({ phase: "waiting-model", since: Date.now() });
         this.providerResponseStatus = undefined;
@@ -2533,6 +2540,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     }
     const projectPrompt = projectInstructionsPrompt(this.projectInstructions);
     const memoryPrompt = projectMemoryPrompt(this.projectMemory);
+    const knowledgePrompt = projectKnowledgePrompt(this.projectKnowledge,this.mode === "agent" && !this.discussionOnly && !this.activeWorkflowRunId);
     const optionalToolsPrompt = this.optionalToolsPrompt();
     this.composedSections = {
       runtime: this.baseSystemPrompt,
@@ -2549,6 +2557,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
         ...(optionalToolsPrompt ? [optionalToolsPrompt] : []),
         ...(projectPrompt ? [projectPrompt] : []),
         ...(memoryPrompt ? [memoryPrompt] : []),
+        ...(knowledgePrompt ? [knowledgePrompt] : []),
       ].join("\n\n")),
       ...(this.chatInstructions ? { [CHAT_INSTRUCTION_SECTION]: this.chatInstructions } : {}),
     };
@@ -2820,6 +2829,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
       ["chatInstructions", safeJson(this.chatInstructions ?? null) === safeJson(config.chatInstructions ?? null)],
       ["chatWorkflowContext", this.chatWorkflowContext === config.chatWorkflowContext],
       ["projectMemory", (this.projectMemory ?? "") === (config.projectMemory?.trim() ?? "")],
+      ["projectKnowledge", safeJson(this.projectKnowledge ?? null) === safeJson(config.projectKnowledge ?? null)],
       ["projectPath", (this.projectPath ?? "") === (config.remoteWorkspace?.path ?? config.projectPath?.trim() ?? "")],
       ["remoteWorkspace", safeJson(this.remoteWorkspace ?? null) === safeJson(config.remoteWorkspace ?? null)],
       ["visualizationsDir", (this.visualizationsDir ?? "") === (config.remoteWorkspace ? "" : config.visualizationsDir ?? "")],
@@ -3374,6 +3384,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     const externalPathHint =
       " An explicit path outside the workspace and session scratch roots requires permission unless the effective mode is Auto.";
     const describe = (toolName: string): string => {
+      if (projectKnowledgeDescriptions[toolName]) return projectKnowledgeDescriptions[toolName];
       if (toolName === "GenerateImages") return imageGenerationDescription;
       if (scheduledToolDescriptions[toolName]) return scheduledToolDescriptions[toolName];
       switch (toolName) {
@@ -3429,6 +3440,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
     // One entry per tool: the shapes diverge enough that a chain of ternaries
     // stopped being readable.
     const parameters: Record<string, Parameters<typeof Type.Object>[0]> = {
+      ...projectKnowledgeParameters,
       GenerateImages: imageGenerationParameters,
       TodoWrite: todoWriteParameters,
       Read: {
@@ -3899,6 +3911,10 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
           }
         }
         const rawContent = result.content;
+        if (result.ok && toolName === "ProjectKnowledgeWrite") {
+          this.projectKnowledge = rawContent as import("@pi-desktop/shared").ProjectKnowledgeSnapshot;
+          this.setAgentSystemPrompt(this.composeSystemPrompt());
+        }
         const imageBlocks: Array<{ type: "image"; data: string; mimeType: string }> = [];
         let text: string;
         let details: unknown = rawContent;
@@ -4123,6 +4139,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
         : ["Read", "Glob", "Grep", "BrowserPreview", "Bash", "Write", "Edit"];
     if (this.mode === "agent") {
       tools.push("PluginScaffold", "PluginPack", "GenerateImages", ...Object.keys(scheduledToolParameters));
+      if (this.projectKnowledge) tools.push("ProjectKnowledgeRead", "ProjectKnowledgeWrite");
     }
     const builtins = tools.map(exec);
     for (const tool of builtins) this.builtinTools.add(tool);

@@ -56,6 +56,7 @@ import type { ClipboardHistory } from "../clipboard-history";
 import { getModuleDirectory } from "../module-path";
 import type { PluginRuntime } from "../plugin-runtime";
 import type { IpcRegistrar } from "./types";
+import { registerProjectKnowledgeIpc } from "./project-knowledge-ipc";
 
 type WorkspaceRecord = { path: string; name: string };
 
@@ -111,6 +112,7 @@ export function registerWorkspaceIpc({
   withGitBranch,
   stripWinLongPrefix,
 }: WorkspaceIpcDependencies): void {
+  registerProjectKnowledgeIpc(registrar, getHost);
   let host: HostProcess | null = null;
   const handle = (channel: string, fn: (...args: any[]) => Promise<any>) => {
     registrar.handle(channel, async (...args) => {

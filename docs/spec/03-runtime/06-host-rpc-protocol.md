@@ -285,6 +285,15 @@ type ToolBudgetHealth = {
   shared group memory using the existing 32 KiB entry limit.
 - `project.group.instructions.get/set({ groupId, content })` — reads or stores
   shared group instructions using a bounded host-owned value.
+- `project.knowledge.get({ groupId })` — returns the separate versioned
+  Agent-maintained collection, including history.
+- `project.knowledge.forSession({ sessionId })` — resolves the session's project
+  identity for launch context; callers cannot override its project scope.
+- `project.knowledge.forget({ groupId, entryId, expectedRevision })` and
+  `project.knowledge.clearHistory({ groupId, expectedRevision })` — apply
+  user-initiated management through compare-and-swap and return the updated
+  snapshot. Agent writes instead use the ordinary `tools.execute` boundary,
+  with trusted session/turn binding. See [Project knowledge](project-knowledge.md).
 - `project.group.context({ path })` — resolves the group containing a primary or
   member root and returns its shared instructions and memory for runtime launch.
   Legacy groups return no group context so the path-scoped compatibility APIs

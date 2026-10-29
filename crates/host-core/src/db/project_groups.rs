@@ -263,6 +263,7 @@ impl Database {
         self.kv_delete(GROUP_NAMESPACE, id)?;
         self.kv_delete(GROUP_MEMORY_NAMESPACE, id)?;
         self.kv_delete(GROUP_INSTRUCTIONS_NAMESPACE, id)?;
+        self.kv_delete(crate::project_knowledge::NAMESPACE, id)?;
         Ok(())
     }
 
@@ -308,6 +309,7 @@ impl Database {
                 position: position as i64,
             })
             .collect::<Vec<_>>();
+        let transaction = self.conn.unchecked_transaction()?;
         for path in &canonical_paths {
             self.ensure_project(path, false)?;
         }
@@ -324,7 +326,9 @@ impl Database {
             detached_paths: Vec::new(),
             remote: None,
         };
+        crate::project_knowledge::adopt_legacy_roots(self, &group.id, &canonical_paths)?;
         self.kv_set(GROUP_NAMESPACE, &group.id, &serde_json::to_value(&group)?)?;
+        transaction.commit()?;
         Ok(group)
     }
 
@@ -419,6 +423,7 @@ impl Database {
                 removed_without_sessions.push(*path);
             }
         }
+        let transaction = self.conn.unchecked_transaction()?;
         for path in &ordered {
             self.ensure_project(path, false)?;
         }
@@ -429,6 +434,7 @@ impl Database {
                 .execute(params![name, primary])?;
             let mut legacy = current;
             legacy.name = name.to_string();
+            transaction.commit()?;
             return Ok(legacy);
         }
 
@@ -504,7 +510,9 @@ impl Database {
                 )?;
             }
         }
+        crate::project_knowledge::adopt_legacy_roots(self, &group.id, &ordered)?;
         self.kv_set(GROUP_NAMESPACE, &group.id, &serde_json::to_value(&group)?)?;
+        transaction.commit()?;
         Ok(group)
     }
 

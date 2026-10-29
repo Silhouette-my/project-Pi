@@ -82,6 +82,7 @@ import type {
   ProjectGroupRecord,
   ProjectMemory,
   ProjectMemoryEntry,
+  ProjectKnowledgeSnapshot,
   ProjectWorkspace,
   ScheduledTask,
   ProviderCreateInput,
@@ -1052,6 +1053,19 @@ export const api = {
     }),
   getProjectGroupMemory: (groupId: string) =>
     invoke<{ memory: ProjectMemory }>(IPC.invoke.projectGroupMemoryGet, { groupId }),
+  getProjectKnowledge: (groupId: string) =>
+    invoke<ProjectKnowledgeSnapshot>(IPC.invoke.projectKnowledgeGet, { groupId }),
+  forgetProjectKnowledge: (groupId: string, entryId: string, expectedRevision: number) =>
+    invoke<ProjectKnowledgeSnapshot>(IPC.invoke.projectKnowledgeForget, {
+      groupId,
+      entryId,
+      expectedRevision,
+    }),
+  clearProjectKnowledgeHistory: (groupId: string, expectedRevision: number) =>
+    invoke<ProjectKnowledgeSnapshot>(IPC.invoke.projectKnowledgeClearHistory, {
+      groupId,
+      expectedRevision,
+    }),
   saveProjectGroupMemory: (groupId: string, entries: ProjectMemory["entries"]) =>
     invoke<{ memory: ProjectMemory }>(IPC.invoke.projectGroupMemorySave, { groupId, entries }),
   getProjectGroupInstructions: (groupId: string) =>

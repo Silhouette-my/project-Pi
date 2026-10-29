@@ -377,6 +377,7 @@ export function Sidebar({
   const [collapsedBranches, setCollapsedBranches] = useState<Record<string, boolean>>({});
   const [instructionsFor, setInstructionsFor] = useState<ProjectEntry | null>(null);
   const [memoryFor, setMemoryFor] = useState<ProjectEntry | null>(null);
+  const memorySourceNavigation = useRef(0);
   const [menuPosition, setMenuPosition] = useState<{
     top: number;
     left: number;
@@ -1297,6 +1298,35 @@ export function Sidebar({
       reportError(error);
     }
   }, [focusComposer, hideSessionHoverCard, reportError, selectSession, t]);
+
+  const openMemorySource = useCallback(async (sessionId: string, messageId: string) => {
+    const request = ++memorySourceNavigation.current;
+    const project = memoryFor;
+    if (!project) return;
+    try {
+      const current = useAppStore.getState();
+      if (normalizeProjectPath(current.workspace?.path) !== normalizeProjectPath(project.path)) {
+        const activated = await activateProject(project.path);
+        if (request !== memorySourceNavigation.current || !activated) return;
+      }
+      const beforeSelection = useAppStore.getState();
+      if (beforeSelection.activeSessionId === sessionId && !beforeSelection.selectingSessionId)
+        beforeSelection.setPage("chat");
+      else
+        await selectSession(sessionId);
+      let selected = useAppStore.getState();
+      if (request !== memorySourceNavigation.current || selected.activeSessionId !== sessionId) return;
+      if (selected.sessionMeta[sessionId]?.archived === true) {
+        restoreSession(sessionId);
+        selected = useAppStore.getState();
+      }
+      if (request !== memorySourceNavigation.current || selected.page !== "chat") return;
+      await selected.navigateTranscript({ sessionId, messageId, query: "" });
+      if (request === memorySourceNavigation.current) setMemoryFor(null);
+    } catch (error) {
+      if (request === memorySourceNavigation.current) reportError(error);
+    }
+  }, [activateProject, memoryFor, reportError, restoreSession, selectSession]);
 
   useEffect(() => cancelSessionPrefetch, []);
 
@@ -3304,7 +3334,11 @@ export function Sidebar({
             groupId: workflowGroupForPath(workflowGroups.groups, memoryFor.path)?.id,
             legacy: workflowGroupForPath(workflowGroups.groups, memoryFor.path)?.legacy,
           }}
-          onClose={() => setMemoryFor(null)}
+          onClose={() => {
+            memorySourceNavigation.current += 1;
+            setMemoryFor(null);
+          }}
+          onOpenSource={(sessionId, messageId) => void openMemorySource(sessionId, messageId)}
           onSaved={() => undefined}
           onError={reportError}
         />

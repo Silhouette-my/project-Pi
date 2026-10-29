@@ -1791,6 +1791,16 @@ and group context. The system prompt adds a short isolated-workspace note
 (work only in the worktree, use the `PI_PORT` block, leave branch changes and
 merging to the user, and how to resolve a merge conflict).
 
+Ordinary project conversations additionally load the Host's current
+[Agent-maintained project knowledge](project-knowledge.md), independently of
+Workflow membership. The sidecar forwards the snapshot into runtime creation
+and reuse matching. Its prompt projection is labelled separately from user
+memory, excludes superseded/forgotten content, and never grants authority.
+`ProjectKnowledgeRead` and `ProjectKnowledgeWrite` use the existing tool
+execution/permission path; contexts that prohibit these tools retain read-only
+knowledge context without maintenance instructions. Successful writes refresh
+the current projection; the next launch reloads the authoritative snapshot.
+
 ## 8. Concurrency
 
 | Scope | MVP policy |
