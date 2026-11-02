@@ -8,10 +8,7 @@ import {
   classifySidecarCrash,
   sidecarCrashErrorCode,
 } from "@pi-desktop/agent-runtime";
-import {
-  assertBuiltinSkillEnabled,
-  loadBuiltinSkillBody,
-} from "../builtin-skills";
+import { createSkillTool } from "./skill-tool";
 import { createImageGenerationTool } from "../services/image-generation-service";
 import { registerPluginDevTools } from "../plugin-dev-tools";
 import { resolveLocalFile } from "../browser-view";
@@ -27,7 +24,7 @@ import type { ModelsDevCatalog } from "../models-dev-catalog";
 import type { PluginRuntime } from "../plugin-runtime";
 import type { RuntimeState } from "./context";
 import type { FinishTurn } from "./plans";
-import { formatSkillToolContent, type LoadedSkillDocument } from "../skill-document";
+import type { LoadedSkillDocument } from "../skill-document";
 import { currentSystemProxyRelayUrl } from "../network-proxy";
 
 export type SidecarRuntimeDependencies = {
@@ -615,59 +612,23 @@ export function createSidecarRuntime({
         content: preview.content,
       };
     }
-    sendToRenderer(IPC.event.browserPreview, {
-      sessionId,
-      path: file,
-    });
+    await browserHost.openTab({ path: file }, sessionId);
     return {
       ok: true,
-      content: `Requested a new Browser tab for ${raw}. Once loaded, live reload updates the page when the file or sibling assets change.`,
+      content: `Opened a new Browser tab for ${raw}. Its page stays available in the background, and live reload updates it when the file or sibling assets change.`,
     };
   });
   // Plugin skills (D174): the model loads a declared skill document by id.
   // Served in main because the plugin runtime — and the plugin directories —
   // live here, not in host-core.
-  s.setLocalTool("Skill", async ({ args, sessionId }) => {
-    const id = String((args as { id?: unknown })?.id ?? "").trim();
-    if (!id) {
-      return {
-        ok: false,
-        isError: true,
-        content: "Skill: `id` is required. Use an id from the Skills section.",
-      };
-    }
-    const projectPath = sessionProjects.get(sessionId) ?? null;
-    try {
-      await assertBuiltinSkillEnabled(id, disabledBuiltinSkills);
-      // Bundled skills answer first; they are not owned by any plugin. A user
-      // skill is looked up next, and only then a plugin's — the ids cannot
-      // collide, since a plugin skill id always carries a `<pluginId>/` prefix.
-      const skill: LoadedSkillDocument =
-        loadBuiltinSkillBody(id) ??
-        (await loadUserSkillBody(id, projectPath)) ??
-        plugins.loadSkillBody(id);
-      return {
-        ok: true,
-        content: formatSkillToolContent(skill),
-      };
-    } catch (error) {
-      const userIds = (await activeUserSkills(projectPath ?? undefined)).map(
-        (skill) => skill.id,
-      );
-      const pluginIds = plugins
-        .getSkills()
-        .filter((skill) => pluginActiveInProject(skill.pluginId, projectPath))
-        .map((skill) => skill.id);
-      const available = [...userIds, ...pluginIds].join(", ");
-      return {
-        ok: false,
-        isError: true,
-        content: `Skill: ${error instanceof Error ? error.message : String(error)}.${
-          available ? ` Available skills: ${available}.` : ""
-        }`,
-      };
-    }
-  });
+  s.setLocalTool("Skill", createSkillTool({
+    sessionProjects,
+    disabledBuiltinSkills,
+    loadUserSkillBody,
+    activeUserSkills,
+    plugins,
+    pluginActiveInProject,
+  }));
   // Plugin authoring (D171): scaffold, validate and package a plugin without
   // leaving the session. Paths stay inside the open workspace.
   registerPluginDevTools(s, {

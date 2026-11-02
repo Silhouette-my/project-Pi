@@ -106,10 +106,17 @@ const invoke = async (key, ...args) => {
 const snapshot = () => invoke("projectWorkflowSnapshot", { projectId });
 const mutate = async (kind, fields) => invoke("projectWorkflowMutate", { kind, commandId: `ui-e2e-${++sequence}`, expectedRevision: (await snapshot()).revision, ...fields });
 const clickText = async (text, selector = "button") => page.evaluate(`(() => { const el=[...document.querySelectorAll(${json(selector)})].find(x=>x.textContent?.trim().includes(${json(text)}) && !x.disabled); if(!el) return false; el.click(); return true })()`);
+const openProjectHome = () => page.evaluate(`(() => { const el=document.querySelector('[data-sidebar-project-group] .sidebar-project-cube'); if(!el) return false; el.click(); return true })()`);
 const clickAria = async (label, selector = "button[aria-label]") => page.evaluate(`(() => { const el=[...document.querySelectorAll(${json(selector)})].find(x=>x.getAttribute('aria-label')===${json(label)} && !x.disabled); if(!el) return false; el.click(); return true })()`);
 const fillByLabel = async (label, value) => page.evaluate(`(() => { const labels=[...document.querySelectorAll('label')]; const label=labels.find(x=>x.textContent?.trim().startsWith(${json(label)})); const input=label?.querySelector('input,textarea,select') || (label?.htmlFor && document.getElementById(label.htmlFor)); if(!input) return false; const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value')?.set; setter?.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); return true })()`);
 const fillControl = async (selector, value) => page.evaluate(`(() => { const input=document.querySelector(${json(selector)}); if(!input) return false; Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value').set.call(input,${json(value)}); input.dispatchEvent(new Event('input',{bubbles:true})); return true })()`);
 const submitForm = async selector => page.evaluate(`(() => { const form=document.querySelector(${json(selector)}); if(!form) return false; form.requestSubmit(); return true })()`);
+// The Agent is a work-panel tab: the project page presents it by default, so this only
+// asks again (idempotently, under until()) when the panel is not showing it yet.
+const agentTabSelector = () => `.work-panel [data-project-agent-dock="${projectId}"]`;
+const openAgentDock = async () => page.evaluate(`(() => { if(document.querySelector(${json(agentTabSelector())})) return true; const toggle=document.querySelector('[data-project-agent-dock-toggle]'); if(toggle && !toggle.disabled) toggle.click(); return false })()`);
+const selectControl = async (selector, value) => page.evaluate(`(() => { const input=document.querySelector(${json(selector)}); if(!input) return false; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(input,${json(value)}); input.dispatchEvent(new Event('change',{bubbles:true})); return input.value===${json(value)} })()`);
+const openContextTab = async () => clickText("上下文", ".workflow-tabs button");
 const capture = async name => { const shot = await page.call("Page.captureScreenshot", { format: "png" }); await writeFile(join(output, name), Buffer.from(shot.data, "base64")); };
 try {
   const seed = new Host(hostBinary, data, { env: { HOME: home }, quiet: true });
@@ -125,13 +132,22 @@ try {
   setup = await main.evaluate(`globalThis.__PI_DESKTOP_PLAN_UI_PROBE({operation:'liveSetup',workspace:${json(join(root, "apps"))}})`);
   assert.equal(setup.ok, true, json(setup));
   await invoke("settingsSet", { ...await invoke("settingsGet"), defaultProviderId: setup.providerId, defaultModelId: setup.modelId });
-  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "empty project in sidebar", 60000);
-  await clickText("apps");
+  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim().includes('Workflow UI Production'))`), "empty project in sidebar", 60000);
+  await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
+  assert.ok(await openProjectHome());
+  // Default open: entering the project page presents the Agent tab in the right work panel
+  // without any toggle; docked or revealed over the page depending on the window width.
+  await until(() => page.evaluate(`!!document.querySelector(${json(agentTabSelector())}) && !!document.querySelector('[data-work-panel-tab-id="project-agent:${projectId}"]')`), "project page opens with the Agent tab in the right panel");
+  assert.ok(await page.evaluate(`!!document.querySelector('[data-workflow="console"]') && !document.querySelector('.project-agent-dock')`), "the console no longer renders its own dock");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "empty project Agent composer");
   assert.equal((await snapshot()).workstreams.length, 0);
   assert.ok(await fillControl('[data-workflow="project-intent"] textarea', "PROJECT_AGENT_EMPTY_PROJECT: discuss before working"));
   assert.ok(await submitForm('[data-workflow="project-intent"]'));
-  await until(() => page.evaluate(`document.body.innerText.includes('PROJECT_AGENT_REPLY_1')`), "actual Agent response rendered");
+  await until(() => page.evaluate(`document.querySelector('[data-project-agent-dock]')?.innerText.includes('PROJECT_AGENT_REPLY_1')`), "actual Agent response rendered in the project dock");
+  assert.equal(await page.evaluate(`document.querySelector('[data-workflow="console"]') ? 'project' : 'other'`), "project", "discussing keeps the Project Console as the page");
+  await capture("renderer-project-agent-dock.png");
+  await page.evaluate(`document.querySelector(${json(agentTabSelector() + " [data-project-agent]")}).click()`);
+  await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar')`), "full Agent conversation opened from the dock");
   const projectAgentSession = (await snapshot()).projectAgents.find(agent => agent.projectId === projectId).sessionId;
   assert.equal((await snapshot()).workstreams.length, 0, "discussion creates no hidden workstream");
   assert.equal((await snapshot()).runs.length, 0, "discussion starts no workflow run");
@@ -140,18 +156,23 @@ try {
   assert.ok(await page.evaluate(`!!document.querySelector('.workflow-conversation-bar') && !document.querySelector('.composer-mode') && !document.querySelector('.composer-permission')`));
   await capture("renderer-project-agent.png");
   await page.evaluate(`document.querySelector('.workflow-conversation-bar button').click()`);
-  await until(() => page.evaluate(`!!document.querySelector('.workflow-agent-tab')`), "project return route");
-  await page.evaluate(`document.querySelector('.workflow-agent-tab').click()`);
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "project return route");
+  // A narrow console overlays the dock only on request, so reopen it explicitly.
+  await until(() => openAgentDock(), "project Agent dock toggle on return");
+  await until(() => page.evaluate(`!!document.querySelector('[data-project-agent-dock] [data-project-agent]')`), "project Agent dock entry on return");
+  await page.evaluate(`document.querySelector(${json(agentTabSelector() + " [data-project-agent]")}).click()`);
   await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar')`), "project Agent reopened");
   assert.equal((await snapshot()).projectAgents[0].sessionId, projectAgentSession);
   assert.equal(modelRequests.length, 1, "reopening never sends another prompt");
-  coverage.push("Empty project opens canonical Agent from the overview, renders an actual loopback-model reply in ChatSurface, preserves it on revisit, and creates no Workstream/Run or tool catalog");
+  coverage.push("Empty project discusses with the canonical Agent from the project dock, keeps the console as the page, opens the full conversation on demand, renders an actual loopback-model reply in ChatSurface, preserves it on revisit, and creates no Workstream/Run or tool catalog");
   await stopApp();
   await startApp();
-  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "project restored after restart", 60000);
-  await clickText("apps");
+  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim().includes('Workflow UI Production'))`), "project restored after restart", 60000);
+  await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
+  assert.ok(await openProjectHome());
+  await until(() => openAgentDock(), "project Agent dock toggle after restart");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"] textarea')`), "project composer after restart");
-  await page.evaluate(`document.querySelector('.workflow-agent-tab').click()`);
+  await page.evaluate(`document.querySelector(${json(agentTabSelector() + " [data-project-agent]")}).click()`);
   await until(() => page.evaluate(`!!document.querySelector('.workflow-conversation-bar') && !!document.querySelector('.composer-input')`), "resumed Agent Composer");
   assert.ok(await page.evaluate(`(() => { const input=document.querySelector('.composer-input'); if(!input) return false; input.focus(); input.textContent='PROJECT_AGENT_RESTART: continue the same discussion'; input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'PROJECT_AGENT_RESTART: continue the same discussion'})); return true })()`));
   await until(() => page.evaluate(`!!document.querySelector('.composer-toolbar .send-btn:not(:disabled)')`), "real Composer send enabled");
@@ -163,6 +184,60 @@ try {
   coverage.push("Restart keeps the same project Agent and transcript; the existing Composer sends the next message with its configured model and still no execution tools");
   await page.evaluate(`document.querySelector('.workflow-conversation-bar button').click()`);
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "return before work creation");
+
+  // Return to conversation: the Agent's floating pill chooses a mode and a target; the return
+  // quotes the discussion into the target's composer draft and never sends. The console stays
+  // the visible page.
+  await until(() => openAgentDock(), "project Agent tab before returning to a conversation");
+  const requestsBeforeReturn = modelRequests.length;
+  const pill = `${agentTabSelector()} [data-return-pill]`;
+  const pillLabel = () => page.evaluate(`document.querySelector(${json(pill)})?.innerText.trim() ?? ''`);
+  const pickOption = async (option) => {
+    assert.ok(await page.evaluate(`(() => { const pill=document.querySelector(${json(pill)}); if(!pill) return false; pill.click(); return true })()`), "Agent return pill");
+    await until(() => page.evaluate(`!!document.querySelector('[data-return-option="${option}"]')`), `menu option ${option}`);
+    await page.evaluate(`document.querySelector('[data-return-option="${option}"]').click()`);
+  };
+  assert.match(await pillLabel(), /回传：不回传/, "the Agent return pill defaults to None");
+  assert.equal(await page.evaluate(`!!document.querySelector(${json(agentTabSelector() + " [data-return-action]")})`), false, "no return button while the mode is None");
+  assert.equal(await page.evaluate(`document.querySelector('[data-work-panel-tab-id="project-agent:${projectId}"] [role=tab], [data-work-panel-tab-id="project-agent:${projectId}"] button')?.title`), "项目 Agent · 仅讨论，不执行", "the removed discussion-only hint is the tab tooltip");
+  await pickOption("mode:full");
+  await pickOption(`target:${setup.sessionId}`);
+  await until(async () => /回传：全部 → /.test(await pillLabel()), "the pill names the mode and the target");
+  await capture("renderer-agent-return-pill.png");
+  const action = `${agentTabSelector()} [data-return-action]`;
+  await until(() => page.evaluate(`(() => { const button=document.querySelector(${json(action)}); if(!button || button.disabled) return false; button.click(); return true })()`), "Return to conversation enabled and pressed");
+  await sleep(500);
+  assert.equal(modelRequests.length, requestsBeforeReturn, "returning the whole discussion sends nothing");
+  assert.ok(await page.evaluate(`!!document.querySelector('[data-workflow="console"]') && !document.querySelector('.workflow-conversation-bar')`), "returning keeps the console as the visible page");
+  assert.equal((await snapshot()).runs.length, 0, "returning starts no workflow run");
+  const openSetupChatForDraft = () => page.evaluate(`(() => { const button=document.querySelector('[data-sidebar-session-row="${setup.sessionId}"] .thread-item-main'); if(!button) return false; button.click(); return true })()`);
+  await until(() => openSetupChatForDraft(), "project chat row in the sidebar");
+  await until(() => page.evaluate(`(document.querySelector('.composer-input')?.textContent ?? '').includes('PROJECT_AGENT_REPLY_2')`), "the target's draft holds the quoted discussion");
+  const draft = await page.evaluate(`document.querySelector('.composer-input').textContent`);
+  assert.ok(draft.includes("> ") && /引用自 项目 Agent · /.test(draft), "the draft is a blockquote with the attribution line");
+  assert.ok(/引用自 项目 Agent · [^\n]+$/.test(draft.trimEnd()), "the attribution is the last line");
+  assert.equal(modelRequests.length, requestsBeforeReturn, "the draft was never sent");
+  coverage.push("The project Agent's floating return pill picks a mode and a target conversation; Return to conversation quotes the discussion into the target's composer draft as a blockquote plus an attribution line, sends nothing, and the console stayed the visible page");
+  assert.ok(await openProjectHome());
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "console after the return check");
+
+  // A project chat shows the Agent tab by default; closing it keeps it closed for that chat.
+  const openSetupChat = () => page.evaluate(`(() => { const button=document.querySelector('[data-sidebar-session-row="${setup.sessionId}"] .thread-item-main'); if(!button) return false; button.click(); return true })()`);
+  const chatAgentTab = `[data-work-panel-tab-id="project-agent:${projectId}"]`;
+  await until(() => openSetupChat(), "project chat row in the sidebar");
+  await until(() => page.evaluate(`!document.querySelector('[data-workflow="console"]') && !!document.querySelector(${json(chatAgentTab)}) && !!document.querySelector(${json(agentTabSelector())})`), "a project chat shows the Agent tab in the right panel by default");
+  await capture("renderer-project-chat-agent-tab.png");
+  assert.ok(await page.evaluate(`(() => { const close=document.querySelector(${json(chatAgentTab + " .work-panel-tab-close")}); if(!close) return false; close.click(); return true })()`));
+  await until(() => page.evaluate(`!document.querySelector(${json(chatAgentTab)})`), "Agent tab closed in the chat context");
+  assert.ok(await openProjectHome());
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]') && !!document.querySelector(${json(agentTabSelector())})`), "project page presents the Agent again after the chat close");
+  await until(() => openSetupChat(), "project chat row after returning");
+  await until(() => page.evaluate(`!document.querySelector('[data-workflow="console"]')`), "project chat reopened");
+  await sleep(1000);
+  assert.ok(await page.evaluate(`!document.querySelector(${json(chatAgentTab)})`), "a closed Agent tab is not re-added to that chat");
+  assert.ok(await openProjectHome());
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"]')`), "return to the console after the chat checks");
+  coverage.push("A project chat shows the project Agent tab in the right panel by default, and after the user closes it the tab is not re-added for that chat while the project page still presents it");
   await main.evaluate(`(() => { const makeRequire=process.getBuiltinModule('module').createRequire; const req=makeRequire(${json(join(root, "apps/desktop/package.json"))}); const shell=req('electron').shell; globalThis.__workflowOpenedPaths=[]; shell.openPath=async path=>{ globalThis.__workflowOpenedPaths.push(path); return ''; }; })()`);
   const now = stamp(), workstreamId = "ui-workstream", candidateId = "ui-candidate", resourceId = "ui-resource";
   const workstream = { id: workstreamId, projectId, title: "Measured rollout", goal: "Ship the measured release", acceptance: [{ id: "ui-acceptance", title: "Candidate reviewed", status: "pending", evidenceIds: [] }], owner: { kind: "session", ref: setup.sessionId }, status: "draft", priority: 0, order: 0, dependencyIds: [], nextAction: "Review the candidate", blocker: { reason: "Candidate review is pending", owner: "Release lead", resumeWhen: "Approve candidate-r7" }, mainSessionId: setup.sessionId, revision: 0, decisionRevision: 0, createdAt: now, updatedAt: now };
@@ -177,8 +252,9 @@ try {
   assert.equal(initial.artifacts.find(item => item.id === candidateId)?.revision, "candidate-r7");
   assert.equal(initial.resources.find(item => item.id === resourceId)?.source.revision, "src-r2");
   // The user path opens the project without selecting the seeded Agent session.
-  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim()==='apps')`), "open project appears in real sidebar", 60000);
-  await clickText("apps");
+  await until(() => page.evaluate(`!![...document.querySelectorAll('button')].find(x=>x.textContent?.trim().includes('Workflow UI Production'))`), "open project appears in real sidebar", 60000);
+  await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
+  assert.ok(await openProjectHome());
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"][data-project-id="${projectId}"]')`), "Project Console opens from sidebar");
   coverage.push("Opened the real Project Console from the sidebar; no active session was selected by the harness");
 
@@ -192,6 +268,52 @@ try {
   const created = await snapshot();
   assert.ok(created.workstreams.some(item => item.title === "UI-created workstream"));
   coverage.push("Created a workstream with title, goal, acceptance, owner, and next action through rendered controls");
+
+  // Project side conversation: the floating pill edits the Host return policy at any time, and
+  // Return to conversation records a proposal (Context tab) or an output, as the policy says.
+  assert.ok(await clickText("侧聊", ".workflow-actions button"), "new side conversation control");
+  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="side-editor"]')`), "side conversation editor");
+  assert.ok(await fillControl('[data-workflow="side-editor"] textarea', "SIDE_RETURN_QUESTION: is the row spacing fine?"));
+  assert.ok(await submitForm('[data-workflow="side-editor"]'));
+  const sideTab = ".work-panel [data-project-side-tab]";
+  await until(() => page.evaluate(`!!document.querySelector(${json(sideTab)})`), "the side conversation opens as a work-panel tab", 30000);
+  const side = (await snapshot()).conversations.find(item => item.purpose === "ask" && item.relation === "child");
+  assert.ok(side, "a project side conversation was linked");
+  assert.equal(side.returnPolicy, "none", "an Ask side conversation starts with None");
+  await until(() => page.evaluate(`document.querySelector(${json(sideTab)})?.innerText.includes('PROJECT_AGENT_REPLY')`), "the side conversation answered", 30000);
+  const sidePill = `${sideTab} [data-return-pill]`, sideAction = `${sideTab} [data-return-action]`;
+  const sideLabel = () => page.evaluate(`document.querySelector(${json(sidePill)})?.innerText.trim() ?? ''`);
+  const pickSide = async (policy) => {
+    assert.ok(await page.evaluate(`(() => { const pill=document.querySelector(${json(sidePill)}); if(!pill) return false; pill.click(); return true })()`), "side return pill");
+    await until(() => page.evaluate(`!!document.querySelector('[data-return-option="mode:${policy}"]')`), `side option ${policy}`);
+    await page.evaluate(`document.querySelector('[data-return-option="mode:${policy}"]').click()`);
+  };
+  const hostPolicy = async () => (await snapshot()).conversations.find(item => item.sessionId === side.sessionId).returnPolicy;
+  assert.match(await sideLabel(), /回传：不回传/);
+  assert.equal(await page.evaluate(`!!document.querySelector(${json(sideAction)})`), false, "no return button under None");
+  await pickSide("proposal");
+  await until(async () => (await hostPolicy()) === "proposal", "the Host stored the proposal policy");
+  await until(async () => /回传：提议/.test(await sideLabel()), "the pill follows the stored policy");
+  await capture("renderer-project-side-pill.png");
+  const decisionsBefore = (await snapshot()).decisions.length;
+  await until(() => page.evaluate(`(() => { const button=document.querySelector(${json(sideAction)}); if(!button || button.disabled) return false; button.click(); return true })()`), "Return to conversation pressed under Propose");
+  await until(async () => (await snapshot()).decisions.length === decisionsBefore + 1, "a proposal was recorded");
+  const proposal = (await snapshot()).decisions.find(item => item.sources.some(source => source.kind === "session" && source.ref === side.sessionId));
+  assert.equal(proposal.state, "proposed");
+  assert.ok(proposal.statement.includes("PROJECT_AGENT_REPLY"), "the proposal carries the side answer");
+  await pickSide("delivery");
+  await until(async () => (await hostPolicy()) === "delivery", "the Host stored the delivery policy");
+  const artifactsBefore = (await snapshot()).artifacts.length;
+  await until(() => page.evaluate(`(() => { const button=document.querySelector(${json(sideAction)}); if(!button || button.disabled) return false; button.click(); return true })()`), "Return to conversation pressed under Deliver");
+  await until(async () => (await snapshot()).artifacts.length === artifactsBefore + 1, "an output was recorded for the workstream");
+  assert.ok((await snapshot()).artifacts.some(item => item.kind === "report" && item.source.ref === side.sessionId && item.workstreamId === side.workstreamId));
+  await pickSide("none");
+  await until(async () => (await hostPolicy()) === "none", "the policy returns to None");
+  assert.equal(await page.evaluate(`!!document.querySelector(${json(sideAction)})`), false, "the return button leaves with None");
+  // Context is immutable: the Host kept ancestry and read context through every change.
+  const after = (await snapshot()).conversations.find(item => item.sessionId === side.sessionId);
+  assert.deepEqual({ ...after, returnPolicy: side.returnPolicy }, side, "only the return policy changed");
+  coverage.push("A project side conversation's floating pill changes the Host return policy (None / Propose / Deliver output) at any time while ancestry and context stay immutable; Return to conversation records a proposed decision sourced from the side conversation, or a report output for the workstream, and disappears under None");
 
   // Search is submitted and selected through visible controls; inspect hit breadcrumbs and focus target.
   assert.ok(await clickAria("搜索此项目"), "project search is available in its header");
@@ -224,8 +346,8 @@ try {
   const candidateOpenedPath = await main.evaluate(`globalThis.__workflowOpenedPaths[0]`);
   assert.equal(candidateOpenedPath, recordedPath);
 
-  // Context resource appears in its real tab and carries the source revision.
-  await clickText("共享上下文");
+  // Context resource appears in the shared-context tab and carries the source revision.
+  assert.ok(await openContextTab(), "shared context tab");
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "project resource context");
   const resourceUi = await page.evaluate(`document.querySelector('[data-workflow-resource="${resourceId}"]')?.innerText`);
   assert.match(resourceUi, /src-r2/);
@@ -233,58 +355,13 @@ try {
   await until(() => main.evaluate(`globalThis.__workflowOpenedPaths?.length===2`), "resource reference routed to isolated shell boundary");
   const resourceOpenedPath = await main.evaluate(`globalThis.__workflowOpenedPaths[1]`);
   assert.equal(resourceOpenedPath, recordedPath);
-  coverage.push("Opened the resource context through the actual tab, read its source revision, and verified both candidate/resource references resolve to their recorded path through the production IPC boundary");
+  coverage.push("Opened the resource context through the shared-context tab, read its source revision, and verified both candidate/resource references resolve to their recorded path through the production IPC boundary");
 
-  // Folder management and chat placement/removal are actual sidebar DOM actions.
-  const createFolder = async (name, parentId = "") => {
-    assert.ok(await clickAria("新建文件夹"), "new folder control is available");
-    await until(() => page.evaluate(`!![...document.querySelectorAll('label')].find(x=>x.textContent?.trim().startsWith('文件夹名称'))`), "folder editor");
-    assert.ok(await fillByLabel("文件夹名称", name));
-    if (parentId) assert.ok(await fillByLabel("上级文件夹", parentId));
-    assert.ok(await submitForm(".workflow-navigation-editor"));
-    return until(async () => (await snapshot()).folders.find(folder => folder.name === name), `folder ${name} persisted`);
-  };
-  const folderRoot = await createFolder("UI Evidence");
-  const folderNested = await createFolder("Nested Evidence", folderRoot.id);
-  assert.equal(folderNested.parentId, folderRoot.id);
-  coverage.push("Created a top-level folder and a shallow nested folder through the real sidebar editor");
-
-  assert.ok(await clickAria("整理对话"), "chat organization mode opens");
-  assert.ok(await page.evaluate(`(() => { const folder=document.querySelector('[data-workflow-folder="${folderRoot.id}"] .workflow-navigation-label'); if(!folder) return false; folder.click(); return true })()`), "parent folder can be expanded");
-  await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"]')`), "nested folder row");
-  assert.ok(await page.evaluate(`(() => { const button=document.querySelector('[data-workflow-folder="${folderNested.id}"] button[aria-label="新建对话"]'); if(!button) return false; button.click(); return true })()`), "new chat action is available in nested folder");
-  const nestedChat = await until(async () => (await snapshot()).navigation.find(item => item.folderId === folderNested.id), "chat created in nested folder");
-  const sessionsResult = await invoke("sessionList");
-  const setupSession = sessionsResult.sessions.find(session => session.id === nestedChat.sessionId);
-  assert.ok(setupSession, "new folder chat appears in the ordinary session inventory");
-  await page.evaluate(`document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-label')?.click()`);
-  await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat input[type=checkbox]')`), "folder chat selectable in organization mode");
-  assert.ok(await page.evaluate(`(() => { const button=document.querySelector('[data-workflow-folder="${folderNested.id}"] .thread-item-main'); if(!button) return false; button.click(); return true })()`));
-  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.lastAccessedAt, "folder chat recorded in recent view");
-  assert.ok(await page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat')`), "recent view preserves folder visibility");
-  assert.ok(await clickAria("收藏对话", `[data-workflow-folder="${folderNested.id}"] button[aria-label]`));
-  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.favorite, "folder chat favorited");
-  await until(() => page.evaluate(`!!document.querySelector('[data-workflow-folder="${folderNested.id}"] button[aria-label="收藏对话"][aria-pressed=true]')`), "favorite remains visible in its folder");
-  coverage.push("Opened and favorited a folder chat through its rendered row; Recent and Favorites preserve its stable folder location");
-  const selectedChat = await page.evaluate(`(() => { const input=document.querySelector('[data-workflow-folder="${folderNested.id}"] .workflow-navigation-chat input[type=checkbox]'); if(!input) return false; input.click(); return true })()`);
-  assert.ok(selectedChat, "folder chat can be selected without opening its transcript");
-  await until(() => page.evaluate(`!![...document.querySelectorAll('label')].find(x=>x.textContent?.includes('移动所选的'))`), "move-selected destination");
-  assert.ok(await fillByLabel("移动所选的", folderRoot.id));
-  assert.ok(await clickText("移动"));
-  await until(async () => (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId)?.folderId === folderRoot.id, "folder chat moved through sidebar organization controls");
-  coverage.push("Created a chat inside the nested folder and moved it to another folder with the sidebar organize controls");
-
-  assert.ok(await clickAria("移除文件夹", `[data-workflow-folder="${folderNested.id}"] button[aria-label]`));
-  await until(() => page.evaluate(`!!document.querySelector('.workflow-navigation-editor[role=alert]')`), "non-destructive folder confirmation");
-  assert.ok(await clickText("移除文件夹"));
-  await until(async () => !(await snapshot()).folders.some(folder => folder.id === folderNested.id), "nested folder removal");
-  const retainedNavigation = (await snapshot()).navigation.find(item => item.sessionId === nestedChat.sessionId);
-  assert.equal(retainedNavigation?.folderId, folderRoot.id, "removing the empty nested folder leaves moved chat in its destination");
-  assert.ok((await invoke("sessionList")).sessions.some(session => session.id === nestedChat.sessionId), "folder removal leaves the underlying chat accessible");
-  coverage.push("Removed the now-empty nested folder non-destructively and verified its chat remains available in the session inventory");
-  await clickText("apps");
+  // Folder, category and chat placement flows moved to the category sidebar; e2e-project-navigation-ui owns them.
+  await page.evaluate(`(() => { const group=document.querySelector('[data-project-agent="${projectId}"]')?.closest('[data-sidebar-project-group]'); const toggle=group?.querySelector('.project-toggle'); if(toggle?.getAttribute('aria-expanded')==='false')toggle.click(); })()`);
+  assert.ok(await openProjectHome());
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow="console"][data-project-id="${projectId}"]')`), "return to Project Console from chat navigation");
-  await clickText("共享上下文");
+  assert.ok(await openContextTab());
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "resource panel restored after chat navigation");
 
   // Resize the actual Electron window (not the emulated CSS viewport) to its supported minimum.
@@ -294,14 +371,14 @@ try {
 
   // Inspect the workstream owner, blocker, and current candidate on Overview at both themes.
   await clickText("概览");
-  await until(() => page.evaluate(`!!document.querySelector('[data-workflow="project-intent"]')`), "Overview view");
+  await until(() => page.evaluate(`!!document.querySelector('[data-project-overview]')`), "Overview view");
 
   // At the native supported minimum, capture both themes and the shared context surface.
   for (const [name, theme] of [["renderer-overview-light.png", "light"], ["renderer-overview-dark.png", "dark"]]) {
     await page.evaluate(`document.documentElement.dataset.theme=${json(theme)}`);
     await until(() => page.evaluate(`document.documentElement.dataset.theme===${json(theme)}`), `${theme} theme`);
-    await page.evaluate("window.scrollTo(0,0); document.querySelector('.workflow-console')?.scrollTo(0,0)"); await sleep(250);
-    layout[name] = await page.evaluate(`(() => { const actions=document.querySelector('.workflow-header .workflow-actions')?.getBoundingClientRect(); return {width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,consoleWidth:document.querySelector('[data-workflow="console"]')?.getBoundingClientRect().width,headerActions:actions?{top:actions.top,bottom:actions.bottom}:null,selectedConsoleControl:document.querySelector('[data-workflow="console"] [aria-pressed=true]')?.innerText || null} })()`);
+    await page.evaluate(`window.scrollTo(0,0); for (let el=document.querySelector('[data-workflow="console"] > .workflow-page'); el; el=el.parentElement) el.scrollTo?.(0,0)`); await sleep(250);
+    layout[name] = await page.evaluate(`(() => { const actions=document.querySelector('.workflow-header .workflow-header-actions')?.getBoundingClientRect(); return {width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,consoleWidth:document.querySelector('[data-workflow="console"]')?.getBoundingClientRect().width,headerActions:actions?{top:actions.top,bottom:actions.bottom}:null,selectedConsoleControl:document.querySelector('[data-workflow="console"] [aria-pressed=true]')?.innerText || null} })()`);
     await capture(name);
   }
   for (const [name, metrics] of Object.entries(layout)) {
@@ -309,13 +386,14 @@ try {
     assert.ok(metrics.documentWidth <= 801 && metrics.consoleWidth <= 801, `${name} overflows supported width: ${json(metrics)}`);
     assert.ok(metrics.headerActions && metrics.headerActions.top >= 46 && metrics.headerActions.bottom <= 600, `${name} overlaps native titlebar or clips header actions: ${json(metrics)}`);
   }
-  await clickText("Measured rollout", ".workflow-workstream-list button");
+  assert.ok(await clickText("工作流", ".workflow-tabs button"), "Workstreams tab");
+  await until(() => clickText("Measured rollout", ".workflow-workstream-list button"), "Measured rollout in the workstream list");
   await until(() => page.evaluate(`!!document.querySelector('.workflow-detail .workflow-blocker') && !!document.querySelector('.workflow-candidate-summary')`), "workstream owner, blocker, and candidate details");
   const overviewText = await page.evaluate(`document.querySelector('.workflow-detail')?.innerText`);
   assert.match(overviewText, /Release lead/);
   assert.match(overviewText, /Approve candidate-r7/);
   assert.match(overviewText, /candidate-r7/);
-  coverage.push("Opened a work item from Overview and inspected its owner, blocker/resume condition, and current candidate in its separate detail view");
+  coverage.push("Opened a work item from the Workstreams list and inspected its owner, blocker/resume condition, and current candidate in its separate detail view");
   await page.evaluate(`document.documentElement.dataset.theme='light'; document.querySelector('.workflow-detail')?.scrollIntoView({block:'start'})`);
   await until(() => page.evaluate(`(() => { const block=document.querySelector('.workflow-blocker')?.getBoundingClientRect(), candidate=document.querySelector('.workflow-candidate-summary')?.getBoundingClientRect(); return !!block && !!candidate && block.top >= 0 && block.bottom <= innerHeight && candidate.top >= 0 && candidate.bottom <= innerHeight })()`), "Overview blocker and candidate visible in viewport");
   const overviewDetail = await page.evaluate(`(() => { const rect=selector=>{const r=document.querySelector(selector)?.getBoundingClientRect(); return r?{top:r.top,bottom:r.bottom,left:r.left,right:r.right}:null}; return {text:document.querySelector('.workflow-detail')?.innerText,owner:rect('.workflow-detail .workflow-muted'),blocker:rect('.workflow-blocker'),candidate:rect('.workflow-candidate-summary'),width:innerWidth,height:innerHeight} })()`);
@@ -324,7 +402,7 @@ try {
   assert.ok(overviewDetail.candidate?.top >= 0 && overviewDetail.candidate.bottom <= 600, `Overview candidate is not visible: ${json(overviewDetail)}`);
   await capture("renderer-overview-detail.png");
 
-  await clickText("共享上下文");
+  assert.ok(await openContextTab());
   await until(() => page.evaluate(`!!document.querySelector('[data-workflow-resource="${resourceId}"]')`), "shared context screenshot");
   await page.evaluate("document.documentElement.dataset.theme='light'; document.querySelector('.workflow-console')?.scrollTo(0,0)"); await sleep(250);
   layout["renderer-context-light.png"] = await page.evaluate(`({width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,consoleWidth:document.querySelector('[data-workflow="console"]')?.getBoundingClientRect().width})`);

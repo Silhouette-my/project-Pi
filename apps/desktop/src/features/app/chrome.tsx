@@ -2,7 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import i18n from "i18next";
 import { useTranslation } from "react-i18next";
 import { TooltipButton } from "../../components/ui";
-import { IconNewSession, IconSidebar } from "../../components/icons";
+import { IconPlus, IconSidebar } from "../../components/icons";
 
 export class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -66,7 +66,7 @@ export function CollapsedTitlebarActions({
         data-nav="new-task"
         onClick={onNewTask}
       >
-        <IconNewSession size={15} />
+        <IconPlus size={15} />
       </TooltipButton>
     </div>
   );

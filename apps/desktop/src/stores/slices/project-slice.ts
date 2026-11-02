@@ -1,6 +1,6 @@
 import { forgetTranscriptReadingState } from "../../lib/transcript-reading-position";
 import i18n from "i18next";
-import type { ProjectWorkspace } from "@pi-desktop/shared";
+import { normalizeAccentPresetId, type ProjectWorkspace } from "@pi-desktop/shared";
 import { api } from "../../lib/api";
 import {
   rememberProject,
@@ -14,6 +14,7 @@ import {
 } from "../../lib/session-panes";
 import {
   clearSessionAsks,
+  dropSessionAskDrafts,
 } from "../../lib/pending-asks";
 import {
   clearSessionPermissions,
@@ -174,6 +175,7 @@ function clearLocalSessionState(
       id,
     );
     const pendingAsks = clearSessionAsks(state.pendingAsks, id);
+    const askDrafts = dropSessionAskDrafts(state.askDrafts, state.pendingAsks, id);
     const latestTurnResults = withoutRecordKey(state.latestTurnResults, id);
     const planningStates = withoutRecordKey(state.planningStates, id);
     const pendingPlans = withoutRecordKey(state.pendingPlans, id);
@@ -202,6 +204,7 @@ function clearLocalSessionState(
       isRunning: state.activeSessionId === id ? false : state.isRunning,
       pendingPermissions,
       pendingAsks,
+      askDrafts,
       latestTurnResults,
       planningStates,
       pendingPlans,
@@ -253,6 +256,7 @@ export function createProjectSlice({
   | "setShowArchived"
   | "archiveProject"
   | "toggleProjectPinned"
+  | "setProjectColor"
   | "renameProject"
   | "toggleProjectArchived"
   | "restoreProject"
@@ -656,6 +660,21 @@ export function createProjectSlice({
       } catch {
         // The durable recent-project index is optional in restricted contexts.
       }
+      persistCurrentSidebar(get);
+    },
+
+    setProjectColor: (path, color) => {
+      const key = normalizeProjectPath(path);
+      if (!key) return;
+      set((state) => {
+        const { color: _previous, ...rest } = state.projectMeta[key] || {};
+        return {
+          projectMeta: {
+            ...state.projectMeta,
+            [key]: normalizeAccentPresetId(color) ? { ...rest, color } : rest,
+          },
+        };
+      });
       persistCurrentSidebar(get);
     },
 

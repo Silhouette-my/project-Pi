@@ -1,0 +1,56 @@
+/* Conversation mention (ADR conversation-mention): the `@` list rows, the
+   caret anchor of the plain-textarea composer, and its token highlight. */
+
+.mention-anchor {
+  position: fixed;
+  width: 1px;
+  pointer-events: none;
+}
+
+.composer-autocomplete.mention-popover {
+  width: 300px;
+  max-height: 300px;
+}
+
+.composer-ac-item.mention-row {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mention-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm-plus, var(--text-md));
+}
+
+.mention-row-secondary {
+  flex: 0 1 auto;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ds-text-muted);
+  font-size: var(--text-xs-plus, var(--text-sm));
+}
+
+/* The twin sits under a transparent textarea and paints only the tokens'
+   tiles; its own text is invisible. Geometry and metrics are copied from the
+   textarea at runtime, so a restyle of the field needs no change here. */
+.mention-mirror {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: transparent;
+}
+
+.mention-mirror mark {
+  border-radius: var(--radius-sm);
+  background: var(--ds-tile-deep);
+  box-shadow: 0 0 0 2px var(--ds-tile-deep);
+  color: transparent;
+}

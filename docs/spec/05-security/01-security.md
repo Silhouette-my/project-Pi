@@ -49,6 +49,15 @@ cannot use a file link to escape the workspace. This local-file browsing is
 covered by the high-risk `browser.cdp` capability; `BrowserPreview` and the
 sidecar's workspace file resolver remain restricted to the session workspace.
 
+Browser tool calls derive page identity from the trusted in-flight invocation,
+not plugin arguments or the currently visible page. Session-owned CDP works
+while hidden; unscoped plugin UI calls remain visibility-gated. Unknown or closed
+targets fail closed. Hidden guests are hosted by an invisible sandboxed backing
+window with no Node integration or elevated preload. Host-only focus emulation
+enables input without presenting or focusing a window or extending the raw CDP
+allowlist. Closing the last parked page releases the backing host. Cookie,
+storage, Target and network-interception methods remain denied.
+
 ### Content Security Policy
 
 - Dev: `script-src 'self' 'unsafe-inline' 'unsafe-eval'` (required by Vite
@@ -67,6 +76,14 @@ sidecar's workspace file resolver remain restricted to the session workspace.
   links, URL attributes, `foreignObject`, script, embedded media, and external
   image elements are removed before the SVG reaches the DOM. Invalid or
   oversized input fails closed to escaped source text.
+- Inline GenUI admits only `frame-src pi-genui:` in the parent. Its document
+  responses enforce `sandbox allow-scripts` in the CSP header, in addition to
+  the caller's opaque-origin iframe sandbox. Documents allow only bundled
+  scripts and inline styles; fetches, frames, forms, and remote assets are
+  blocked. The private Host reader pins native directory capabilities and
+  returns bounded bytes; Main never reopens model paths. See
+  [the GenUI ADR](../../adr/gen-ui-inline-visualization.md) for the explicit
+  WebRTC ICE residual channel and the remaining v1 limits.
 
 ### Future hardening (tracked, post-MVP)
 
@@ -84,6 +101,12 @@ sidecar's workspace file resolver remain restricted to the session workspace.
 - Error messages must not echo full keys
 
 ## 4. Workspace sandbox
+
+New session-backed Workflow tasks (`executionMode: "session"`) use the selected
+Agent session's existing permission mode and tool/plugin configuration. They do
+not add workflow resource grants, a second Shell approval layer, or an OS sandbox.
+Old tasks without that marker retain their bounded resource/authorization and
+exact-command Shell approval contracts; upgrades never silently widen them.
 
 - File tools are restricted to the project root by default; an explicit path
   outside the session workspace and scratch roots requires the host permission

@@ -9,14 +9,25 @@ import {
   type ComponentType,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
+import type { UseEdgeRevealResult } from "../../hooks/use-edge-reveal";
 import { useBlockingOverlayActive } from "../../lib/blocking-overlay";
 import {
   workPanelTabReorderScrollDelta,
   workPanelTabReorderInsertAfter,
   workPanelTabReorderShouldArm,
 } from "../../lib/work-panel-tab-reorder";
+import {
+  ACTIVE_TAB_MIN_WIDTH,
+  TAB_TITLE_MIN_WIDTH,
+  adjacentTabId,
+  freezeTabWidths,
+  tabStripLayout,
+  tabWidth,
+  workPanelShortcut,
+} from "../../lib/work-panel-strip";
 import {
   isKnownWorkPanelTab,
   parsePluginViewRef,
@@ -25,19 +36,27 @@ import {
   toolWorkPanelTab,
 } from "../../lib/work-panel-tabs";
 import type { PluginViewMeta } from "@pi-desktop/shared";
+import { api } from "../../lib/api";
 import { pluginViewIcon, pluginViewInitial } from "../../lib/plugin-view-icons";
 import { useAppStore } from "../../stores/app-store";
 import type { WorkPanelTab } from "../../stores/app-store";
 import { cx } from "../ui";
+import {
+  ContextMenu,
+  useContextMenu,
+  type ContextMenuItem,
+} from "../ContextMenu";
 import { TooltipButton } from "../ui";
 import type { IconProps } from "../icons";
 import {
   IconBot,
+  IconChat,
   IconClose,
   IconDiff,
   IconFileText,
   IconPanelMaximize,
   IconPanelRestore,
+  IconPin,
   IconPlug,
   IconPlus,
 } from "../icons";
@@ -45,6 +64,22 @@ import { ReviewTab } from "./ReviewTab";
 import { FilesTab } from "./FilesTab";
 import { PluginViewTab } from "./PluginViewTab";
 import { SubagentTranscriptTab } from "./SubagentTranscriptTab";
+import { SideChatTab } from "../../features/chat/side-chat/SideChatTab";
+import {
+  openWholeConversationSideChat,
+  selectCanOpenSideChat,
+  selectSideChatAnchorId,
+} from "../../features/chat/side-chat/side-chat-entry";
+import { ProjectAgentTab } from "../../features/project-panel/ProjectAgentTab";
+import { ProjectSideTab } from "../../features/project-panel/ProjectSideTab";
+import { ProjectPanelEmpty } from "../../features/project-panel/ProjectPanelEmpty";
+import { useOptionalProjectWorkflow } from "../../features/project-workflow/useProjectWorkflow";
+import { ProjectNewTabMenu } from "./ProjectNewTabMenu";
+import {
+  isProjectPanelContextKey,
+  projectIdOfContextKey,
+  workPanelContextKey,
+} from "../../lib/project-panel";
 import {
   MAIN_PANE_MIN_WIDTH,
   WORK_PANEL_COMPACT_MIN_WIDTH,
@@ -62,6 +97,9 @@ const TAB_ICONS = {
   file: IconFileText,
   plugin: IconPlug,
   subagent: IconBot,
+  sidechat: IconChat,
+  "project-agent": IconBot,
+  "project-side": IconChat,
 } as const;
 
 type WorkPanelResizeState = {
@@ -104,7 +142,7 @@ type WorkPanelTool = {
 
 function tabLabel(
   tab: WorkPanelTab,
-  t: (key: string) => string,
+  t: (key: string, options?: Record<string, unknown>) => string,
   pluginViews: PluginViewMeta[],
 ) {
   if (tab.kind === "plugin") {
@@ -116,9 +154,39 @@ function tabLabel(
   }
   if (tab.kind === "new") return t("panel.new.title");
   if (tab.kind === "subagent") return tab.label ?? t("panel.tabs.subagent");
+  if (tab.kind === "sidechat") return t("sideChat.title");
+  if (tab.kind === "project-agent") return t("projectPanel.agentTab");
+  if (tab.kind === "project-side") {
+    return tab.label ? t("sideChat.sessionTitle", { title: tab.label }) : t("projectPanel.sideTab");
+  }
   if (tab.kind !== "file") return t(`panel.tabs.${tab.kind}`);
   const path = tab.resource ?? "";
   return path.split("/").filter(Boolean).pop() || t("panel.tabs.file");
+}
+
+/**
+ * The tab tooltip. A side chat or the project Agent has no header any more, so
+ * what the header said (what it is about, where it came from, what it may do)
+ * lives here. Other tabs keep their resource or label.
+ */
+function tabTooltip(
+  tab: WorkPanelTab,
+  label: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  workstreamTitleOf: (sessionId: string) => string | undefined,
+): string {
+  if (tab.kind === "sidechat") {
+    return tab.sideChat?.excerpt
+      ? t("workPanel.return.tooltipChat", { excerpt: tab.sideChat.excerpt })
+      : label;
+  }
+  if (tab.kind === "project-agent") return t("workPanel.return.tooltipAgent");
+  if (tab.kind === "project-side") {
+    const workstream = tab.resource ? workstreamTitleOf(tab.resource) : undefined;
+    return workstream ? t("workPanel.return.tooltipSide", { workstream }) : label;
+  }
+  if (tab.kind === "subagent") return tab.label ?? label;
+  return tab.resource ?? label;
 }
 
 function workPanelTools(
@@ -157,20 +225,32 @@ function ToolIcon({ item, size = 15 }: { item: WorkPanelTool; size?: number }) {
   );
 }
 
+/** Space between tabs, and the sticky "+" slot (28px button plus its margin). */
+const TAB_GAP = 2;
+const NEW_TAB_SLOT_WIDTH = 30;
+
+/** Content left visible beside a revealed overlay panel, in CSS pixels. */
+const EDGE_PANEL_CONTENT_MARGIN = 48;
+
 export function WorkPanel(props: Parameters<typeof LocalWorkPanel>[0]) {
   const session = useAppStore((state) => state.sessions.find((item) => item.id === state.activeSessionId));
   const sessionId = useAppStore((state) => state.activeSessionId);
+  const projectPage = useAppStore((state) => state.page === "project");
   const width = useAppStore((state) => state.workPanelWidth);
+  // The project page presents the project's own context, whatever session
+  // happens to be active underneath it.
+  if (projectPage) return <LocalWorkPanel {...props} />;
   if (session && isRemoteSession(session)) {
     return <RemoteWorkspace key={session.id} session={session} width={Math.min(width, Math.max(280, (props.containerWidth || 900) - 320))}
-      exiting={props.exiting} onExitAnimationEnd={props.onExitAnimationEnd} />;
+      exiting={props.exiting} onExitAnimationEnd={props.onExitAnimationEnd}
+      edgePanel={props.edgePanel} onClose={props.onCloseOverlay} />;
   }
   if (sessionId?.startsWith("remote:")) return null;
   return <LocalWorkPanel {...props} />;
 }
 
 function LocalWorkPanel({
-  panelBlocked = false,
+  panelBlocked: panelBlockedRequest = false,
   exiting = false,
   onExitAnimationEnd,
   containerWidth = 0,
@@ -178,8 +258,11 @@ function LocalWorkPanel({
   sidebarExiting = false,
   sidebarWidth = 0,
   onAutoCollapseSidebar,
-  maximized = false,
+  maximized: maximizedRequest = false,
   onToggleMaximize,
+  edgePanel,
+  pinned = true,
+  onTogglePin,
 }: {
   /**
    * Hides every native surface in the panel. Both the preview browser and a
@@ -203,20 +286,60 @@ function LocalWorkPanel({
   maximized?: boolean;
   /** Toggles the preview mode from the panel header. */
   onToggleMaximize?: () => void;
+  /**
+   * Present while the panel is an edge-reveal overlay (unpinned): the
+   * `useEdgeReveal` panel props that slide it over the content. An overlay
+   * takes no layout width, so the three-column budget does not apply to it.
+   */
+  edgePanel?: UseEdgeRevealResult["panelProps"];
+  /** Closes an overlay panel (used by the remote workspace's close button). */
+  onCloseOverlay?: () => void;
+  /** Docked permanently; false while it auto-hides. */
+  pinned?: boolean;
+  onTogglePin?: () => void;
 }) {
   const { t } = useTranslation();
+  const overlay = edgePanel !== undefined;
+  // Preview mode needs the dock: MainChat is removed beside it. An overlay
+  // never maximizes; pin the panel first.
+  const maximized = maximizedRequest && !overlay;
+  // The overlay slides in with a transform, and native plugin views read their
+  // bounds from the DOM, so they wait for the slide to settle.
+  const [overlayEntering, setOverlayEntering] = useState(overlay);
+  useEffect(() => {
+    if (!overlay || !overlayEntering) return;
+    const timer = window.setTimeout(() => setOverlayEntering(false), 400);
+    return () => window.clearTimeout(timer);
+  }, [overlay, overlayEntering]);
+  const panelBlocked = panelBlockedRequest || overlayEntering;
   const blockingOverlayActive = useBlockingOverlayActive();
+  const {
+    contextMenu: tabContextMenu,
+    openContextMenu: openTabContextMenu,
+    closeContextMenu: closeTabContextMenu,
+  } = useContextMenu();
   const rawTabs = useAppStore((s) => s.workPanelTabs);
   const tabs = rawTabs.filter(isKnownWorkPanelTab);
   const activeTabId = useAppStore((s) => s.activeWorkPanelTabId);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
+  // The context key is what tab reordering must not outlive: the session's id,
+  // or `project:<id>` on the project page.
+  const contextKey = useAppStore((s) => workPanelContextKey(s));
+  const projectContext = isProjectPanelContextKey(contextKey);
   const pluginViews = useAppStore((s) => s.pluginViews);
   const width = useAppStore((s) => s.workPanelWidth);
   const yieldedWidth = useAppStore((s) => s.workPanelYieldedWidth);
   const activateTab = useAppStore((s) => s.activateWorkPanelTab);
   const reorderTabs = useAppStore((s) => s.reorderWorkPanelTabs);
   const closeTab = useAppStore((s) => s.closeWorkPanelTab);
+  // A side chat about the whole conversation is offered only on a chat page.
+  const canSideChat = useAppStore(
+    (s) => s.page === "chat" && selectCanOpenSideChat(s),
+  );
+  const sideChatEmpty = !useAppStore(selectSideChatAnchorId);
   const openWorkPanelTab = useAppStore((s) => s.openWorkPanelTab);
+  const closeOtherTabs = useAppStore((s) => s.closeOtherWorkPanelTabs);
+  const closeAllTabs = useAppStore((s) => s.closeAllWorkPanelTabs);
   const openNewWorkPanelTab = useAppStore((s) => s.openNewWorkPanelTab);
   const replaceWorkPanelTab = useAppStore((s) => s.replaceWorkPanelTab);
   const setWidth = useAppStore((s) => s.setWorkPanelWidth);
@@ -225,10 +348,13 @@ function LocalWorkPanel({
   const tabSignature = JSON.stringify(
     tabs.map(({ id, kind, resource, location }) => [id, kind, resource, location]),
   );
+
   // Subagent tabs may share an agent name; repeats gain a 1-based `#n`
   // suffix in strip order so the row stays unambiguous. The base label
   // already falls back to panel.tabs.subagent when no name was captured.
-  const subagentTabsInOrder = tabs.filter((tab) => tab.kind === "subagent");
+  const subagentTabsInOrder = tabs.filter(
+    (tab) => tab.kind === "subagent" || tab.kind === "sidechat",
+  );
   const subagentDisplayLabels = subagentTabDisplayLabels(
     subagentTabsInOrder.map((tab) => tabLabel(tab, t, pluginViews)),
   );
@@ -238,9 +364,30 @@ function LocalWorkPanel({
     ),
   );
 
+  const workflow = useOptionalProjectWorkflow();
+  const workstreamTitleOf = useCallback(
+    (sessionId: string) => {
+      const link = workflow?.snapshot?.conversations.find((item) => item.sessionId === sessionId);
+      return link
+        ? workflow?.snapshot?.workstreams.find((item) => item.id === link.workstreamId)?.title
+        : undefined;
+    },
+    [workflow?.snapshot],
+  );
+  const projectId = projectIdOfContextKey(contextKey);
+  const stripWrapRef = useRef<HTMLDivElement | null>(null);
+  const [stripWidth, setStripWidth] = useState(0);
+  const [stripFade, setStripFade] = useState({ start: false, end: false });
+  // Widths held after a close button press, so the next close lands under the
+  // pointer; released when the pointer leaves the strip.
+  const [frozenWidths, setFrozenWidths] = useState<Record<string, number> | null>(null);
   const [panelDragWidth, setPanelDragWidth] = useState<number | null>(null);
   const panelResizeState = useRef<WorkPanelResizeState | null>(null);
   const tabReorderState = useRef<WorkPanelTabReorderState | null>(null);
+  // The sticky "+" and the gaps between tabs (one more than the tabs: the "+" is an item too)
+  // come out of the room tabs share.
+  const stripAvailable = stripWidth - NEW_TAB_SLOT_WIDTH - tabs.length * TAB_GAP;
+  const stripLayout = tabStripLayout(stripAvailable, tabs.length);
   const tabStripRef = useRef<HTMLDivElement | null>(null);
   const suppressedTabClickPointerIdsRef = useRef<Set<number>>(new Set());
   const tabWrapperRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -276,13 +423,30 @@ function LocalWorkPanel({
       preferredWidth: width,
       yieldedWidth,
     });
-  const layout = workPanelLayout({
+  const dockLayout = workPanelLayout({
     containerWidth: budgetWidth,
     sidebarWidth,
     sidebarCollapsed: !sidebarOccupiesBudget,
     requestedPanelWidth,
     maximized,
   });
+  // An overlay is bounded by the window, not by the MainChat floor: it floats
+  // over the content, so neither the floor nor the sidebar yield applies.
+  const overlayMaxWidth = Math.max(
+    WORK_PANEL_COMPACT_MIN_WIDTH,
+    Math.round(budgetWidth) - EDGE_PANEL_CONTENT_MARGIN,
+  );
+  const layout = overlay
+    ? {
+        mainWidth: 0,
+        panelWidth: Math.min(
+          clampWorkPanelWidth(panelDragWidth ?? width),
+          overlayMaxWidth,
+        ),
+        maxPanelWidth: overlayMaxWidth,
+        shouldCollapseSidebar: false,
+      }
+    : dockLayout;
   const renderPanelWidth = layout.panelWidth;
   const panelMinimum = workPanelGestureMinimum(renderPanelWidth);
   const isResizing = panelDragWidth !== null;
@@ -312,8 +476,31 @@ function LocalWorkPanel({
     setNativeSurfaceReadyForExit(true);
   }, [exiting]);
 
+  /**
+   * Reveal one tab's full box — the wrapper, not the button alone. The close
+   * control is a 24px sibling inside that wrapper, so scrolling only the button
+   * leaves the close control clipped by the strip's overflow edge (issue
+   * #1762). The button is the fallback for a tab rendered without a wrapper.
+   */
+  const revealTab = useCallback((tabId: string) => {
+    tabWrapperRefs.current[tabId]?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+    tabButtonRefs.current[tabId]?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+    tabCloseButtonRefs.current[tabId]?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, []);
+
   useLayoutEffect(() => {
     if (!activeTabId) return;
+    // Inline rather than a helper call: `work-panel.test.mjs` pins this effect
+    // body as the contract for "wrapper, then button, then close control".
     tabWrapperRefs.current[activeTabId]?.scrollIntoView({
       block: "nearest",
       inline: "nearest",
@@ -327,6 +514,48 @@ function LocalWorkPanel({
       inline: "nearest",
     });
   }, [activeTabId, tabs.length]);
+
+  // Tabs are sized from the room the strip has, so it is measured (not
+  // guessed) and re-measured whenever the panel is resized.
+  useLayoutEffect(() => {
+    const node = stripWrapRef.current;
+    if (!node) return;
+    const update = () => setStripWidth(node.clientWidth);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Edge fades show only on the side that has more tabs to scroll to.
+  const updateStripFade = useCallback(() => {
+    const strip = tabStripRef.current;
+    if (!strip) return;
+    const start = strip.scrollLeft > 1;
+    const end = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
+    setStripFade((current) =>
+      current.start === start && current.end === end ? current : { start, end },
+    );
+  }, []);
+  useLayoutEffect(() => {
+    updateStripFade();
+  }, [updateStripFade, stripWidth, tabSignature, frozenWidths, activeTabId]);
+
+  // A held width only lasts for the run of closes it was made for.
+  useEffect(() => {
+    setFrozenWidths(null);
+  }, [contextKey]);
+  // A narrowed panel clips a tab that was fully visible a moment ago, and
+  // neither `activeTabId` nor `tabs.length` changes when only the width does —
+  // so the reveal above would not re-run and the close control would stay
+  // clipped after a resize (issue #1762). Observe the strip itself.
+  useLayoutEffect(() => {
+    const strip = tabStripRef.current;
+    if (!strip || !activeTabId || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => revealTab(activeTabId));
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [activeTabId, revealTab]);
 
   const finishTabReorder = useCallback(() => {
     const state = tabReorderState.current;
@@ -349,14 +578,14 @@ function LocalWorkPanel({
     const state = tabReorderState.current;
     if (
       state &&
-      (state.activeSessionId !== activeSessionId ||
+      (state.activeSessionId !== contextKey ||
         state.activeTabId !== activeTabId ||
         state.tabSignature !== tabSignature)
     ) {
       suppressedTabClickPointerIdsRef.current.add(state.pointerId);
       finishTabReorder();
     }
-  }, [activeSessionId, activeTabId, finishTabReorder, tabSignature]);
+  }, [contextKey, activeTabId, finishTabReorder, tabSignature]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -561,7 +790,7 @@ function LocalWorkPanel({
       const state: WorkPanelTabReorderState = {
         pointerId: event.pointerId,
         sourceTabId,
-        activeSessionId,
+        activeSessionId: contextKey,
         activeTabId,
         tabSignature,
         startClientX: event.clientX,
@@ -581,7 +810,7 @@ function LocalWorkPanel({
       window.addEventListener("pointerup", onUp, true);
       window.addEventListener("pointercancel", onCancel, true);
     },
-    [activeSessionId, activeTabId, finishTabReorder, reorderTab, tabSignature],
+    [contextKey, activeTabId, finishTabReorder, reorderTab, tabSignature],
   );
 
   const selectTool = useCallback(
@@ -598,9 +827,18 @@ function LocalWorkPanel({
   );
 
   const closeTabAndFocus = useCallback(
-    (tabId: string) => {
+    (tabId: string, options?: { holdWidths?: boolean }) => {
       const index = tabs.findIndex((tab) => tab.id === tabId);
+      // Closing active activates the right neighbour, else the left one.
       const nextTab = index >= 0 ? tabs[index + 1] ?? tabs[index - 1] : undefined;
+      if (options?.holdWidths) {
+        const rendered: Record<string, number> = {};
+        for (const tab of tabs) {
+          const width = tabWrapperRefs.current[tab.id]?.getBoundingClientRect().width;
+          if (width) rendered[tab.id] = width;
+        }
+        setFrozenWidths(freezeTabWidths(rendered, tabId));
+      }
       closeTab(tabId);
       requestAnimationFrame(() => {
         if (nextTab) tabButtonRefs.current[nextTab.id]?.focus();
@@ -608,6 +846,98 @@ function LocalWorkPanel({
       });
     },
     [closeTab, tabs],
+  );
+  // Panel-scoped shortcuts: they act only while focus is inside the panel, so
+  // no global binding is spent and every shell shortcut keeps its key.
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const shortcut = workPanelShortcut(
+        event,
+        window.piDesktop?.platform ?? "darwin",
+      );
+      if (!shortcut) return;
+      const focused = document.activeElement;
+      if (!(focused instanceof Element) || !focused.closest('[data-testid="work-panel"]')) return;
+      const current = activeTabIdRef.current;
+      if (shortcut === "close-tab") {
+        if (!current) return;
+        event.preventDefault();
+        event.stopPropagation();
+        closeTabAndFocus(current);
+        return;
+      }
+      const target = adjacentTabId(
+        tabs.map((tab) => tab.id),
+        current,
+        shortcut === "next-tab" ? 1 : -1,
+      );
+      if (!target) return;
+      event.preventDefault();
+      event.stopPropagation();
+      activateTab(target);
+      requestAnimationFrame(() => tabButtonRefs.current[target]?.focus({ preventScroll: true }));
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [activateTab, closeTabAndFocus, tabs]);
+
+  const closeOtherTabsAndFocus = useCallback(
+    (tabId: string) => {
+      closeOtherTabs(tabId);
+      requestAnimationFrame(() => tabButtonRefs.current[tabId]?.focus());
+    },
+    [closeOtherTabs],
+  );
+  const closeAllTabsAndFocus = useCallback(() => {
+    closeAllTabs();
+    requestAnimationFrame(() => newTabButtonRef.current?.focus());
+  }, [closeAllTabs]);
+  const openNativeTabMenu = useCallback(
+    (
+      event: ReactMouseEvent<HTMLDivElement>,
+      tabId: string,
+      label: string,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const menuContextKey = contextKey;
+      const rect = event.currentTarget.getBoundingClientRect();
+      const point =
+        event.clientX === 0 && event.clientY === 0
+          ? { x: rect.left + Math.min(24, rect.width / 2), y: rect.top + Math.min(24, rect.height / 2) }
+          : { x: event.clientX, y: event.clientY };
+      void api.openWorkPanelTabMenu({
+        closeTabLabel: t("panel.closeTab", { name: label }),
+        closeOtherTabsLabel: t("panel.closeOtherTabs"),
+        closeAllTabsLabel: t("panel.closeAllTabs"),
+        canCloseOthers: tabs.length > 1,
+        x: point.x,
+        y: point.y,
+      }).then((action) => {
+        if (!action || !menuContextKey) return;
+        const current = useAppStore.getState();
+        if (
+          workPanelContextKey(current) !== menuContextKey ||
+          !current.workPanelTabs.some((tab) => tab.id === tabId)
+        ) return;
+        if (action === "closeTab") closeTabAndFocus(tabId);
+        else if (action === "closeOtherTabs") closeOtherTabsAndFocus(tabId);
+        else closeAllTabsAndFocus();
+      }).catch((error) => {
+        useAppStore.getState().showToast(String(error), { variant: "error" });
+      });
+    },
+    [
+      contextKey,
+      closeAllTabsAndFocus,
+      closeOtherTabsAndFocus,
+      closeTabAndFocus,
+      t,
+      tabs.length,
+    ],
   );
   const onTabKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLButtonElement>, tabId: string) => {
@@ -796,15 +1126,26 @@ function LocalWorkPanel({
     <aside
       className={cx(
         "work-panel",
+        overlay && "edge-panel",
         maximized && "is-maximized",
         exiting && !exitAnimationReady && "is-exit-pending",
         exitAnimationReady && "is-exiting",
       )}
       style={panelStyle}
+      aria-label={t("panel.title")}
+      {...edgePanel}
       data-testid="work-panel"
       data-resizing={isResizing ? "true" : undefined}
       data-exiting={exiting ? "true" : undefined}
       onAnimationEnd={(event) => {
+        if (
+          overlay &&
+          event.target === event.currentTarget &&
+          event.animationName.startsWith("edge-panel-in")
+        ) {
+          setOverlayEntering(false);
+          return;
+        }
         if (!exitAnimationReady) return;
         if (event.target !== event.currentTarget) return;
         if (!event.animationName.startsWith("work-panel-out")) return;
@@ -838,20 +1179,30 @@ function LocalWorkPanel({
       />
       <div className="work-panel-main">
         <header className="work-panel-header">
-          <div className="work-panel-tab-strip-wrap">
+          <div className="work-panel-tab-strip-wrap" ref={stripWrapRef}>
               <div
                 ref={tabStripRef}
-                className="work-panel-tab-strip no-drag"
+                className={cx(
+                  "work-panel-tab-strip no-drag",
+                  stripFade.start && "fade-start",
+                  stripFade.end && "fade-end",
+                )}
                 role="tablist"
                 aria-label={t("panel.tabsLabel")}
                 onWheel={onTabStripWheel}
+                onScroll={updateStripFade}
+                onPointerLeave={() => setFrozenWidths(null)}
               >
                 {tabs.map((tab) => {
                   const label =
-                    tab.kind === "subagent"
-                      ? (subagentLabelById.get(tab.id) ?? t("panel.tabs.subagent"))
+                    tab.kind === "subagent" || tab.kind === "sidechat"
+                      ? (subagentLabelById.get(tab.id) ?? tabLabel(tab, t, pluginViews))
                       : tabLabel(tab, t, pluginViews);
                   const selected = tab.id === activeTabId;
+                  const width = tabWidth(stripLayout, selected, frozenWidths?.[tab.id]);
+                  // Inactive tabs give up their title (and close button, shown on
+                  // hover over the icon) before the strip has to scroll.
+                  const iconOnly = !selected && width < TAB_TITLE_MIN_WIDTH;
                   const Icon =
                     tab.kind === "plugin"
                       ? pluginViewIcon(
@@ -866,11 +1217,58 @@ function LocalWorkPanel({
                       className={cx(
                         "work-panel-tab",
                         selected && "active",
+                        iconOnly && "is-icon-only",
                         draggingTabId === tab.id && "is-dragging",
                         dropIndicator?.tabId === tab.id &&
                           (dropIndicator.insertAfter ? "is-drop-after" : "is-drop-before"),
                       )}
+                      style={{ width: Math.max(width, selected ? ACTIVE_TAB_MIN_WIDTH : 0) }}
+                      onMouseDown={(event) => {
+                        // Middle press would start the platform's autoscroll.
+                        if (event.button === 1) event.preventDefault();
+                      }}
+                      // Middle click closes from anywhere on the tab, its close button included.
+                      onAuxClick={(event) => {
+                        if (event.button !== 1) return;
+                        event.preventDefault();
+                        closeTabAndFocus(tab.id, { holdWidths: true });
+                      }}
                       data-work-panel-tab-id={tab.id}
+                      // A partly visible inactive tab reveals its close
+                      // control on hover (`.work-panel-tab:hover
+                      // .work-panel-tab-close`, styles/work-panel.css:314) —
+                      // revealing opacity is not enough when the control sits
+                      // outside the strip, so bring the whole box in first.
+                      onPointerEnter={() => revealTab(tab.id)}
+                      onContextMenu={(event) => {
+                        if (activeTab?.kind === "plugin") {
+                          openNativeTabMenu(event, tab.id, label);
+                          return;
+                        }
+                        const items: ContextMenuItem[] = [
+                          {
+                            id: "close-tab",
+                            label: t("panel.closeTab", { name: label }),
+                            onSelect: () => closeTabAndFocus(tab.id),
+                          },
+                          {
+                            id: "close-other-tabs",
+                            label: t("panel.closeOtherTabs"),
+                            disabled: tabs.length <= 1,
+                            separatorBefore: true,
+                            onSelect: () => closeOtherTabsAndFocus(tab.id),
+                          },
+                          {
+                            id: "close-all-tabs",
+                            label: t("panel.closeAllTabs"),
+                            onSelect: closeAllTabsAndFocus,
+                          },
+                        ];
+                        openTabContextMenu(event, {
+                          label: t("panel.tabsLabel"),
+                          items,
+                        });
+                      }}
                       key={tab.id}
                     >
                       <button
@@ -885,16 +1283,12 @@ function LocalWorkPanel({
                         tabIndex={selected ? 0 : -1}
                         aria-grabbed={draggingTabId === tab.id}
                         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+                        aria-label={iconOnly ? label : undefined}
                         className="work-panel-tab-button"
-                        title={tab.kind === "subagent" ? label : tab.resource ?? label}
+                        title={tabTooltip(tab, label, t, workstreamTitleOf)}
                         onPointerDown={(event) => beginTabReorder(event, tab.id)}
                         onDragStart={(event) => event.preventDefault()}
                         onClick={() => activateTab(tab.id)}
-                        onAuxClick={(event) => {
-                          if (event.button !== 1) return;
-                          event.preventDefault();
-                          closeTabAndFocus(tab.id);
-                        }}
                         onKeyDown={(event) => onTabKeyDown(event, tab.id)}
                       >
                         <Icon size={14} />
@@ -909,40 +1303,64 @@ function LocalWorkPanel({
                         aria-label={t("panel.closeTab", { name: label })}
                         title={t("panel.closeTab", { name: label })}
                         onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => closeTabAndFocus(tab.id)}
+                        onClick={() => closeTabAndFocus(tab.id, { holdWidths: true })}
                       >
                         <IconClose size={12} />
                       </button>
                     </div>
                   );
                 })}
+                {/* Right after the last tab; sticky at the right edge once the strip scrolls. */}
+                {projectContext ? (
+                  <ProjectNewTabMenu
+                    projectId={projectId}
+                    t={t}
+                    agentOpen={tabs.some((tab) => tab.kind === "project-agent")}
+                  />
+                ) : (
+                  <TooltipButton
+                    ref={newTabButtonRef}
+                    type="button"
+                    className="work-panel-new-tab work-panel-tab-plus"
+                    tooltip={t("panel.new.open")}
+                    ariaLabel={t("panel.new.open")}
+                    onClick={openNewWorkPanelTab}
+                  >
+                    <IconPlus size={16} />
+                  </TooltipButton>
+                )}
               </div>
           </div>
           <div className="work-panel-actions no-drag">
+            {onTogglePin ? (
               <TooltipButton
-                ref={newTabButtonRef}
                 type="button"
-                className="work-panel-new-tab"
-                tooltip={t("panel.new.open")}
-                ariaLabel={t("panel.new.open")}
-                onClick={openNewWorkPanelTab}
+                className="work-panel-pin edge-pin-btn"
+                tooltip={pinned ? t("nav.unpinWorkPanel") : t("nav.pinWorkPanel")}
+                ariaLabel={pinned ? t("nav.unpinWorkPanel") : t("nav.pinWorkPanel")}
+                aria-pressed={pinned}
+                data-nav="pin-work-panel"
+                onClick={onTogglePin}
               >
-                <IconPlus size={16} />
+                <IconPin size={15} />
               </TooltipButton>
-            <TooltipButton
-              type="button"
-              className="work-panel-maximize"
-              tooltip={t(maximized ? "panel.restore" : "panel.maximize")}
-              ariaLabel={t(maximized ? "panel.restore" : "panel.maximize")}
-              aria-pressed={maximized}
-              onClick={() => onToggleMaximize?.()}
-            >
-              {maximized ? (
-                <IconPanelRestore size={15} />
-              ) : (
-                <IconPanelMaximize size={15} />
-              )}
-            </TooltipButton>
+            ) : null}
+            {overlay ? null : (
+              <TooltipButton
+                type="button"
+                className="work-panel-maximize"
+                tooltip={t(maximized ? "panel.restore" : "panel.maximize")}
+                ariaLabel={t(maximized ? "panel.restore" : "panel.maximize")}
+                aria-pressed={maximized}
+                onClick={() => onToggleMaximize?.()}
+              >
+                {maximized ? (
+                  <IconPanelRestore size={15} />
+                ) : (
+                  <IconPanelMaximize size={15} />
+                )}
+              </TooltipButton>
+            )}
           </div>
         </header>
         <div className="work-panel-body">
@@ -957,6 +1375,39 @@ function LocalWorkPanel({
               <SubagentTranscriptTab delegationId={activeTab.resource ?? ""} />
             </div>
           )}
+          {activeTab?.kind === "sidechat" && (
+            <div
+              key={activeTab.id}
+              id={`work-panel-surface-${activeTab.id}`}
+              className="work-panel-tabpane"
+              role="tabpanel"
+              aria-labelledby={`work-panel-tab-${activeTab.id}`}
+            >
+              <SideChatTab tab={activeTab} />
+            </div>
+          )}
+          {activeTab?.kind === "project-agent" && activeTab.resource && (
+            <div
+              key={activeTab.id}
+              id={`work-panel-surface-${activeTab.id}`}
+              className="work-panel-tabpane"
+              role="tabpanel"
+              aria-labelledby={`work-panel-tab-${activeTab.id}`}
+            >
+              <ProjectAgentTab projectId={activeTab.resource} />
+            </div>
+          )}
+          {activeTab?.kind === "project-side" && activeTab.resource && (
+            <div
+              key={activeTab.id}
+              id={`work-panel-surface-${activeTab.id}`}
+              className="work-panel-tabpane"
+              role="tabpanel"
+              aria-labelledby={`work-panel-tab-${activeTab.id}`}
+            >
+              <ProjectSideTab sessionId={activeTab.resource} label={activeTab.label} />
+            </div>
+          )}
           {activeTab?.kind === "review" && (
             <div
               id={`work-panel-surface-${activeTab.id}`}
@@ -964,7 +1415,7 @@ function LocalWorkPanel({
               role="tabpanel"
               aria-labelledby={`work-panel-tab-${activeTab.id}`}
             >
-              <ReviewTab />
+              <ReviewTab projectId={projectContext ? projectId : undefined} />
             </div>
           )}
           {activeTab?.kind === "file" && (
@@ -1004,7 +1455,12 @@ function LocalWorkPanel({
                 </div>
               );
             })()}
-          {(!activeTab || activeTab.kind === "new") && (
+          {!activeTab && projectContext && (
+            <div className="work-panel-tabpane" data-testid="work-panel-empty">
+              <ProjectPanelEmpty contextKey={contextKey} />
+            </div>
+          )}
+          {(!activeTab || activeTab.kind === "new") && !(projectContext && !activeTab) && (
             <div
               className="work-panel-tabpane"
               data-testid="work-panel-empty"
@@ -1021,6 +1477,24 @@ function LocalWorkPanel({
                   role="group"
                   aria-label={t("panel.toolsAndPanels")}
                 >
+                  {canSideChat ? (
+                    <button
+                      type="button"
+                      className="work-panel-launcher-row"
+                      data-work-panel-launcher-item="side-chat"
+                      disabled={sideChatEmpty}
+                      title={sideChatEmpty ? t("workPanel.sideChatEmpty") : undefined}
+                      onClick={() => {
+                        const launcherId = activeTab?.kind === "new" ? activeTab.id : undefined;
+                        if (openWholeConversationSideChat() && launcherId) closeTab(launcherId);
+                      }}
+                    >
+                      <span className="work-panel-launcher-icon" aria-hidden>
+                        <IconChat size={16} />
+                      </span>
+                      <span className="work-panel-launcher-label">{t("workPanel.newSideChat")}</span>
+                    </button>
+                  ) : null}
                   {tools.map((item) => (
                     <button
                       key={item.id}
@@ -1047,6 +1521,7 @@ function LocalWorkPanel({
           )}
         </div>
       </div>
+      <ContextMenu state={tabContextMenu} onClose={closeTabContextMenu} />
     </aside>
   );
 }

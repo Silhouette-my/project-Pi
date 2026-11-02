@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/app-store";
 import {
@@ -7,14 +7,25 @@ import {
 } from "./project-agent-navigation";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 
+const requests = new Map<string, Promise<void>>();
+const listeners = new Set<() => void>();
+const notify = () => {
+  for (const listener of listeners) listener();
+};
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
+
 /** Reuse the canonical project discussion and the existing chat/queue surface. */
 export function useProjectAgent(projectId: string) {
   const { t } = useTranslation();
   const { action, busy: workflowBusy } = useProjectWorkflow();
-  const [busy, setBusy] = useState(false);
+  const busy = useSyncExternalStore(subscribe, () => requests.has(projectId));
   const [error, setError] = useState<string | null>(null);
   const current = useRef<string | null>(projectId);
-  const pending = useRef<Promise<void> | null>(null);
   useEffect(() => {
     current.current = projectId;
     return () => {
@@ -23,9 +34,9 @@ export function useProjectAgent(projectId: string) {
   }, [projectId]);
   const open = useCallback(
     (prompt?: string): Promise<void> => {
-      if (pending.current) return pending.current;
+      const existing = requests.get(projectId);
+      if (existing) return existing;
       setError(null);
-      setBusy(true);
       const request = openProjectAgentConversation({
         open: () => action({ kind: "agent.open", projectId }),
         getState: useAppStore.getState,
@@ -43,10 +54,11 @@ export function useProjectAgent(projectId: string) {
           throw cause;
         })
         .finally(() => {
-          pending.current = null;
-          if (current.current === projectId) setBusy(false);
+          requests.delete(projectId);
+          notify();
         });
-      pending.current = request;
+      requests.set(projectId, request);
+      notify();
       return request;
     },
     [action, projectId, t],

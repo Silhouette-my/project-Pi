@@ -3,7 +3,22 @@ export type WorkPanelTabKind =
   | "review"
   | "file"
   | "plugin"
-  | "subagent";
+  | "subagent"
+  | "sidechat"
+  | "project-agent"
+  | "project-side";
+
+/**
+ * The anchor of a chat side chat (ADR side-chats-on-detached-transcripts).
+ * The tab owns it so the draft needs no registry: `resource` stays empty until
+ * the first Send forks the child, then holds the child session id.
+ */
+export type SideChatAnchor = {
+  parentSessionId: string;
+  anchorMessageId: string;
+  /** One-line excerpt of the anchored message, captured at open time. */
+  excerpt: string;
+};
 
 export type WorkPanelTab = {
   id: string;
@@ -18,6 +33,8 @@ export type WorkPanelTab = {
   /** Optional 1-based line/column for host file tabs (chat `path:line` refs). */
   line?: number;
   column?: number;
+  /** Present on `sidechat` tabs only. */
+  sideChat?: SideChatAnchor;
 };
 
 export type WorkPanelTabsState = {
@@ -88,7 +105,10 @@ export function switchWorkPanelContextState(
 }
 
 export function toolWorkPanelTab(
-  kind: Exclude<WorkPanelTabKind, "new" | "file" | "plugin" | "subagent">,
+  kind: Exclude<
+    WorkPanelTabKind,
+    "new" | "file" | "plugin" | "subagent" | "sidechat" | "project-agent" | "project-side"
+  >,
 ): WorkPanelTab {
   return { id: kind, kind };
 }
@@ -136,6 +156,46 @@ export function subagentWorkPanelTab(
     kind: "subagent",
     resource: delegationId,
     ...(agentName ? { label: agentName } : {}),
+  };
+}
+
+/**
+ * A side chat opened from one message (ADR side-chats-on-detached-transcripts).
+ *
+ * Keyed by parent session and anchor message, so asking again from the same
+ * message reuses its tab. It is created only by the explicit user action, so
+ * ADR 0033 still holds: no agent event opens it.
+ */
+export function sideChatWorkPanelTab(
+  anchor: SideChatAnchor,
+  label: string,
+  childSessionId?: string,
+  /** Makes the tab new each time (a side chat about the whole conversation). */
+  uniqueSuffix?: string,
+): WorkPanelTab {
+  return {
+    id: `sidechat:${anchor.parentSessionId}:${anchor.anchorMessageId}${uniqueSuffix ? `:${uniqueSuffix}` : ""}`,
+    kind: "sidechat",
+    label,
+    ...(childSessionId ? { resource: childSessionId } : {}),
+    sideChat: anchor,
+  };
+}
+
+export function sideChatTabChildId(tab: WorkPanelTab | undefined | null): string | undefined {
+  return tab?.kind === "sidechat" ? tab.resource || undefined : undefined;
+}
+
+/** Replace fields of one tab in place, keeping order and the active tab. */
+export function patchWorkPanelTabState(
+  state: WorkPanelTabsState,
+  tabId: string,
+  patch: Partial<WorkPanelTab>,
+): WorkPanelTabsState {
+  if (!state.tabs.some((tab) => tab.id === tabId)) return state;
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab)),
   };
 }
 
@@ -248,6 +308,10 @@ export function isKnownWorkPanelTab(tab: WorkPanelTab): boolean {
     Boolean(tab) &&
     (tab.kind === "new" || tab.kind === "review" ||
       tab.kind === "file" || tab.kind === "plugin" ||
+      (tab.kind === "sidechat" && Boolean(tab.sideChat)) ||
+      // Project tabs are meaningless without the project / session they name.
+      ((tab.kind === "project-agent" || tab.kind === "project-side") &&
+        Boolean(tab.resource)) ||
       tab.kind === "subagent")
   );
 }
@@ -407,6 +471,24 @@ export function closeWorkPanelTabState(
     tabs,
     activeTabId: tabs[Math.min(index, tabs.length - 1)]?.id ?? null,
   };
+}
+
+export function closeOtherWorkPanelTabsState(
+  state: WorkPanelTabsState,
+  tabId: string,
+): WorkPanelTabsState {
+  const tab = state.tabs.find((item) => item.id === tabId);
+  if (!tab) return state;
+  if (state.tabs.length === 1 && state.activeTabId === tabId) return state;
+  return { tabs: [tab], activeTabId: tab.id };
+}
+
+export function closeAllWorkPanelTabsState(
+  state: WorkPanelTabsState,
+): WorkPanelTabsState {
+  return state.tabs.length === 0 && state.activeTabId === null
+    ? state
+    : { tabs: [], activeTabId: null };
 }
 
 /**

@@ -150,8 +150,8 @@ test("the top bar's collapsed lead-in tracks the dock instead of snapping", () =
   assert.match(leadBlock, /position:\s*absolute/);
   // `left` and the title's `padding-left` must cover the same distance, or the
   // button drifts onto the title mid-transition even though both endpoints look
-  // right. Both are derived from --ct-lead-inset, 36px apart.
-  assert.match(leadBlock, /left:\s*calc\(var\(--ct-lead-inset\) - 36px\)/);
+  // right. Both are derived from --ct-lead-inset, 68px apart.
+  assert.match(leadBlock, /left:\s*calc\(var\(--ct-lead-inset\) - 68px\)/);
   assert.doesNotMatch(leadBlock, /overflow:\s*hidden/);
   assert.doesNotMatch(leadBlock, /width:\s*0/);
   assert.match(leadBlock, /opacity:\s*0/);
@@ -172,7 +172,7 @@ test("the top bar's collapsed lead-in tracks the dock instead of snapping", () =
 
   // Because the slot is out of flow, the title's collapsed offset must be
   // derived from the same inset the button is positioned at, or the two drift.
-  assert.match(collapsedBlock, /padding-left:\s*calc\(var\(--ct-lead-inset\) \+ 36px\)/);
+  assert.match(collapsedBlock, /padding-left:\s*calc\(var\(--ct-lead-inset\) \+ 68px\)/);
   const topbarBaseBlock =
     globalStyles.match(/\.conversation-topbar\s*\{[\s\S]*?\}/)?.[0] ?? "";
   assert.match(topbarBaseBlock, /--ct-lead-inset:\s*12px/);

@@ -265,7 +265,7 @@ test("file picker exposes files only", () => {
 test("large image attachments avoid whole-file startup reads", () => {
   assert.match(attachments, /async function hashFile\(path: string\)/);
   assert.match(attachments, /createReadStream\(path\)/);
-  assert.match(attachments, /const inline = supportsVision && size <= MAX_INLINE_IMAGE_BYTES/);
+  assert.match(attachments, /const read = supportsVision && size <= MAX_INLINE_IMAGE_BYTES/);
   assert.match(attachments, /await copyFile\(source, target, fsConstants\.COPYFILE_EXCL\)/);
   assert.doesNotMatch(attachments, /const bytes = readFileSync\(source\.absolute\)/);
   assert.match(history, /const size = \(await stat\(canonical\)\)\.size/);
@@ -345,7 +345,7 @@ test("a pasted session link becomes an inline chip with the link as its text", (
     composer,
     /createFileReference\(span\.id, sessionChipName\(span\.id\), ownerSessionId, \{\s*kind: "session",\s*token,/,
   );
-  assert.match(composer, /return `\$\{t\("chat\.sessionReference"\)\} · \$\{title \|\| id\.slice\(0, 8\)\}`;/);
+  assert.match(composer, /return title \|\| id\.slice\(0, 8\);/);
   // The chip opens its conversation, and its token serializes back to the link.
   assert.match(composer, /if \(reference\.kind === "session"\) return "session";/);
   assert.match(composer, /chip\.dataset\.action = editableText[\s\S]*?"open-session-reference"/);

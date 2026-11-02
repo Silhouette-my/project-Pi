@@ -1,5 +1,4 @@
 import { isRemoteSession, sessionAllows } from "../lib/remote-session-safety";
-import { inheritedSessionModelBinding } from "../lib/session-model";
 import {
   useEffect,
   useLayoutEffect,
@@ -13,8 +12,6 @@ import type {
   PermissionMode,
 } from "@pi-desktop/shared";
 import {
-  initialThinkingLevelForBinding,
-  initialThinkingLevelForUnmatchedModel,
   imageGenerationBindings,
   isImageGenerationModel,
   normalizeLargePasteThreshold,
@@ -24,24 +21,17 @@ import { latestTurnContextInspector } from "../lib/latest-turn-context";
 import { isActivePlanExecution } from "../lib/plan-mode-state";
 import { headAsk, queuedAskCount } from "../lib/pending-asks";
 import type { QueuedPrompt } from "../lib/queued-prompts";
-import { composerModelDisplayName, sameComposerModelId } from "../lib/composer-models";
-import {
-  resolveComposerThinkingProvider,
-} from "../lib/session-thinking";
+import { sessionFastModeActive } from "../lib/fast-mode-command";
 import { ComposerAutocomplete } from "./ComposerAutocomplete";
 import { AskToolCard } from "./AskToolCard";
 import { PlanApprovalBar } from "./PlanApprovalBar";
-import { TodoDock } from "./TodoDock";
-import { BackgroundTasksBar } from "./BackgroundTasksBar";
+import { TaskDock } from "./TaskDock";
 import {
   COMPOSER_MAX_VISIBLE_ROWS,
   COMPOSER_MIN_HEIGHT_PX,
   PLACEHOLDER_KEYS,
   cssPixels,
   isPermissionMode,
-  isThinkingLevel,
-  thinkingLevelForProvider,
-  thinkingProviderForModel,
   type ComposerPrefill,
 } from "../features/chat/composer/model";
 import { editorSelectionRange } from "../features/chat/composer/editor";
@@ -56,6 +46,7 @@ import { useComposerSubmit } from "../features/chat/composer/hooks/useComposerSu
 import { useComposerTransforms } from "../features/chat/composer/hooks/useComposerTransforms";
 import { ComposerInput } from "../features/chat/composer/ComposerInput";
 import { useComposerModelMenu } from "../features/chat/composer/hooks/useComposerModelMenu";
+import { useSessionModelSelection } from "../features/chat/composer/hooks/useSessionModelSelection";
 import { useVoiceInput } from "../features/voice/useVoiceInput";
 import { ComposerToolbar } from "../features/chat/composer/ComposerToolbar";
 import { ComposerStatus } from "../features/chat/composer/ComposerStatus";
@@ -345,59 +336,13 @@ export function Composer({
       : sessionPermissionMode;
   const composerPermissionMode: Exclude<PermissionMode, "inherit"> =
     mode === "goal" ? "auto" : effectivePermissionMode;
-  const recentModels = useAppStore((s) => s.recentModels);
-  const selectedModel = remoteSession ? { providerId: activeSession?.providerId, modelId: activeSession?.modelId } : inheritedSessionModelBinding({
-    draft: activeSession ?? draftConfiguration,
-    settings,
-    providers,
-    recentModels,
+  const { provider, modelId, thinkingProvider, thinkingLevel, modelLabel } = useSessionModelSelection({
+    session: activeSession,
+    draft: draftConfiguration,
+    remote: remoteSession,
+    t,
   });
-  const provider = providers.find(candidate => candidate.id === selectedModel.providerId);
-  const modelId = selectedModel.modelId;
-  const selectedModelCatalog = provider ? providerModels[provider.id] : undefined;
-  const catalogThinkingProvider = thinkingProviderForModel(
-    provider,
-    modelId,
-    selectedModelCatalog,
-  );
-  const thinkingProvider = resolveComposerThinkingProvider({
-    provider,
-    modelId,
-    activeSession,
-    catalogThinkingProvider,
-  });
-  const selectedBinding = provider?.models.find((candidate) =>
-    sameComposerModelId(candidate.id, modelId ?? ""),
-  );
-  const selectedModelInfo = selectedModelCatalog?.find((candidate) =>
-    sameComposerModelId(candidate.modelId, modelId ?? ""),
-  );
-  // A draft without a session starts at the selected model's stored default
-  // thinking level, clamped onto that binding's enabled ladder.
-  const draftThinkingLevel = selectedModelInfo?.catalogSource === "models.dev"
-    ? initialThinkingLevelForBinding(
-        selectedBinding,
-        thinkingProvider?.supportedThinkingLevels,
-      )
-    : initialThinkingLevelForUnmatchedModel(
-        selectedBinding,
-        thinkingProvider?.supportedThinkingLevels,
-      );
-  const sessionThinkingLevel =
-    activeSession?.thinkingLevel ??
-    (!activeSession ? draftConfiguration?.thinkingLevel : undefined) ??
-    draftThinkingLevel;
-  const configuredThinkingLevel = isThinkingLevel(sessionThinkingLevel)
-    ? sessionThinkingLevel
-    : "off";
-  const thinkingLevel = thinkingLevelForProvider(
-    thinkingProvider,
-    configuredThinkingLevel,
-  );
   const thinkingLabel = thinkingLevel;
-  const modelLabel = modelId
-    ? composerModelDisplayName(provider, modelId)
-    : t("chat.model");
   const modelMenu = useComposerModelMenu({
     configureActiveSession,
     mode,
@@ -408,10 +353,10 @@ export function Composer({
     thinkingLevel,
     controlsBlocked,
   });
-  // ChatGPT chat-mode instruction presets (spec 03-runtime/11) are a
-  // per-session setting on local sessions only.
+  // Chat instructions (spec 03-runtime/11) are a per-session setting.
   const chatInstructionMenu = useChatInstructionMenu({
-    enabled: !nativeSession && !remoteSession && provider?.apiStyle === "chatgpt_conversation",
+    remote: remoteSession, native: nativeSession, apiStyle: provider?.apiStyle,
+    session: activeSession, draft: draftConfiguration,
     mode,
     providerId: provider?.id,
     modelId,
@@ -463,6 +408,8 @@ export function Composer({
     t,
     sendPrompt,
     steerPrompt,
+    sendQueuedNow,
+    queuedPrompts,
     showToast,
     recordHistory: inputHistory.record,
     draft: {
@@ -545,8 +492,10 @@ export function Composer({
       data-composer-dock={variant}
     >
       <div className="composer-stack">
-        {activeSessionId && localToolsAllowed ? <TodoDock sessionId={activeSessionId} /> : null}
-        <BackgroundTasksBar />
+        {/* One container for todo and background tasks: the tabs live in the
+            header, so the gate now covers both the way it already covered the
+            todo dock. */}
+        {activeSessionId && localToolsAllowed ? <TaskDock sessionId={activeSessionId} /> : null}
         {planCheckpoint?.status === "pending" ? (
           <PlanApprovalBar proposal={planCheckpoint} />
         ) : null}
@@ -604,9 +553,9 @@ export function Composer({
             onAcceptCompletion={completions.acceptCompletion}
             onSubmit={(steering) => void submitFromComposer(steering)}
             onInsertNewline={insertNewlineInEditor}
-            onInput={(source, caret) => {
+            onInput={(source, caret, composing) => {
               inputHistory.exitBrowsing();
-              completions.handleInput(source, caret);
+              completions.handleInput(source, caret, composing);
             }}
             onHistoryNavigate={inputHistory.navigate}
             onCompositionStart={() => setComposing(true)}
@@ -645,9 +594,9 @@ export function Composer({
             showToast={showToast}
             modelMenu={modelMenu}
             chatInstructionMenu={chatInstructionMenu}
-            chatInstructionPreset={(activeSession ?? draftConfiguration)?.promptPreset ?? null}
             modelLabel={modelLabel}
             thinkingLabel={thinkingLabel}
+            modelFastMode={sessionFastModeActive(provider, modelId, activeSession ?? draftConfiguration)}
             contextUsage={composerContextUsage ?? null}
             value={value}
             modelReady={modelReady}

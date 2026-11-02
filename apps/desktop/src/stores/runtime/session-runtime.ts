@@ -43,7 +43,7 @@ export type SessionConfiguration = Pick<
   SessionSummary,
   "mode" | "providerId" | "modelId" | "thinkingLevel"
 > &
-  Partial<Pick<SessionSummary, "permissionMode">> & {
+  Partial<Pick<SessionSummary, "permissionMode" | "fastMode">> & {
     // ChatGPT chat-mode instruction preset id (spec 03-runtime/11). null
     // clears it back to the built-in chat persona; mergeSessionConfiguration
     // forwards null while skipping only undefined.
@@ -91,7 +91,7 @@ export type SessionRuntime = {
   retractOptimisticUserMessage: (sessionId: string, message: UiMessage) => void;
   cacheBackgroundTranscriptEvent: (envelope: AgentEventEnvelope) => void;
   mergeSessionConfiguration: (
-    current: SessionConfiguration | undefined,
+    current: Partial<SessionConfiguration> | undefined,
     next: SessionConfiguration,
   ) => SessionConfiguration;
   queueWorkspaceAlignment: <T>(task: () => Promise<T>) => Promise<T>;
@@ -244,6 +244,15 @@ export function createSessionRuntime({ get, set }: StoreAccess): SessionRuntime 
         upsertLiveSessionMessage(cached, message),
       );
     }
+    // A detached surface (project Agent dock) reads the retained snapshot.
+    if (state.retainedTranscripts[sessionId]) {
+      set((current) => current.retainedTranscripts[sessionId]
+        ? { retainedTranscripts: {
+            ...current.retainedTranscripts,
+            [sessionId]: upsertLiveSessionMessage(current.retainedTranscripts[sessionId], message),
+          } }
+        : current);
+    }
   }
 
   function retractOptimisticUserMessage(sessionId: string, message: UiMessage): void {
@@ -262,6 +271,17 @@ export function createSessionRuntime({ get, set }: StoreAccess): SessionRuntime 
         sessionId,
         removeLiveSessionMessage(cached, message.id),
       );
+    }
+    if (state.retainedTranscripts[sessionId]?.some((item) => item.id === message.id)) {
+      set((current) => {
+        const retained = current.retainedTranscripts[sessionId];
+        return retained
+          ? { retainedTranscripts: {
+              ...current.retainedTranscripts,
+              [sessionId]: removeLiveSessionMessage(retained, message.id),
+            } }
+          : current;
+      });
     }
   }
 
@@ -377,6 +397,24 @@ export function createSessionRuntime({ get, set }: StoreAccess): SessionRuntime 
       next,
       sessionHistoryCache.get(sessionId) ?? state.sessionHistory[sessionId],
     );
+    // A detached surface (project Agent dock) shows this session while another
+    // one is active, so its snapshot follows the stream. Hidden chat panes keep
+    // their last painted snapshot and refresh when they become visible again.
+    if (
+      state.retainedTranscripts[sessionId] &&
+      !state.retainedSessionIds.includes(sessionId)
+    ) {
+      set((latest) =>
+        latest.retainedTranscripts[sessionId] && !latest.retainedSessionIds.includes(sessionId)
+          ? {
+              retainedTranscripts: {
+                ...latest.retainedTranscripts,
+                [sessionId]: next,
+              },
+            }
+          : latest,
+      );
+    }
   }
 
   function queueWorkspaceAlignment<T>(task: () => Promise<T>): Promise<T> {

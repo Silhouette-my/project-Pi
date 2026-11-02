@@ -56,7 +56,7 @@ impl From<anyhow::Error> for Error {
 }
 
 fn empty() -> Value {
-    json!({"schemaVersion":1,"revision":0,"projectAgents":[],"folders":[],"navigation":[],"expandedIds":[],
+    json!({"schemaVersion":1,"revision":0,"projectAgents":[],"projectNavigation":[],"categories":[],"folders":[],"navigation":[],"expandedIds":[],
         "workstreams":[],"conversations":[],"resources":[],"decisions":[],"authorizations":[],
         "runs":[],"artifacts":[],"evidence":[],"feedback":[],"deliveries":[]})
 }
@@ -84,6 +84,13 @@ fn load(db: &Database) -> Result<Value> {
             // Additive v1 extension: pre-Agent snapshots have no project mapping.
             if value.get("projectAgents").is_none() {
                 value["projectAgents"] = json!([]);
+            }
+            if value.get("projectNavigation").is_none() {
+                value["projectNavigation"] = json!([]);
+            }
+            // Additive v1 extension: user-defined sidebar categories.
+            if value.get("categories").is_none() {
+                value["categories"] = json!([]);
             }
             Ok(value)
         }

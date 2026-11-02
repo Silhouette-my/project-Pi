@@ -1,6 +1,7 @@
 import { transcriptLongHistoryProbe as runLongHistoryProbe } from "./transcript-long-history";
 import { transcriptEditProbe } from "./transcript-edit";
 import { turnProcessProbe } from "./turn-process";
+import { transcriptAutoCollapseProbe } from "./transcript-auto-collapse";
 import { transcriptStatusProbe } from "./transcript-status";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -64,7 +65,7 @@ async function markdownLinkInteractionProbe(
     useAppStore.setState({
       activeSessionId: "markdown-link-probe",
       page: "chat",
-      settings: { ...initialState.settings, linkOpenTarget: "workpanel" },
+      settings: { ...initialState.settings, linkOpenTarget: "workpanel", transcriptDisplayMode: "command-first" },
       openUrlInWorkPanel: (url) => openedUrls.push(url),
     });
     flushSync(() =>
@@ -362,6 +363,7 @@ globalThis.resetContextOverflowRecoveryProbe = async () => {
       enterToSend: true,
       onboardingDismissed: false,
       smoothStreaming: false,
+      transcriptDisplayMode: "command-first",
     },
   });
 };
@@ -424,6 +426,7 @@ globalThis.transcriptRenderProbe = async () => {
       enterToSend: true,
       onboardingDismissed: false,
       smoothStreaming: false,
+      transcriptDisplayMode: "command-first",
     },
   });
   const container = document.createElement("div");
@@ -650,6 +653,7 @@ globalThis.transcriptRenderProbe = async () => {
     const markdownLinks = await markdownLinkInteractionProbe(i18n);
     const contextMenuSubmenu = await contextMenuSubmenuInteractionProbe();
     const turnProcess = await turnProcessProbe();
+    const autoCollapse = await transcriptAutoCollapseProbe();
     return {
       ok: statusLifecycle.ok && markdownLinks.ok && contextMenuSubmenu.ok && turnProcess.ok,
       statusLifecycle,
@@ -662,6 +666,7 @@ globalThis.transcriptRenderProbe = async () => {
       taskLifecycleUpdated: true,
       taskTimingUpdated: true,
       turnProcess,
+      autoCollapse,
       messageEditing: await transcriptEditProbe(),
       textUpdateDurationMs,
     };

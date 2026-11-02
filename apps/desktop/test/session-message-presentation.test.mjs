@@ -57,6 +57,7 @@ function loadComponent(name, extras = {}) {
       useChatTextActions: () => ({ copyText: () => {}, selectText: () => {} }),
     },
     "./ActionBarSlots": { ActionSlotSide: () => null },
+    "../side-chat/SideChatAction": { SideChatAction: () => null },
     "../../../plugins/renderer-slots/slot-message": { slotMessage: () => undefined },
     // The row renders the user's own order through the shared placement helper.
     "@pi-desktop/shared": { splitInlineContent },

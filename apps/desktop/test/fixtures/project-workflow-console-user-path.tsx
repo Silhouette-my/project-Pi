@@ -23,6 +23,7 @@ import {
   useProjectWorkflow,
 } from "../../src/features/project-workflow/useProjectWorkflow";
 import { ProjectConsole } from "../../src/features/project-workflow/ProjectConsole";
+import { ProjectAgentTab } from "../../src/features/project-panel/ProjectAgentTab";
 import { useAppStore } from "../../src/stores/app-store";
 import { useUnfiledNewSession } from "../../src/features/project-workflow/useUnfiledNewSession";
 import "../../src/styles/globals.css";
@@ -336,6 +337,19 @@ function RevisionProbe() {
     </>
   );
 }
+/**
+ * Stands in for the right work panel, which the console no longer renders: it
+ * shows the project Agent tab once the project's panel context holds one,
+ * exactly what WorkPanel does for a `project-agent` tab.
+ */
+function WorkPanelProbe() {
+  const tab = useAppStore((state) => state.workPanelTabs.find((item) => item.kind === "project-agent"));
+  return tab?.resource ? (
+    <aside data-work-panel-probe style={{ width: 340, display: "flex", flexDirection: "column" }}>
+      <ProjectAgentTab projectId={tab.resource} />
+    </aside>
+  ) : null;
+}
 const root = createRoot(document.getElementById("root")!);
 function mount() {
   flushSync(() =>
@@ -343,6 +357,7 @@ function mount() {
       <ProjectWorkflowProvider>
         <RevisionProbe />
         <ProjectConsole projectId="project-1" />
+        <WorkPanelProbe />
       </ProjectWorkflowProvider>,
     ),
   );
@@ -466,11 +481,12 @@ Object.assign(window, {
     const edit = document.querySelector('[data-workflow="workstream-editor"]')!;
     field("workflow.title", edit).focus();
     check(document.activeElement === field("workflow.title", edit), "Title not keyboard-focusable");
-    fill("workflow.nextAction", "Review exact candidate and preserve reading position", edit);
+    check(!edit.querySelector("select, input[type='number'], fieldset"), "Task editor still asks users to schedule or assign work");
+    fill("workflow.goal", "Review exact candidate and preserve reading position", edit);
     submit(edit);
     await until(
       () =>
-        durable.workstreams[0].nextAction ===
+        durable.workstreams[0].goal ===
         "Review exact candidate and preserve reading position",
       "Edit not persisted through IPC",
     );
@@ -480,6 +496,8 @@ Object.assign(window, {
     const concurrentEditor = document.querySelector('[data-workflow="workstream-editor"]')!;
     fill("workflow.title", longTitle + " (reviewed)", concurrentEditor);
     durable.workstreams[0].nextAction = "Background checkpoint must survive title editing";
+    durable.workstreams[0].owner = { kind: "agent", ref: "updated-agent-owner" };
+    durable.workstreams[0].priority = 17;
     durable.workstreams[0].revision++;
     durable.revision++;
     emit();
@@ -503,10 +521,15 @@ Object.assign(window, {
       titleMutation.kind === "workstream.update" && !("nextAction" in titleMutation.patch),
       "Editor submitted an untouched stale field",
     );
+    check(titleMutation.kind === "workstream.update" &&
+      ["owner", "priority", "dependencyIds"].every((key) => !(key in titleMutation.patch)),
+      "Task editor submitted agent-managed fields");
+    check(durable.workstreams[0].owner.ref === "updated-agent-owner" && durable.workstreams[0].priority === 17,
+      "Task editing reset existing assignment or scheduling metadata");
     click("workflow.editWorkstream", detail());
     const conflictingEditor = document.querySelector('[data-workflow="workstream-editor"]')!;
-    fill("workflow.nextAction", "User draft from old checkpoint", conflictingEditor);
-    durable.workstreams[0].nextAction = "New authoritative checkpoint";
+    fill("workflow.goal", "User draft from old checkpoint", conflictingEditor);
+    durable.workstreams[0].goal = "New authoritative checkpoint";
     durable.workstreams[0].revision++;
     durable.revision++;
     emit();
@@ -524,33 +547,79 @@ Object.assign(window, {
     );
     check(
       mutations.length === beforeConflict &&
-        durable.workstreams[0].nextAction === "New authoritative checkpoint",
+        durable.workstreams[0].goal === "New authoritative checkpoint",
       "Stale field escaped the editor",
     );
     click("workflow.retry", conflictingEditor);
     check(
-      field("workflow.nextAction", conflictingEditor).value === "New authoritative checkpoint",
+      field("workflow.goal", conflictingEditor).value === "New authoritative checkpoint",
       "Reload did not restore current field",
     );
     click("workflow.close", conflictingEditor);
     click("workflow.newWorkstream");
     const create = document.querySelector('[data-workflow="workstream-editor"]')!;
     check(create.closest('[role="dialog"][aria-modal="true"]'), "Work editor was not a modal dialog");
-    field("workflow.title", create).focus();
-    flushSync(() => field("workflow.title", create).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+    check(document.activeElement === field("workflow.goal", create), "New task does not focus its description");
+    check(!create.querySelector("details[open]"), "Optional task details should start collapsed");
+    const visibleTaskInputs = () => [...create.querySelectorAll<HTMLElement>("input, textarea, select")]
+      .filter((element) => element.getClientRects().length > 0);
+    check(visibleTaskInputs().length === 1 && visibleTaskInputs()[0] === field("workflow.goal", create),
+      "Collapsed task form still exposes optional inputs");
+    flushSync(() => create.querySelector("summary")!.click());
+    check(visibleTaskInputs().length === 3, "Task details did not reveal name and acceptance");
+    flushSync(() => create.querySelector("summary")!.click());
+    check(visibleTaskInputs().length === 1, "Closing task details did not hide optional inputs");
+    field("workflow.goal", create).focus();
+    check(!create.querySelector("select, input[type='number'], fieldset"), "New task asks users for assignment, priority or dependencies");
+    flushSync(() => field("workflow.goal", create).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
     check(document.activeElement === findButton("workflow.close", create), "Dialog focus escaped backwards");
     flushSync(() => findButton("workflow.close", create).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })));
-    check(document.activeElement === field("workflow.title", create), "Dialog focus escaped forwards");
-    fill("workflow.title", "Independent validation", create);
-    fill("workflow.goal", "Validate after restart", create);
-    fill("workflow.acceptance", "Reload restores state", create);
-    fill("workflow.owner", "validation-owner", create);
+    check(document.activeElement === field("workflow.goal", create), "Dialog focus escaped forwards");
+    fill("workflow.goal", "Validate after restart\nKeep the current task context.", create);
+    check(!(field("workflow.acceptance", create) as HTMLTextAreaElement).required, "New task still requires acceptance");
     submit(create);
     await until(() => durable.workstreams.length === 2, "Workstream creation missing");
     await until(
       () => !document.querySelector('[data-workflow="workstream-editor"]'),
       "Creation did not settle",
     );
+    const sessionTask = durable.workstreams[1];
+    check(sessionTask.executionMode === "session" && sessionTask.acceptance.length === 0, "New task did not preserve lightweight semantics");
+    check(sessionTask.title === "Validate after restart", "Task title was not generated from its description");
+    check(sessionTask.owner.kind === "user" && sessionTask.owner.ref === "user" && sessionTask.priority === 0 && sessionTask.dependencyIds.length === 0 && sessionTask.nextAction === "", "New task defaults require user scheduling");
+    const sessionDetail = () => document.querySelector(`[data-workstream-id="${sessionTask.id}"]`)!;
+    await until(sessionDetail, "New task detail missing");
+    check(![...sessionDetail().querySelectorAll("button")].some((button) => button.textContent === t("workflow.authority")), "New task exposes a second authorization form");
+    check(!sessionDetail().textContent?.includes(t("workflow.noCandidate")), "New task requires a candidate");
+    check(!sessionDetail().querySelector(".workflow-detail-outputs"), "New task exposes an empty evidence section");
+    check(!findButton("workflow.start", sessionDetail()).disabled, "New task cannot start with its available Agent conversation");
+    click("workflow.start", sessionDetail());
+    await until(() => actions.at(-1)?.kind === "start", "New task start missing");
+    const sessionStart = actions.at(-1)!;
+    check(sessionStart.kind === "start" && sessionStart.sessionId === "main-chat" && !sessionStart.authorizationId, "New task failed to reuse session without Workflow authority");
+    await until(() => !findButton("workflow.discuss", sessionDetail()).disabled, "New task start stayed busy");
+    click("workflow.newSide", sessionDetail());
+    const sessionSide = document.querySelector('[data-workflow="side-editor"]')!;
+    fill("workflow.purpose", "work", sessionSide);
+    fill("workflow.assignment", "Use the selected Agent configuration", sessionSide);
+    check(!findButton("workflow.createSide", sessionSide).disabled, "New side work requires a legacy grant");
+    submit(sessionSide);
+    await until(() => !document.querySelector('[data-workflow="side-editor"]'), "New side work did not settle");
+    const sessionSideAction = actions.at(-1)!;
+    check(sessionSideAction.kind === "side.create" && sessionSideAction.sourceSessionId === "main-chat" && !sessionSideAction.authorizationId, "New side work changed session authority");
+    click("workflow.editWorkstream", sessionDetail());
+    const optionalEditor = document.querySelector('[data-workflow="workstream-editor"]')!;
+    fill("workflow.acceptance", "Optional user review", optionalEditor);
+    submit(optionalEditor);
+    await until(() => !document.querySelector('[data-workflow="workstream-editor"]'), "Optional acceptance edit did not settle");
+    check(durable.workstreams[1].executionMode === "session", "Editing changed execution mode");
+    durable.workstreams[1].status = "completed";
+    durable.workstreams[1].revision++;
+    durable.revision++;
+    emit();
+    await until(() => sessionDetail()?.textContent?.includes(t("workflow.agentFinished")), "Agent completion label missing");
+    check(durable.workstreams[1].acceptance[0].status === "pending", "Agent completion fabricated acceptance");
+    check(sessionDetail().textContent?.includes(t("workflow.agentFinishedHint")), "Agent completion meaning is not visible");
     await selectPrimary();
     click("workflow.authority", detail());
     const authority = document.querySelector('[data-workflow="authorization-editor"]')!;
@@ -619,6 +688,15 @@ Object.assign(window, {
       );
     }
     click("workflow.overview");
+    // The Agent lives in the right work panel's project context; the header
+    // entry asks the panel to show it.
+    const openDock = () => {
+      if (document.querySelector('[data-workflow="project-intent"]')) return true;
+      const toggle = document.querySelector<HTMLButtonElement>("[data-project-agent-dock-toggle]");
+      if (toggle && !toggle.disabled) flushSync(() => toggle.click());
+      return Boolean(document.querySelector('[data-workflow="project-intent"]'));
+    };
+    await until(openDock, "Project Agent dock did not open");
     const intent = document.querySelector('[data-workflow="project-intent"]')!;
     check(!intent.querySelector("select"), "Project Agent required a workstream");
     fill("workflow.intentText", "Review a new direction", intent);
@@ -638,7 +716,9 @@ Object.assign(window, {
     flushSync(() => root.render(null));
     useAppStore.setState({ page: "project", projectConsoleId: "project-1", activeSessionId: null });
     mount();
-    await until(() => document.querySelector('[data-workflow="project-intent"]'), "Project overview missing after remount");
+    await until(openDock, "Project overview missing after remount");
+    // Sending needs the reloaded snapshot; the Agent tab says so until it arrives.
+    await until(() => !document.querySelector(".detached-conversation-notice"), "Agent tab stayed unavailable after remount");
     const restoredIntent = document.querySelector('[data-workflow="project-intent"]')!;
     check(field("workflow.intentText", restoredIntent).value === "Review a new direction", "Remount discarded project draft");
     rejectSend = false;
@@ -647,7 +727,8 @@ Object.assign(window, {
     check(sent.every((item) => item.target === "project-agent"), "Project prompt used unrelated active chat");
     check(actions.at(-1)?.kind === "agent.open", "Project Agent used fake workstream action");
     useAppStore.setState({ page: "project", projectConsoleId: "project-1", activeSessionId: null, refreshSessions: originals.refreshSessions, selectSession: originals.selectSession, sendPrompt: originals.sendPrompt });
-    click("workflow.artifacts");
+    // Outputs and evidence live in the workstream detail rather than a tab.
+    await selectPrimary();
     await until(
       () => document.querySelector('[data-workflow-artifact="candidate-7"]'),
       "Candidate missing",
@@ -691,12 +772,13 @@ Object.assign(window, {
     // Boundary rejection must remain visible and must not fabricate a mutation.
     click("workflow.editWorkstream", detail());
     const rejectedEditor = document.querySelector('[data-workflow="workstream-editor"]')!;
-    fill("workflow.owner", "must-not-apply", rejectedEditor);
+    const priorGoal = durable.workstreams[0].goal;
+    fill("workflow.goal", "must-not-apply", rejectedEditor);
     rejectMutation = true;
     submit(rejectedEditor);
     await until(() => document.querySelector('[role="alert"]'), "Mutation rejection hidden");
     check(
-      durable.workstreams[0].owner.ref === "continuity-owner",
+      durable.workstreams[0].goal === priorGoal,
       "Rejected mutation applied optimistically",
     );
     click("workflow.close", rejectedEditor);
@@ -739,7 +821,7 @@ Object.assign(window, {
     click("workflow.allWorkstreams");
     const otherWorkstream = [
       ...document.querySelectorAll<HTMLButtonElement>(".workflow-workstream"),
-    ].find((button) => button.textContent?.includes("Independent validation"))!;
+    ].find((button) => button.textContent?.includes("Validate after restart"))!;
     flushSync(() => otherWorkstream.click());
     await until(
       () => document.querySelector(`[data-workstream-id="${durable.workstreams[1].id}"]`),
@@ -873,6 +955,8 @@ Object.assign(window, {
   },
   async consoleScreenshot(theme: string, target = "top") {
     document.documentElement.dataset.theme = theme;
+    const editor = document.querySelector('[data-workflow="workstream-editor"]');
+    if (editor) click("workflow.close", editor);
     const searchToggle = findButton("workflow.search", document.querySelector(".workflow-header")!);
     if (searchToggle.getAttribute("aria-expanded") === "true") flushSync(() => searchToggle.click());
     if (target === "top") click("workflow.overview");
@@ -880,17 +964,35 @@ Object.assign(window, {
       click("workflow.overview");
       await selectPrimary();
     }
+    if (target === "session") {
+      // This fixture's fixed-width panel does not implement AppShell docking.
+      // Close it to inspect the task itself at the requested viewport width.
+      flushSync(() => useAppStore.setState({ workPanelTabs: [] }));
+      click("workflow.workstreams");
+      const row = document.querySelector<HTMLButtonElement>(`.workflow-workstream[data-workflow-workstream="${durable.workstreams[1].id}"]`);
+      check(row, "Session task screenshot row missing");
+      flushSync(() => row.click());
+      await until(() => document.querySelector(`[data-workstream-id="${durable.workstreams[1].id}"]`), "Session task screenshot missing");
+    }
     if (target === "artifacts") {
-      click("workflow.artifacts");
+      click("workflow.overview");
+      await selectPrimary();
+      document.querySelector('[data-workflow-artifact="candidate-7"]')?.scrollIntoView({ block: "start" });
       await until(
         () => document.querySelector('[data-workflow-artifact="candidate-7"]'),
         "Candidate screenshot missing",
       );
     }
+    if (target === "new" || target === "new-details") {
+      click("workflow.newWorkstream");
+      const form = document.querySelector('[data-workflow="workstream-editor"]')!;
+      fill("workflow.goal", "Update the project documentation to match the current application.", form);
+      if (target === "new-details") flushSync(() => form.querySelector("summary")!.click());
+    }
     await frame();
     document.getAnimations().forEach((animation) => animation.finish());
     await frame();
-    document.querySelector<HTMLElement>(".workflow-console")!.scrollTop = 0;
+    if (target !== "artifacts") document.querySelector<HTMLElement>(".workflow-page")!.scrollTop = 0;
     if (target === "controls") detail().scrollIntoView({ block: "start" });
     await frame();
     return {

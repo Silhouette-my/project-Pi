@@ -1,0 +1,11 @@
+/*
+  Chat side chat (ADR side-chats-on-detached-transcripts): the shared detached
+  conversation fills the tab; the return control floats over its top
+  (components/workpanel/work-return.css).
+*/
+.side-chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}

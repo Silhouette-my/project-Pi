@@ -21,14 +21,25 @@ Each ADR includes:
 | ID | Title | Status |
 |---|---|---|
 | project-agent-discussion-boundary | [Project Agent discussion sessions](project-agent-discussion-boundary.md) | Accepted |
+| fork-upstream-schema-convergence | [Fork/upstream schema convergence](fork-upstream-schema-convergence.md) | Implemented candidate |
+| fork-visualization-compatibility | [Fork visualization compatibility](fork-visualization-compatibility.md) | Implemented candidate |
 | isolated-visualize-frame-document | [Isolated visualization frame documents](isolated-visualize-frame-document.md) | Accepted for implementation |
 | chatgpt-conversation-browser-transport | [ChatGPT conversation browser transport](chatgpt-conversation-browser-transport.md) | Accepted for implementation |
+| plugin-projects-list | [Read-only durable project enumeration for plugins](plugin-projects-list.md) | Accepted |
+| append-only-review-state | [Append-only review state](append-only-review-state.md) | Implemented candidate |
+| lossless-tool-image-storage | [Lossless tool-image storage and bounded history mutations](lossless-tool-image-storage.md) | Implemented candidate |
+| plugin-remote-workspace-reads | [Plugin reads in remote workspaces](plugin-remote-workspace-reads.md) | Implemented candidate |
+| browser-background-lifecycle | [Browser page execution outlives side-panel presentation](browser-background-lifecycle.md) | Accepted |
+| asktool-draft-survives-session-switch | [AskTool drafts survive a card remount](asktool-draft-survives-session-switch.md) | Accepted |
+| tool-abort-abandons-host-call | [A user stop ends the turn even when the running tool cannot be cancelled](tool-abort-abandons-host-call.md) | Accepted for implementation |
 | provider-metadata-client-certificate-retry | [Provider metadata recovery from optional client certificates](provider-metadata-client-certificate-retry.md) | Implemented candidate |
 | device-local-project-lists-in-config-sync | [Device-local project lists in configuration sync](device-local-project-lists-in-config-sync.md) | Accepted |
 | s3-only-configuration-backup-sync | [S3-only encrypted configuration backup and synchronization](s3-only-configuration-backup-sync.md) | Accepted; supersedes WebDAV decisions in 0300 / 0301 |
 | remote-provider-import | [Explicit provider import into a running remote Host](remote-provider-import.md) | Accepted for the experimental SSH MVP |
 | remote-project-home-workflow | [Remote projects in the shared Chat home workflow](remote-project-home-workflow.md) | Accepted |
 | project-workflow-durable-state | [Project Workflow durable state](project-workflow-durable-state.md) | Accepted for local MVP implementation |
+| parallel-read-batches | [Ordered preparation and parallel file batches](parallel-read-batches.md) | Proposed |
+| host-file-batch-admission | [Host file identities and ordered batch admission](host-file-batch-admission.md) | Proposed |
 | composer-mcp-invocations | [Composer MCP Invocations](composer-mcp-invocations.md) | Accepted |
 | chronological-system-transcript | [Preserve chronological model system state](chronological-system-transcript.md) | Accepted |
 | mcp-tool-approval-risk | [User MCP tools keep the normal approval path](mcp-tool-approval-risk.md) | Accepted |
@@ -316,7 +327,8 @@ Each ADR includes:
 | 0270 | [Builtin subagents can be switched off](0270-builtin-subagents-can-be-disabled.md) | Accepted for implementation (amends ADR 0063; ADR 0112) |
 | 0271 | [Rebuild the shared provider transport after repeated unanswered failures](0271-provider-transport-rebuild.md) | Accepted for implementation (issue #234) |
 | 0269 | [Move capability documents between the global and project levels](0269-capability-level-transfer.md) | Accepted for implementation (amends ADR 0112) |
-| 0268 | Remove quotes, annotations, and side chats | Accepted (supersedes message-quotes-and-side-chats / response-annotations / floating-annotation-index) |
+| 0268 | Remove quotes, annotations, and side chats | Accepted (supersedes message-quotes-and-side-chats / response-annotations / floating-annotation-index; decision 5 superseded by side-chats-on-detached-transcripts) |
+| side-chats-on-detached-transcripts | Chat side chats on detached transcripts | Accepted (supersedes ADR 0268 decision 5 only) |
 | 0272 | [Judge a public-network address on the route the request will dial](0272-connection-time-public-network-route.md) | Accepted for implementation (amends ADR 0243; issue #419 / PR #473) |
 | 0273 | [Git checkout as a Create project source](0273-git-checkout-create-project-source.md) | Accepted for implementation (amends ADR 0233; ADR 0247) |
 | 0274 | [A development plugin is reviewed before it is loaded](0274-development-plugin-permission-review.md) | Accepted for implementation (amends ADR 0005) |
@@ -383,7 +395,12 @@ Each ADR includes:
 | 0330 | [Open scoped HTML files in the work-panel Browser from plugins](0330-open-html-files-in-work-panel-browser-from-plugins.md) | Accepted |
 | 0331 | [Plugin session follow and host-owned work-panel reveal](0331-plugin-session-follow-and-work-panel-reveal.md) | Accepted |
 | 0333 | [A plugin-owned suggestion in the Composer placeholder](0333-plugin-composer-suggestion.md) | Accepted |
+| 0334 | [OpenAI Fast mode as a per-session switch gated by model settings](0334-openai-fast-mode.md) | Accepted |
 | plugin-fetch-redirect-policy | [Host-enforced plugin fetch redirect policy](plugin-fetch-redirect-policy.md) | Accepted (implementation candidate for #1475) |
 
 | local-agent-remote-workspace-tools | [Local Agent and model requests for remote workspaces](local-agent-remote-workspace-tools.md) | Accepted for implementation |
 | 0332 | [macOS keeps its translucent window surface with an opaque opt-out](0332-macos-opaque-window-surface.md) | Accepted (D665, amended by D666 and D667; supersedes the macOS vibrancy window backing from D348; issue #1064) |
+| gen-ui-inline-visualization | [Inline generative UI visualizations](gen-ui-inline-visualization.md) | Accepted (D671) |
+| 0337 | [Keep the request prefix stable across delegation settlements](0337-stable-prompt-prefix-across-delegation.md) | Accepted (supersedes ADR 0279 §9) |
+
+| model-reasoning-effort-override | [Model reasoning effort override](model-reasoning-effort-override.md) | Proposed |

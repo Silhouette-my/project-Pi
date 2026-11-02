@@ -1,72 +1,291 @@
-.workflow-navigation {
-  flex-shrink: 0;
+/*
+  Sidebar navigation tree: categories, folders, projects and the rows inside
+  them. One indent level only: the contents of a folder or project sit one step
+  right of its row however deeply folders nest, and an expanded folder or
+  project is a shaded block. Items inside a category are inset 8px from the
+  category header (--sidebar-category-inset).
+*/
+.sidebar {
+  --sidebar-category-inset: 8px;
+  --sidebar-row-height: 32px;
+  --sidebar-row-pad: 8px;
+  --sidebar-icon-slot: 16px;
+  --sidebar-row-gap: 6px;
+  --sidebar-indent: 16px;
+  --sidebar-action-size: 22px;
 }
-.workflow-navigation-header,
-.workflow-navigation-chat,
-.workflow-navigation-actions {
+
+.workflow-navigation { flex-shrink: 0; min-width: 0; }
+.workflow-navigation-chat { display: flex; align-items: center; min-width: 0; }
+.workflow-navigation-session { flex: 1; min-width: 0; }
+.workflow-navigation-folded { transform: rotate(-90deg); }
+.workflow-navigation-error { color: var(--ds-error); padding: 6px 10px; overflow-wrap: anywhere; }
+.workflow-navigation-tree { min-width: 0; }
+
+/* ---- category header ---- */
+.sidebar .sidebar-category + .sidebar-category { margin-top: 12px; }
+.sidebar .sidebar-category-header {
   display: flex;
   align-items: center;
-  gap: 3px;
-  min-width: 0;
+  gap: 2px;
+  min-height: 30px;
+  padding: 0 4px 0 var(--sidebar-row-pad);
+  border-radius: var(--radius-xs);
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  user-select: none;
 }
-.workflow-navigation-label.btn {
-  flex: 1;
-  justify-content: flex-start;
-  text-align: left;
-  min-width: 0;
-  gap: 5px;
-}
-.workflow-navigation-label span,
-.workflow-navigation-project span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.workflow-navigation-session {
-  flex: 1;
-  min-width: 0;
-}
-.workflow-navigation-children {
-  padding-left: 12px;
-}
-.workflow-navigation-folded {
-  transform: rotate(-90deg);
-}
-.workflow-navigation-editor {
-  margin: 6px;
-  padding: 8px;
+/* Header actions follow one rule: the pointer is over THIS header (the
+   `is-hovered` class is owned by script and cleared on drag start/end/drop,
+   because :hover goes stale after a native drag), keyboard focus is visible
+   inside it, or its menu is open. Body, other rows and clicks never count. */
+.sidebar .sidebar-category-header.is-hovered,
+.sidebar .sidebar-category-header:has(:focus-visible),
+.sidebar .sidebar-category-header.is-menu-open { color: var(--ds-text-secondary); }
+.sidebar .sidebar-category-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar .sidebar-category-chevron,
+.sidebar .sidebar-chevron-button {
   display: grid;
-  gap: 8px;
-  background: var(--ds-bg-hover);
-  border-radius: var(--radius-md);
-}
-.workflow-navigation-subheading {
-  padding: 7px 10px 3px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-2xs);
   color: var(--ds-text-muted);
-  font-size: var(--text-sm);
 }
-.workflow-navigation-project {
+.sidebar .sidebar-category-chevron { margin-left: 2px; color: inherit; }
+.sidebar .sidebar-category-chevron:hover,
+.sidebar .sidebar-chevron-button:hover { background: var(--ds-bg-active); }
+.sidebar .sidebar-category-spacer { flex: 1; }
+.sidebar .sidebar-category-actions { display: flex; align-items: center; gap: 2px; opacity: 0; pointer-events: none; }
+.sidebar .sidebar-category-header.is-hovered .sidebar-category-actions,
+.sidebar .sidebar-category-header:has(:focus-visible) .sidebar-category-actions,
+.sidebar .sidebar-category-header.is-menu-open .sidebar-category-actions { opacity: 1; pointer-events: auto; }
+.sidebar .sidebar-favorites-header { cursor: default; color: var(--ds-text-secondary); }
+.sidebar .sidebar-favorite-origin {
+  /* Aligns with the title of the row above (icon-less row, title inset). */
+  margin: -4px 0 4px 30px;
+  color: var(--ds-text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-compact);
+}
+.sidebar .sidebar-category-body { margin-left: var(--sidebar-category-inset); min-width: 0; }
+
+/* ---- rows ---- */
+.sidebar .workflow-tree-row {
+  position: relative;
   display: flex;
-  width: 100%;
-  justify-content: flex-start;
-  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  border-radius: var(--radius-xs);
 }
-.workflow-navigation-status,
-.workflow-navigation-relation {
+.sidebar .workflow-tree-row.is-folder,
+.sidebar .workflow-tree-row.is-recent-row {
+  min-height: var(--sidebar-row-height);
+  padding-right: 4px;
+  color: var(--ds-text-secondary);
+}
+.sidebar .workflow-tree-row.is-folder:hover,
+.sidebar .workflow-tree-row.is-folder.is-menu-open,
+.sidebar .workflow-tree-row.is-recent-row:hover { background: var(--ds-bg-hover); }
+.sidebar .workflow-tree-row .workflow-tree-folder.btn {
+  flex: 1;
+  min-width: 0;
+  height: var(--sidebar-row-height);
+  min-height: var(--sidebar-row-height);
+  justify-content: flex-start;
+  gap: var(--sidebar-row-gap);
+  padding: 0 var(--sidebar-row-pad);
+  background: transparent;
+  color: inherit;
+  font-size: var(--text-md-plus);
+  font-weight: inherit;
+  line-height: var(--leading-row);
+  text-align: left;
+}
+.sidebar .workflow-tree-folder svg { flex: 0 0 auto; color: var(--ds-text-muted); }
+.sidebar .workflow-tree-folder span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar .workflow-tree-content { min-width: 0; flex: 1; }
+.sidebar .workflow-tree-content > .project-group { margin: 0; }
+
+/* Row actions: quiet until the row is hovered, focused or its menu is open. */
+.sidebar .workflow-tree-actions { display: none; align-items: center; gap: 0; margin-left: auto; flex: 0 0 auto; }
+.sidebar .workflow-tree-row:hover > .workflow-tree-actions,
+.sidebar .workflow-tree-row:focus-within > .workflow-tree-actions,
+.sidebar .workflow-tree-row.is-menu-open > .workflow-tree-actions,
+.sidebar .sidebar-project-row:hover > .workflow-tree-actions,
+.sidebar .sidebar-project-row:focus-within > .workflow-tree-actions,
+.sidebar .sidebar-project-row.is-menu-open > .workflow-tree-actions { display: flex; }
+.sidebar .sidebar-row-action {
+  display: inline-grid;
+  width: var(--sidebar-action-size);
+  height: var(--sidebar-action-size);
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-xs);
+  color: var(--ds-text-secondary);
+  opacity: 1;
+  pointer-events: auto;
+}
+.sidebar .sidebar-row-action:hover:not(:disabled),
+.sidebar .sidebar-row-action[aria-expanded="true"] { background: var(--ds-bg-hover); color: var(--ds-text-primary); }
+.sidebar .sidebar-row-action:disabled { opacity: 0.4; }
+.sidebar .sidebar-category-actions .sidebar-row-action:hover:not(:disabled) { background: var(--ds-bg-active); }
+
+/* ---- indentation: ONE step, however deep the folders ---- */
+.sidebar .workflow-tree-children { padding-left: var(--sidebar-indent); min-width: 0; }
+.sidebar .workflow-tree-children .workflow-tree-children,
+.sidebar .sidebar-project-body .workflow-tree-children { padding-left: 0; }
+.sidebar .sidebar-project-body { padding-left: var(--sidebar-indent); min-width: 0; }
+.sidebar .workflow-tree-empty {
+  padding: 6px var(--sidebar-row-pad);
+  color: var(--ds-text-faint);
   font-size: var(--text-sm);
+}
+
+/* An expanded folder or project is one shaded block. */
+.sidebar .workflow-tree-node.is-block {
+  margin: 2px 0;
+  padding: 2px 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--ds-text-primary) 4%, transparent);
+}
+.sidebar .workflow-tree-node.is-block .thread-item.active { background: var(--ds-bg-active); }
+
+/* Only the outermost expanded block (category-level folder or project) is height
+   limited: its header row stays outside the scroll area, nested folders scroll
+   with it. No scrollbar and no overscroll containment, so the wheel chains to
+   the sidebar at the ends. Fades (data-fade, set by block-scroll.ts) mark hidden
+   content on the side(s) that have it. */
+.sidebar .workflow-tree-node.is-block > .workflow-tree-children,
+.sidebar .workflow-tree-node.is-block > .workflow-tree-row .sidebar-project-body {
+  --block-fade: calc(var(--sidebar-row-height) * 0.6);
+  max-height: calc(var(--sidebar-row-height) * 8);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.sidebar .workflow-tree-node.is-block > .workflow-tree-children::-webkit-scrollbar,
+.sidebar .workflow-tree-node.is-block > .workflow-tree-row .sidebar-project-body::-webkit-scrollbar { display: none; }
+.sidebar [data-fade="top"] {
+  mask-image: linear-gradient(to bottom, transparent, var(--ds-text-primary) var(--block-fade));
+}
+.sidebar [data-fade="bottom"] {
+  mask-image: linear-gradient(to top, transparent, var(--ds-text-primary) var(--block-fade));
+}
+.sidebar [data-fade="both"] {
+  mask-image: linear-gradient(to bottom, transparent, var(--ds-text-primary) var(--block-fade), var(--ds-text-primary) calc(100% - var(--block-fade)), transparent);
+}
+
+/* ---- drag and drop feedback ---- */
+/* Into: a soft accent tint. Between: a 2px accent line with rounded ends. All
+   indicators are overlays or colour changes, so nothing shifts during a drag. */
+.sidebar .workflow-tree-row,
+.sidebar .sidebar-category-header,
+.sidebar .sidebar-category-body {
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard), opacity var(--motion-duration-fast) var(--motion-ease-standard);
+}
+.sidebar .workflow-tree-row.is-drop-before::before,
+.sidebar .workflow-tree-row.is-drop-after::after,
+.sidebar .sidebar-category.is-drop-before::before,
+.sidebar .sidebar-category.is-drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 3px;
+  right: 3px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--ds-accent);
+  pointer-events: none;
+}
+.sidebar .workflow-tree-row.is-drop-before::before { top: 0; }
+.sidebar .workflow-tree-row.is-drop-after::after { bottom: 0; }
+.sidebar .sidebar-category { position: relative; }
+.sidebar .sidebar-category.is-drop-before::before { top: -1px; }
+.sidebar .sidebar-category.is-drop-after::after { bottom: -1px; }
+.sidebar .workflow-tree-row.is-drop-inside,
+.sidebar .sidebar-category-header.is-drop-inside,
+.sidebar .sidebar-category-body.is-drop-inside,
+.sidebar .workflow-tree-root-target.is-drop-inside {
+  background: color-mix(in oklab, var(--ds-accent) 14%, transparent);
+  border-radius: var(--radius-xs);
+}
+.sidebar .workflow-tree-node.is-dragging > .workflow-tree-row,
+.sidebar .sidebar-category.is-dragging > .sidebar-category-header { opacity: 0.5; }
+.sidebar .sidebar-category.is-dragging > .sidebar-category-body { opacity: 0.5; }
+@media (prefers-reduced-motion: reduce) {
+  .sidebar .workflow-tree-row,
+  .sidebar .sidebar-category-header,
+  .sidebar .sidebar-category-body { transition: none; }
+}
+/* Offscreen element used as the native drag image (see lib/sidebar-drag-image). */
+.sidebar-drag-pill {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 5px 10px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ds-bg-elevated-opaque);
+  box-shadow: var(--ds-raised-shadow);
+  color: var(--ds-text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-compact);
+  pointer-events: none;
+}
+.sidebar-drag-pill-icon { display: grid; flex: 0 0 auto; place-items: center; color: var(--ds-text-muted); }
+.sidebar-drag-pill-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar .workflow-tree-root-hint { min-height: 8px; color: var(--ds-text-muted); font-size: var(--text-sm); padding: 0 6px; }
+
+/* ---- projects ---- */
+.sidebar .sidebar-project-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sidebar-row-gap);
+  min-height: var(--sidebar-row-height);
+  padding: 0 var(--sidebar-row-pad);
+  border-radius: var(--radius-xs);
+  color: var(--ds-text-secondary);
+  font-size: var(--text-md-plus);
+  line-height: var(--leading-row);
+  cursor: pointer;
+}
+.sidebar .sidebar-project-row:hover,
+.sidebar .sidebar-project-row.is-menu-open { background: var(--ds-bg-hover); }
+.sidebar .sidebar-project-row:hover .sidebar-project-cube:not(.is-active):not(.is-static) { color: var(--ds-text-primary); }
+.sidebar .sidebar-project-cube {
+  display: inline-grid;
+  width: var(--sidebar-action-size);
+  height: var(--sidebar-action-size);
+  margin: 0 -3px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-xs);
   color: var(--ds-text-muted);
 }
-.workflow-navigation-side {
-  margin-left: 12px;
+.sidebar button.sidebar-project-cube:hover,
+.sidebar .sidebar-project-cube.is-active { background: var(--ds-bg-active); color: var(--ds-text-primary); }
+.sidebar .sidebar-project-name {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  text-align: left;
 }
-.workflow-navigation-relation {
-  padding-left: 8px;
-}
-.workflow-navigation-error {
-  color: var(--ds-error);
-  padding: 6px 10px;
-  overflow-wrap: anywhere;
-}
-.workflow-navigation-project-entry { display: flex; flex-direction: column; gap: 2px; }
-.workflow-navigation-project-entry .workflow-navigation-label { width: 100%; min-height: 28px; gap: 5px; font-size: var(--text-md); line-height: var(--leading-row); color: var(--ds-text-secondary); padding: 5px 6px 5px 20px; }
-.workflow-navigation-project-entry .workflow-navigation-label[aria-current="page"] { color: var(--ds-text-primary); background: var(--ds-bg-active); }
+.sidebar .sidebar-project-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar .sidebar-project-row .workflow-tree-actions { margin-right: -3px; }
+
+/* ---- folder dialog ---- */
+.workflow-folder-dialog-form { display: grid; gap: 14px; }
+.workflow-folder-dialog-select { width: 100%; }
+.workflow-folder-dialog-error { padding: 0; }

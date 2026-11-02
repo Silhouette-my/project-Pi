@@ -73,6 +73,12 @@ const shared = load(new URL("../src/features/chat/transcript/shared.tsx", import
   "react-i18next": { useTranslation: () => ({ t, i18n: { language: locale } }) },
   "@pi-desktop/shared": await import("@pi-desktop/shared"),
   "./disclosure": {},
+  "./TextShimmer": {
+    TextShimmer: ({ text }) => React.createElement("span", null, text),
+  },
+  // The usage capsule has its own render contract; this fixture only proves
+  // the session-chip graph still loads and renders.
+  "./TurnUsageCapsule": { TurnUsageCapsule: () => null },
   "../../../hooks/use-preview-target": {
     useOpenChatFileRef: () => () => {},
     useOpenPreviewTarget: () => undefined,
@@ -100,7 +106,16 @@ const shared = load(new URL("../src/features/chat/transcript/shared.tsx", import
   "../../../lib/assistant-turns": { messageThinking: () => "" },
   "../../../lib/use-referenced-image-data-url": { useReferencedImageDataUrl: () => undefined },
   "../../../lib/chat-links": { isHtmlFilePath: () => false },
-  "../../../lib/context-usage": { calculateTokenRate: () => 0 },
+  "../../../lib/context-usage": {
+    calculateTokenRate: () => 0,
+    turnUsageBreakdown: () => ({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      totalTokens: 0,
+    }),
+  },
   "../../../stores/app-store": { useAppStore },
 });
 
@@ -127,6 +142,7 @@ const { MessageRow } = load(new URL("../src/features/chat/transcript/MessageRow.
   "../../../plugins/renderer-slots/slot-message": { slotMessage: () => undefined },
   "./menu-items": { userMessageMenuItems: () => [] },
   "./ActionBarSlots": { ActionSlotSide: () => null },
+  "../side-chat/SideChatAction": { SideChatAction: () => null },
   "./SessionMessageOrigin": { SessionMessageOrigin: () => null },
   "./extra-attachments": { getExtraMessageAttachments },
   "./TranscriptMenu": {
@@ -177,13 +193,11 @@ test("a referenced conversation renders as a chip naming its own target", () => 
     /if \(event\.key !== "Enter" && event\.key !== " "\) return;\s*\n\s*event\.preventDefault\(\);\s*\n\s*open\(\);/,
     "Enter and Space activate the chip, the way a button does",
   );
+  assert.ok(html.includes(">@Nightly review<"), "the chip is the quiet @title token");
+  assert.doesNotMatch(html, /composer-chip-icon/, "a mention carries no icon");
   assert.ok(
-    html.includes(`${catalogs.en.chat.sessionReference} · Nightly review`),
-    "the chip names the reference from the catalog",
-  );
-  assert.ok(
-    html.includes(`title="${catalogs.en.chat.sessionReferenceOpen.replace("{{title}}", "Nightly review")}"`),
-    "the tooltip says what opening it does",
+    html.includes(`title="${catalogs.en.mention.tooltip.replace("{{title}}", "Nightly review")}"`),
+    "the tooltip says what the token is",
   );
   assert.doesNotMatch(html, /pi-desktop:\/\/session\//, "the raw link is the message's, not the chip's");
 });
@@ -192,23 +206,23 @@ test("the chip speaks the reader's language", () => {
   locale = "zh-CN";
   store.sessions = [{ id: "session-a", title: "Nightly review" }];
   const html = renderChip();
-  assert.match(html, /会话引用 · Nightly review/);
-  assert.match(html, /title="打开会话 Nightly review"/);
-  assert.match(html, /aria-label="会话引用 · Nightly review"/);
+  assert.match(html, />@Nightly review</);
+  assert.match(html, /title="引用对话：Nightly review"/);
+  assert.match(html, /aria-label="@Nightly review"/);
 });
 
 test("a renamed conversation follows through to every message that references it", () => {
   locale = "zh-CN";
   store.sessions = [{ id: "session-a", title: "依赖清理顺序（改名后）" }];
   const renamed = renderChip();
-  assert.match(renamed, /会话引用 · 依赖清理顺序（改名后）/);
-  assert.match(renamed, /title="打开会话 依赖清理顺序（改名后）"/);
+  assert.match(renamed, />@依赖清理顺序（改名后）</);
+  assert.match(renamed, /title="引用对话：依赖清理顺序（改名后）"/);
   assert.doesNotMatch(renamed, /Nightly review/, "the pasted name does not survive a rename");
 
   store.sessions = [{ id: "session-b", title: "另一段对话" }];
   assert.match(
     renderChip(),
-    /会话引用 · session-/,
+    />@session-</,
     "an unlisted conversation falls back to the id it points at",
   );
   assert.doesNotMatch(renderChip(), /另一段对话/, "another conversation's title is not borrowed");
@@ -216,7 +230,7 @@ test("a renamed conversation follows through to every message that references it
   store.sessions = [{ id: "session-a", title: "  " }];
   assert.match(
     renderChip(),
-    /会话引用 · session-/,
+    />@session-</,
     "an empty title falls back to the id",
   );
   store.sessions = [];
@@ -237,7 +251,7 @@ test("a user message shows the reference as its body chip, not a second block", 
     "the message carries the reference once",
   );
   assert.match(html, /data-session-id="session-a"/);
-  assert.match(html, /Conversation · Nightly review/);
+  assert.match(html, />@Nightly review</);
   assert.doesNotMatch(html, /pi-desktop:\/\/session\/session-a/, "the raw link is replaced by the chip");
 });
 

@@ -1,11 +1,13 @@
 use super::*;
 mod execution;
+mod navigation_tree;
 mod organization;
 
 pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result<()> {
     // Every reference enters through this boundary; navigation never changes workspace roots.
     check_sources(db, value, command)?;
     match command["kind"].as_str().unwrap() {
+        "tree.move" => navigation_tree::move_entry(db, value, command),
         "agent.create" => {
             let project = db
                 .list_project_groups()?
@@ -83,10 +85,20 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
             }
             Ok(())
         }
-        "folder.create" | "folder.update" | "folder.remove" | "navigation.move"
-        | "navigation.update" | "navigation.expand" | "conversation.link" => {
-            organization::apply(db, value, command)
-        }
+        "folder.create"
+        | "folder.update"
+        | "folder.remove"
+        | "category.create"
+        | "category.update"
+        | "category.remove"
+        | "category.reorder"
+        | "navigation.move"
+        | "navigation.update"
+        | "navigation.expand"
+        | "project.favorite"
+        | "conversation.link"
+        | "conversation.policy"
+        | "conversation.return" => organization::apply(db, value, command),
         "run.start"
         | "run.observe"
         | "delivery.publish"
@@ -127,7 +139,8 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                     }
                 }
             }
-            if work["status"] == "completed"
+            if work["executionMode"] != "session"
+                && work["status"] == "completed"
                 && (rows(&work, "acceptance").is_empty()
                     || rows(&work, "acceptance")
                         .iter()
@@ -283,7 +296,9 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                 // Historical feedback remains attached to history; it must not reopen a new candidate.
                 if value["workstreams"][wi]["currentCandidateId"] == row["candidateId"] {
                     value["workstreams"][wi]["acceptance"][ai]["status"] = json!("reopened");
-                    if value["workstreams"][wi]["status"] == "completed" {
+                    if value["workstreams"][wi]["executionMode"] != "session"
+                        && value["workstreams"][wi]["status"] == "completed"
+                    {
                         value["workstreams"][wi]["status"] = json!("ready");
                     }
                     touch(&mut value["workstreams"][wi]);

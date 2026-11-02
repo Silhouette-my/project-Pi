@@ -38,6 +38,7 @@ import {
 import type { StoreAccess } from "./slices/types";
 import {
   createWorkPanelSlice,
+  switchWorkPanelPage,
   switchWorkPanelSession,
 } from "./slices/work-panel-slice";
 import {
@@ -46,6 +47,7 @@ import {
 } from "./slices/initial-state";
 import { createSessionSlice } from "./slices/session-slice";
 import { createQueueSlice } from "./slices/queue-slice";
+import { createSideChatSlice } from "./slices/side-chat-slice";
 import { createTranscriptSlice } from "./slices/transcript-slice";
 import { createProjectSlice } from "./slices/project-slice";
 import { createCatalogSlice } from "./slices/catalog-slice";
@@ -363,12 +365,17 @@ export const useAppStore = create<AppState>((set, get) => {
         planningStates[proposal.sessionId] = "awaiting_approval";
       }
       if (generation !== bootstrapGeneration) return;
-      set({
+      set((state) => ({
         ready: true,
         version,
         healthOk: health.ok,
         settings,
         sessions: hydratedSessions,
+        runningSessions: {
+          ...Object.fromEntries((sessions.runningSessionIds ?? []).map((id) => [id, true])),
+          // Live start/end events received during bootstrap outrank its snapshot.
+          ...state.runningSessions,
+        },
         providers: providers.providers,
         providerModels: cachedProviderModels,
         workspace: currentWorkspace,
@@ -383,7 +390,7 @@ export const useAppStore = create<AppState>((set, get) => {
         notifications: notifications.notifications,
         unreadNotificationCount: notifications.unreadCount,
         sessionOutcomes: latestSessionOutcomes(notifications.notifications),
-      });
+      }));
 
       // The artifact's surface depends on which plugin views are launchable, and
       // the launcher list is only read after `ready`. Resolve it before the
@@ -445,6 +452,8 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   },
 
+  ...createSideChatSlice({ get, set, commitForkedSession }),
+
   ...createWorkPanelSlice({
     get,
     set,
@@ -461,6 +470,8 @@ export const useAppStore = create<AppState>((set, get) => {
 useAppStore.subscribe((state, previous) => {
   transcriptReading.reconcile(state, previous);
   sessionRuntime.syncTranscriptProjection(state, previous);
+  const panel = switchWorkPanelPage(state, previous);
+  if (panel) useAppStore.setState(panel);
 });
 
 export async function materializeDraftSession(

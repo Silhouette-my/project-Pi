@@ -76,6 +76,7 @@ export type RegisterIpcDependencies = {
   activeUserSubagentDocuments: (...args: any[]) => Promise<any>;
   disabledBuiltinSubagents: () => Promise<string[]>;
   disabledBuiltinSkills: () => Promise<string[]>;
+  completionNoticeTurns: Set<string>;
   liveCallService?: LiveCallService;
   liveVoiceWidget?: LiveVoiceWidget;
   restartForStorage: () => void;
@@ -115,6 +116,7 @@ export function registerIpcHandlers(dependencies: RegisterIpcDependencies) {
     updater,
     dataDir,
     activeTurns,
+    completionNoticeTurns,
     isTurnDispatchable,
     sessionProjects,
     persistenceOutbox,
@@ -368,6 +370,12 @@ export function registerIpcHandlers(dependencies: RegisterIpcDependencies) {
     optionalWorkspaceRoot,
     activeUserSkills,
     disabledBuiltinSkills,
+    inlineVisualizationsEnabled: async () => {
+      const currentHost = getHost();
+      if (!currentHost) throw new Error("Host is not running");
+      const settings = await currentHost.call<{ inlineVisualizations?: boolean }>("settings.get");
+      return settings.inlineVisualizations === true;
+    },
     pluginActiveInProject,
     loadComposerTemplatesCached,
   });
@@ -453,6 +461,7 @@ export function registerIpcHandlers(dependencies: RegisterIpcDependencies) {
     persistenceOutbox,
     dataDir,
     activeTurns,
+    completionNoticeTurns,
     recordTurnStart,
     isTurnDispatchable,
     activeTurnUsages,

@@ -27,6 +27,8 @@ export type SidebarMenuActionItem = {
   describedBy?: string;
   busy?: boolean;
   separatorBefore?: boolean;
+  /** Radio-style choice: set on every row of a choice list; the true one shows a check. */
+  checked?: boolean;
   onSelect: () => void;
 };
 
@@ -66,6 +68,7 @@ export type SidebarMenuSubmenuItem = {
   icon?: React.ReactNode;
   items: SidebarMenuActionItem[];
   notes?: SidebarMenuNote[];
+  separatorBefore?: boolean;
 };
 
 

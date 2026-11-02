@@ -29,11 +29,14 @@ destination, chat as the home surface, tools and permissions inline.
 +------------------+--------------------------------+------------------+
 ```
 
-- **Sidebar**: primary navigation has parallel **Chats** and **Projects** areas.
-  Chats organizes ordinary conversations in shallow, navigation-only folders;
-  unfiled chats remain accessible in Recent. Projects contains retained project
-  groups and their workstreams, not a flat permanent session list. Chat folders
-  never grant permissions or share model context. The WorkBuddy-inspired footer
+- **Sidebar**: primary navigation is a list of **categories**: the built-in
+  Chats and Projects plus user-defined ones. A category mixes navigation-only
+  folders (any nesting depth, rendered with one indent level), standalone
+  conversations and projects. Unfiled chats of the built-in Chats category sit
+  in its Recent group; user-defined categories have no Recent group and show
+  their conversations at the category's top level. Projects contains retained
+  project groups and their workstreams, not a flat permanent session list.
+  Folders never grant permissions or share model context. The WorkBuddy-inspired footer
   keeps compact Settings,
   Extensions, Scheduled (clock), and notification icon actions. Each retained
   project is a
@@ -44,6 +47,18 @@ destination, chat as the home surface, tools and permissions inline.
   discoverable through Settings → Project archive.
   Collapsible to an icon rail (Cmd/Ctrl+B). Its expanded column is user-resizable
   from 240px to 520px (default 275px); dragging below 160px collapses it.
+  **Auto-hide (default):** unless `AppSettings.sidebarPinned` is true, the
+  sidebar takes no layout width. The pointer resting 80ms in a 6px hot zone on
+  the left window edge (below the 46px titlebar row) slides it in as an overlay
+  at its stored width, with a shadow; it retracts 300ms after the pointer
+  leaves. It stays while a menu, popover, context menu or dialog opened from it
+  is open, a drag or resize is running, text input inside it has focus, or
+  keyboard focus inside it was moved there by the keyboard. Escape hides it and
+  returns focus; Cmd/Ctrl+B reveals or hides it and the revealed overlay stays
+  until Escape, a pointer exit after the pointer entered it, or the shortcut
+  again. The header pin button docks it (the behavior described above) and
+  persists `sidebarPinned`; unpinning returns it to auto-hide. The overlay never
+  changes MainPane width (ADR [auto-hide-side-panels](../../adr/auto-hide-side-panels.md)).
 - **Product identity**: runtime shell copy uses `PI-Desktop`; the home hero and
   sidebar reuse the derived `src/assets/brand/logo-*.png` marks, while composer prompt
   rows have no leading brand icon and session-creation controls use a dedicated
@@ -51,8 +66,25 @@ destination, chat as the home surface, tools and permissions inline.
   Windows/Linux, the expanded sidebar begins with a keyboard-accessible Home
   brand and Collapse sidebar at the right; activating the
   brand returns the main pane to chat. The macOS expanded sidebar omits the
-  logo/title brand and places only Collapse sidebar at the right of
-  the traffic-light row. `Codex` remains only an external import source or a
+  logo/title brand. After the traffic lights (macOS) or the brand, the top bar
+  holds Search (opens the global search dialog; its tooltip shows the
+  configured shortcut), Favorites, New chat, Pin and Collapse sidebar, with a
+  divider below. Favorites toggles the list between the category tree and a
+  **Favorites view**: a "Favorites" header row replacing the tree, then the
+  favourited standalone conversations (persisted `navigation.favorite`, toggled
+  from the session menu) as ordinary rows with status dots and menus, newest
+  activity first; empty shows one muted line. The button shows a pressed state;
+  clicking it again or Esc inside the sidebar returns to the tree. The choice is
+  a per-window preference in local storage, never Host data. Projects have no
+  favourite flag.
+  The project row menu is grouped by dividers: New chat, New folder / Project
+  instructions, Memory / Rename, Pin / Open folder, Copy, Git / Archive /
+  Danger zone. The project row also carries hover actions New chat, New folder
+  and Project Agent (opens the Agent tab and reveals the work panel), then the
+  menu. The Projects category header offers New project and New folder; a
+  folder's menu is Rename, New folder, Move to…, Remove folder (no second
+  confirmation). While the sidebar is hidden the titlebar shows
+  Expand sidebar and New chat; a docked sidebar has no second New chat icon. `Codex` remains only an external import source or a
   design-reference term.
 - **Main pane**: exactly one destination at a time; destinations replace the
   pane (they are pages, not modals). Once Settings or Extensions is selected,
@@ -99,7 +131,22 @@ destination, chat as the home surface, tools and permissions inline.
   `--ds-window-lead-inset` token — the cluster's 76px right edge (from
   `@pi-desktop/shared`) plus a 12px gap — and the main process positions the
   buttons from that same shared geometry.
-- **Work panel**: docked right column (not an overlay) opened by an artifact,
+- **Work panel**: docked right column when pinned (`AppSettings.workPanelPinned`),
+  otherwise an auto-hide overlay revealed from the right window edge with the
+  same dwell, hide delay, hold rules, Escape and `Cmd/Ctrl + J` behavior as the
+  sidebar. It needs a presented context (the active session, or the project on the
+  project page): without one there is no hot zone and no reveal. Agent and tool
+  results never open or reveal it; only an explicit user gesture does. The one
+  exception is navigation, not an agent: entering a project, or a chat of a
+  workflow project, adds the project Agent tab and opens the panel (revealing an
+  auto-hidden one once) unless the user closed that tab in that context (ADR
+  0033 amendment). The overlay keeps the stored panel width, floats above MainPane
+  (no width budget, no sidebar yield, no preview/maximize; pin the panel for
+  those), and is mounted only while revealed. A side-chat tab opened by the
+  explicit Ask in side chat click reveals it through the same user-gesture
+  rule. Its header pin button docks it and
+  persists `workPanelPinned`. The pinned panel is a docked right column (not an
+  overlay) opened by an artifact,
   the viewport-fixed toggle, or `Cmd/Ctrl + J`. File, URL, browser-preview, and
   successful workspace-edit artifacts create their resources atomically. The
   46px content header exposes a tablist and a fixed `+` trigger. Unused
@@ -204,20 +251,40 @@ destination, chat as the home surface, tools and permissions inline.
 
 ### 3.2 Sidebar projects and Chat folders
 
-- **Sections**: the compact `Chats` area precedes `Projects` and owns ordinary
-  conversation creation, shallow folders and the existing sort/archive-view
-  menu. A global new Chat is unfiled; one created inside a folder inherits that
-  folder. Folder create, rename, move and bulk move affect navigation only;
-  removing a folder does not delete its chats. Recent is a derived access and
-  activity view, not storage ownership; favorites are references. Its toolbar
-  places sorting before new-chat creation. Folder and chat order, user titles,
-  expansion state and transcript reading position remain stable across
-  navigation. Both areas keep quiet
-  glyph actions and also accept a right-click create menu on the heading or empty
-  list chrome so section creation stays discoverable
-  without extra chrome. Its list shows at most five compact rows (146px) before
-  scrolling internally, so standalone work stays visible without displacing
-  project navigation. The following `Projects` area exposes the
+- **Categories**: the built-in `Chats` and `Projects` precede user-defined
+  categories (right-click the top bar's New chat, then New category; a custom
+  header's `...` menu has Rename and Delete category, which deletes without
+  confirmation and moves its contents to the matching built-in: conversations
+  and folders to Chats, projects to Projects). A header shows its title, then
+  a collapse chevron, and right-aligned hover actions: New chat and New folder
+  (Chats and custom), New project (Projects, the existing add-project flow).
+  Everything inside a category is inset 8px from the header, so the tile and
+  header text share one left edge and the icon sits 8px further in.
+- **Folders**: no chevron; a folder or open-folder icon. Nesting is unlimited and
+  rendered with one indent level: contents of any folder or project sit one step
+  right of its row. An expanded folder or project is a shaded block. Hover
+  actions are New chat, New folder and `...` (Rename, New folder, Remove folder;
+  removing never deletes chats, children move up one level). Folders move by
+  drag only; dialogs create and rename them. Navigation never changes a
+  conversation's workspace, context or permissions.
+- **Projects**: an outline cube, then the name. The cube opens project home (an
+  active tile, no full-row highlight); the name toggles expansion; there is no
+  Project home row. The `...` menu leads with New folder, New chat, Project
+  instructions, Memory and Rename, then keeps the existing pin, archive, open
+  folder, copy, Git and danger actions. Per-project colour is removed from the
+  UI; the persisted field is kept and ignored.
+- **Conversations**: no left icon. A status dot sits in the right slot,
+  vertically centred with its right inset equal to its top/bottom gap
+  (running accent, needs-permission purple, failed red; completed and unread
+  show nothing); the hover `...` takes the same slot. Menu order: Rename task,
+  Pin, Move to folder..., Create branch, Archive, Git, Copy, Danger zone. Branches
+  and child conversations nest under their parent with a chevron after the
+  title and guide lines. Pinned conversations rank first among their siblings.
+- Folder create/rename and chat move (including a multi-selection) use one
+  dialog (name, Location, Cancel plus Create/Save/Move). Recent is a derived
+  access and activity view, not storage ownership. Folder and chat order, user
+  titles, expansion state and transcript reading position remain stable across
+  navigation. The following `Projects` area exposes the
   folder-picker action; retained project groups use the remaining height and
   scroll independently.
 - **Identity**: each project group is keyed by a host-owned logical group id;
@@ -265,6 +332,11 @@ destination, chat as the home surface, tools and permissions inline.
   delete remain separate actions. Rename edits the task label only; archive
   never removes the transcript. Open folder is a project action, not a
   conversation action.
+- **Project color** (F670): the project menu holds a **Project color** submenu
+  listing Follow theme color plus the seven presets, each with a color dot and a
+  check on the current choice. The choice is renderer-local sidebar preference
+  metadata keyed by project path. It tints only the project's folder glyph in
+  the sidebar and the Project Console accent; absent follows the theme color.
 - **Isolated sessions** (ADR 0329): the project menu offers **New isolated
   session**. Opening the menu probes the project: the item stays disabled
   until the answer arrives, and for an unsuitable project (not git, no
@@ -322,6 +394,11 @@ destination, chat as the home surface, tools and permissions inline.
   focus.
 
 ### 3.3 Scheduled
+Settings → General → Scheduled tasks controls this feature, on by default
+(`scheduledTasksEnabled` absent or true). Off hides the footer and search page
+entries and prevents new runs without deleting tasks or run history. The
+settings switch remains searchable so the feature can be re-enabled.
+
 A task column beside the selected task's page, with an explicit create/edit form, a cadence dropdown, time,
 next occurrence, saved project, per-task permission/model selection, a per-task conversation mode (a new conversation per run, or one conversation every run continues), pause/resume and delete confirmation. Hourly
 schedules repeat at one-hour intervals without a time selector. An interval
@@ -461,9 +538,42 @@ session and workspace. Opening it does not select, create or execute a session.
 Its overview answers what the project is trying to achieve, what is active or
 complete, who owns each workstream, what is blocked or awaits a decision, which
 candidate is current, and what action is next. Progress is expressed through
-those concrete states, never a fabricated percentage or message count. A
-project-level intent composer requires an explicit workstream target before
-routing; it never inherits an unrelated active chat as an implicit destination.
+those concrete states, never a fabricated percentage or message count. The
+console has four tabs: Overview (a summary of real counts, pending decisions,
+each current workstream once with its owner, blocker, next action, current
+candidate and acceptance count, and recent outputs), Workstreams (list beside the selected
+workstream's detail, including its candidate, controls and outputs and evidence;
+stacked below 720px of page width), Shared context (canonical references and
+decisions, scoped by a workstream filter) and Structure.
+
+The canonical discussion-only Project Agent is a tab of the right work panel,
+open by default on the project page and in the project's conversations (ADR
+project-structure-views amendment, ADR 0033 amendment). The tab reads the Agent
+session as a detached transcript, so the console stays the visible page, the
+active chat session is unchanged and the chat surface mounts no extra pane. Its
+composer sends to the Agent session explicitly and never inherits an unrelated
+active chat; the full conversation opens through the existing Agent entry. The
+panel follows the right-edge pin/width rules: docked it sits beside the console,
+auto-hidden it is revealed once over the page on entry. In the tab, **Send to
+conversation…** hands the Agent's latest answer (or its last 1, 3 or all
+exchanges) to a project conversation after the user picks the thread and edits a
+preview, and **Bring in a conversation…** quotes a thread's latest answer into
+the Agent draft; the Agent itself still has no tools. Explicit Work actions
+still require a workstream.
+
+Structure is a separate project tab with Sessions, Git and Architecture views.
+Sessions shows only recorded `parentSessionId` edges; main-session and execution
+memberships are annotations, not invented edges. Unlinked history remains
+separate. Selection shows purpose, archive/live/unknown state, context return
+policy and attempts, and opens the exact existing conversation. Navigation
+folders do not alter these relationships.
+
+Git shows the read-only local commit-parent DAG, refs, current working changes
+and selected-commit diffs per registered root. Architecture discovers project
+`.archify` JSON/HTML with opaque `pi-visualize` previews. Source references show
+line ranges from the current working file, distinguished from the artifact's
+generated revision; incomplete Git state is unknown rather than a claimed match.
+Empty and error states do not invent nodes or trigger generation.
 
 Selecting a workstream opens its main line and a focused side-conversation
 surface. The workstream keeps its acceptance, owner, dependencies, current
@@ -481,6 +591,16 @@ execution conversation. Execution scope lists exact allowed actions and resource
 identifiers, bounded attempts and stop conditions; existing tool approvals remain
 authoritative. A late conversation-creation result cannot replace a newer project
 or workstream navigation choice.
+
+Side conversations open beside the console rather than replacing it: creating
+one, or choosing "Open beside" on a workstream's side-conversation list, adds a
+`project-side` tab to the work panel's project context next to the Agent. A
+side tab shows its purpose, read-only return policy and source workstream, reads
+its session as a detached transcript, sends only to that session, links Explore
+proposals to Shared context, and can still open as a full conversation. The
+panel follows the right-edge pin preference (ADR auto-hide-side-panels): unpinned
+it reveals from the window edge, pinned it docks; the project page presents its
+own `project:<id>` context.
 
 Side conversations start with an explicit Ask, Explore or Work intent. Ask uses
 selection and necessary background without writing effective project context.
@@ -509,7 +629,7 @@ resource conflicts retain the user's draft until explicit reload or close.
 | Model menu | Composer-right model × reasoning chip | configured provider/model choices + settings entry (D091) |
 | Profile menu | sidebar footer | Settings / Logs / Theme cycle (D041) |
 | Notification inbox | sidebar footer bell | All/Unread views, task failure rows only (successful completions are hidden, D295), mark-all-read and clear actions (D130/D117) |
-| Toasts | events (plugin toast, backend restored, copy) | top-center; 4s default, 8s for errors |
+| Toasts | events (plugin toast, backend restored, copy) | top-center of the live main-content safe area; viewport fallback; 4s default, 8s for errors |
 | Project switcher | empty-home underlined project name | sidebar open projects + search + clone git project + open project |
 
 ## 5. Navigation model
@@ -531,8 +651,8 @@ resource conflicts retain the user's draft until explicit reload or close.
   project identity. It does not change the active session, selected workspace,
   or a running session. Back/Forward restores the exact project destination;
   returning to Chat restores the chosen conversation and its reading position.
-- Starting or routing an intent from the project surface requires an explicit
-  workstream target. Chat/Work transitions preserve the same workstream identity
+- Starting Work or routing a workstream intent requires an explicit
+  workstream target; project Agent discussion does not. Chat/Work transitions preserve the same workstream identity
   and make the handoff action explicit; an unadopted Explore proposal cannot
   steer Work.
 - Empty home has four explicit session states: a project-bound session shows

@@ -12,6 +12,13 @@ equate the consumer Chat provider with the existing Agent/Plan operating state.
 
 ## Core concepts
 
+New ordinary tasks explicitly use session-backed execution. Their Agent session
+retains its existing tools, plugins and permission mode; acceptance conditions
+are optional, natural-language replies can finish work, and existing Review
+remains the change-inspection surface. The bounded authorization/checkpoint loop
+below remains the compatibility contract for historical tasks without
+`executionMode: "session"`. See [session execution ADR](../adr/workflow-session-execution.md).
+
 - **Chat folder**: navigation-only organization for ordinary conversations; it
   neither grants permissions nor shares model context.
 - **Project**: the existing host-owned logical project identity, extended with
@@ -32,7 +39,7 @@ equate the consumer Chat provider with the existing Agent/Plan operating state.
 ### P1. Chat organization and project navigation
 
 Chats and Projects are parallel navigation areas. Ordinary Chat folders support
-create, rename, shallow nesting, move/bulk move and explicit non-destructive folder
+create, rename, unlimited nesting (one indent level), move/bulk move and explicit non-destructive folder
 removal. A global new Chat is unfiled; new Chat within a folder inherits that
 folder. Existing chats remain accessible and continuable.
 
@@ -92,7 +99,15 @@ No user-written/copied handoff is required. An unadopted proposal does not steer
 execution. Discussion sees material changes that occurred after its starting
 snapshot. Backend conversations need not share a physical context window.
 
-### P5. Authorized project execution loop
+### P5. Execution and bounded compatibility
+
+For session-backed tasks, one ordinary Agent turn owns its search/edit/check/fix
+loop. Normal completion with known effects can finish the task, independently of
+optional user acceptance. Errors, cancellation and uncertain effects remain
+visible; restarting observes prior work without replaying it. No workflow-specific
+authorization form, mandatory checkpoint, Candidate or Evidence is required.
+
+The following continuation and acceptance loop applies to bounded tasks:
 
 Event-driven flow: observe change -> choose authorized next work -> execute or
 delegate -> consume/integrate outcome -> assess acceptance -> update state/docs ->

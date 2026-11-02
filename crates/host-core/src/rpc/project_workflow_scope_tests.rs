@@ -234,6 +234,89 @@ async fn ordinary_shell_keeps_auto_execution_without_workflow_approval() {
 }
 
 #[tokio::test]
+async fn workflow_file_batch_tickets_survive_canonicalization_without_widening_scope() {
+    let f = Fixture::new();
+    let turn = f.begin(true).await;
+    for (index, name, args, allowed) in [
+        (
+            0,
+            "Write",
+            json!({"path":"output","content":"scoped output"}),
+            true,
+        ),
+        (1, "Read", json!({"path":"policy.txt"}), true),
+        (
+            2,
+            "Write",
+            json!({"path":"outside","content":"denied"}),
+            false,
+        ),
+    ] {
+        let batch = format!("workflow-batch-{index}");
+        let call = format!("workflow-call-{index}");
+        let ticket = handle_request(
+            f.state.clone(),
+            "tools.fileBatchRegister",
+            json!({"sessionId":f.session,"batchId":batch,"ordinal":0,
+                "toolCallId":call,"toolName":name,"args":args}),
+            mpsc::unbounded_channel().0,
+        )
+        .await
+        .unwrap()["ticket"]
+            .clone();
+        handle_request(
+            f.state.clone(),
+            "tools.fileBatchSeal",
+            json!({"sessionId":f.session,"batchId":batch}),
+            mpsc::unbounded_channel().0,
+        )
+        .await
+        .unwrap();
+        let params = json!({"sessionId":f.session,"turnId":turn,"toolCallId":call,
+            "toolName":name,"args":args,"mode":"agent","fileBatchTicket":ticket});
+        let result = handle_request(
+            f.state.clone(),
+            "tools.execute",
+            params.clone(),
+            mpsc::unbounded_channel().0,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result["ok"], allowed, "{result}");
+        if !allowed {
+            assert_eq!(result["errorCode"], "WORKFLOW_RESOURCE_DENIED");
+        }
+        assert!(
+            handle_request(
+                f.state.clone(),
+                "tools.execute",
+                params,
+                mpsc::unbounded_channel().0,
+            )
+            .await
+            .is_err(),
+            "executed and rejected tickets must both settle"
+        );
+        handle_request(
+            f.state.clone(),
+            "tools.fileBatchClose",
+            json!({"sessionId":f.session,"batchId":batch}),
+            mpsc::unbounded_channel().0,
+        )
+        .await
+        .unwrap();
+    }
+    assert_eq!(
+        fs::read_to_string(f.root.join("output")).unwrap(),
+        "scoped output"
+    );
+    assert!(!f.root.join("outside").exists());
+    let budget = f.state.lock().await.tool_budget.snapshot();
+    assert_eq!(budget.active, 0);
+    assert_eq!(budget.queued, 0);
+}
+
+#[tokio::test]
 async fn workflow_shell_requires_exact_once_approval_even_with_auto_and_prior_grant() {
     let f = Fixture::new();
     let turn = f.begin(true).await;
@@ -668,7 +751,7 @@ async fn workflow_file_executor_rejects_a_target_reresolved_after_host_authoriza
     symlink(&other, &output).unwrap();
     for tool in ["Write", "Read", "Edit"] {
         let result=tools::execute_tool_with_path_access(Some(root),None,tool,&json!({"path":approved,"content":"must not write","old_string":"not authorized","new_string":"must not edit"}),tools::ToolExecutionOptions {
-            timeout_ms:None,bash_options:None,allow_external_paths:false,hashline:None,canonical_path_limit:Some(&approved),
+            timeout_ms:None,bash_options:None,allow_external_paths:false,hashline:None,canonical_path_limit:Some(&approved),visualization_root:None,
         }).await;
         assert_eq!(
             result.error_code.as_deref(),

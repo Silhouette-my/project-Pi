@@ -3,9 +3,8 @@
  *
  * The link is the whole interaction — no new Composer trigger symbol — and the
  * transcript shows it as a card next to the user's words. Electron main is the
- * only writer: it reads the referenced conversation through the host, refuses
- * what this conversation may not pull, and attaches a bounded excerpt that
- * travels with the message from then on.
+ * only writer: it reads the referenced conversation through the host and
+ * attaches a bounded excerpt that travels with the message from then on.
  */
 import { parseSessionLinks, type MessageAttachment } from "@pi-desktop/shared";
 import type { HostProcess } from "./host-process";
@@ -67,27 +66,22 @@ export function formatSessionExcerpt(
   return [head, "", ...lines].join("\n");
 }
 
-/** The project a path belongs to, as the host compares it. */
-function canonicalProject(path: string | undefined): string {
-  return (path ?? "").replace(/[\\/]+$/, "");
-}
-
 /**
  * Resolves every session link in one prompt into an attachment record. Skipped
  * references stay plain text in the message: the current conversation is never
- * referenced, and another project's transcript is not this turn's context.
+ * referenced, and an unknown id is dropped. A conversation of another project
+ * is referenced like any other: the Composer's `@` list offers it under its
+ * project, so naming it is the user's explicit choice (ADR conversation-mention).
  */
 export async function resolveSessionReferences({
   host,
   logger,
   sessionId,
-  projectPath,
   content,
 }: {
   host: HostProcess;
   logger: Pick<Logger, "app">;
   sessionId: string;
-  projectPath?: string;
   content: string;
 }): Promise<MessageAttachment[]> {
   const ids = parseSessionLinks(content).filter((id) => id !== sessionId);
@@ -103,13 +97,6 @@ export async function resolveSessionReferences({
       const referenced = result.session;
       if (!referenced) {
         logger.app("session", "warn", "session reference not found", {
-          sessionId,
-          data: id,
-        });
-        continue;
-      }
-      if (canonicalProject(referenced.projectPath) !== canonicalProject(projectPath)) {
-        logger.app("session", "warn", "session reference outside this project was skipped", {
           sessionId,
           data: id,
         });

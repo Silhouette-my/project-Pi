@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowWorkstream } from "@pi-desktop/shared";
-import { Button, Checkbox, Field, Input, Select, Textarea } from "../../components/ui";
+import { Button, Field, Input, Textarea } from "../../components/ui";
+import { IconChevronRight } from "../../components/icons";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 
 export function WorkstreamEditor({
@@ -17,18 +18,12 @@ export function WorkstreamEditor({
 }) {
   const { t } = useTranslation();
   const { snapshot, mutate, busy } = useProjectWorkflow();
+  const sessionTask = !workstream || workstream.executionMode === "session";
   const [title, setTitle] = useState(workstream?.title ?? "");
   const [goal, setGoal] = useState(workstream?.goal ?? "");
   const [acceptance, setAcceptance] = useState(
     workstream?.acceptance.map((item) => item.title).join("\n") ?? "",
   );
-  const [ownerKind, setOwnerKind] = useState<WorkflowWorkstream["owner"]["kind"]>(
-    workstream?.owner.kind ?? "user",
-  );
-  const [ownerRef, setOwnerRef] = useState(workstream?.owner.ref ?? "user");
-  const [priority, setPriority] = useState(workstream?.priority ?? 0);
-  const [nextAction, setNextAction] = useState(workstream?.nextAction ?? "");
-  const [dependencyIds, setDependencyIds] = useState(workstream?.dependencyIds ?? []);
   const baseline = useRef(workstream);
   const [conflict, setConflict] = useState(false);
   const reload = () => {
@@ -36,11 +31,6 @@ export function WorkstreamEditor({
     setTitle(workstream?.title ?? "");
     setGoal(workstream?.goal ?? "");
     setAcceptance(workstream?.acceptance.map((item) => item.title).join("\n") ?? "");
-    setOwnerKind(workstream?.owner.kind ?? "user");
-    setOwnerRef(workstream?.owner.ref ?? "user");
-    setPriority(workstream?.priority ?? 0);
-    setNextAction(workstream?.nextAction ?? "");
-    setDependencyIds(workstream?.dependencyIds ?? []);
     setConflict(false);
   };
   const save = async () => {
@@ -58,13 +48,9 @@ export function WorkstreamEditor({
           },
       );
     const fields = {
-      title: title.trim(),
+      title: title.trim() || Array.from(goal.trim().split(/\r?\n/, 1)[0]).slice(0, 80).join(""),
       goal: goal.trim(),
       acceptance: items,
-      owner: { kind: ownerKind, ref: ownerRef.trim() },
-      priority,
-      nextAction: nextAction.trim(),
-      dependencyIds,
     };
     const patch: Partial<typeof fields> = {};
     if (baseline.current && workstream) {
@@ -89,6 +75,11 @@ export function WorkstreamEditor({
           kind: "workstream.create",
           workstream: {
             ...fields,
+            owner: { kind: "user", ref: "user" },
+            priority: 0,
+            nextAction: "",
+            dependencyIds: [],
+            executionMode: "session",
             id,
             projectId,
             status: "draft",
@@ -119,85 +110,41 @@ export function WorkstreamEditor({
           </Button>
         </div>
       )}
-      <Field label={t("workflow.title")}>
-        <Input
-          autoFocus
-          required
-          maxLength={512}
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-        />
-      </Field>
       <Field label={t("workflow.goal")}>
         <Textarea
+          autoFocus
           required
-          rows={3}
+          rows={5}
+          placeholder={t("workflow.taskPlaceholder")}
           value={goal}
           onChange={(event) => setGoal(event.target.value)}
         />
       </Field>
-      <Field label={t("workflow.acceptance")} hint={t("workflow.acceptanceHint")}>
-        <Textarea
-          required
-          rows={3}
-          value={acceptance}
-          onChange={(event) => setAcceptance(event.target.value)}
-        />
-      </Field>
-      <div className="workflow-form-grid">
-        <Field label={t("workflow.ownerKind")}>
-          <Select
-            value={ownerKind}
-            onChange={(event) => setOwnerKind(event.target.value as typeof ownerKind)}
-          >
-            {(["user", "session", "agent"] as const).map((kind) => (
-              <option key={kind} value={kind}>
-                {t(`workflow.ownerKinds.${kind}`)}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label={t("workflow.owner")}>
-          <Input required value={ownerRef} onChange={(event) => setOwnerRef(event.target.value)} />
-        </Field>
-        <Field label={t("workflow.priority")}>
-          <Input
-            type="number"
-            step={1}
-            value={priority}
-            onChange={(event) => setPriority(Number(event.target.value))}
-          />
-        </Field>
-      </div>
-      <Field label={t("workflow.nextAction")}>
-        <Textarea
-          rows={2}
-          value={nextAction}
-          onChange={(event) => setNextAction(event.target.value)}
-        />
-      </Field>
-      <fieldset>
-        <legend>{t("workflow.dependencies")}</legend>
-        {snapshot?.workstreams
-          .filter((item) => item.projectId === projectId && item.id !== workstream?.id)
-          .map((item) => (
-            <Checkbox
-              key={item.id}
-              checked={dependencyIds.includes(item.id)}
-              onChange={(event) =>
-                setDependencyIds((ids) =>
-                  event.target.checked ? [...ids, item.id] : ids.filter((id) => id !== item.id),
-                )
-              }
-              label={item.title}
+      <details className="workflow-authority-details" open={workstream ? true : undefined}>
+        <summary tabIndex={0}><IconChevronRight size={12} className="project-disclosure-icon" />{t(sessionTask ? "workflow.taskDetails" : "workflow.editWorkstream")}</summary>
+        <div className="workflow-task-fields">
+          <Field label={t("workflow.title")} hint={t("workflow.titleAutoHint")}>
+            <Input
+              maxLength={512}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
             />
-          ))}
-      </fieldset>
+          </Field>
+          <Field label={t("workflow.acceptance")} hint={t(sessionTask ? "workflow.acceptanceOptionalHint" : "workflow.acceptanceHint")}>
+            <Textarea
+              required={!sessionTask}
+              rows={3}
+              value={acceptance}
+              onChange={(event) => setAcceptance(event.target.value)}
+            />
+          </Field>
+        </div>
+      </details>
       <div className="workflow-actions">
         <Button
           type="submit"
           variant="primary"
-          disabled={busy || !title.trim() || !goal.trim() || !acceptance.trim() || !ownerRef.trim()}
+          disabled={busy || !goal.trim() || (!sessionTask && !acceptance.trim())}
         >
           {t("workflow.save")}
         </Button>

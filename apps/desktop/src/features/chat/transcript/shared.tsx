@@ -32,7 +32,10 @@ import { useVerifiedChatText } from "../../../hooks/use-verified-chat-text";
 import { isHtmlFilePath } from "../../../lib/chat-links";
 import type { SourcePositionProps } from "../../../lib/markdown-source";
 import type { ToolAction } from "../../../lib/tool-display";
-import { calculateTokenRate } from "../../../lib/context-usage";
+import {
+  calculateTokenRate,
+  turnUsageBreakdown,
+} from "../../../lib/context-usage";
 import { useAppStore } from "../../../stores/app-store";
 import { Markdown, useCopy } from "../../../components/Markdown";
 import {
@@ -40,7 +43,6 @@ import {
   IconAudio,
   IconBot,
   IconBranch,
-  IconChat,
   IconCheck,
   IconChevronRight,
   IconCircleAlert,
@@ -61,6 +63,8 @@ import {
   IconX,
 } from "../../../components/icons";
 import { TooltipButton } from "../../../components/ui";
+import { TextShimmer } from "./TextShimmer";
+import { TurnUsageCapsule } from "./TurnUsageCapsule";
 
 /**
  * Legacy message navigation reveals the row it names, at message precision.
@@ -158,19 +162,25 @@ export function MessageMeta({
   usage,
   responseDurationMs,
   responseOutputTokens,
+  responseOutputEstimated,
 }: {
   modelId?: string;
   usage?: MessageUsage;
   responseDurationMs?: number;
   responseOutputTokens?: number;
+  responseOutputEstimated?: boolean;
 }) {
   const { t } = useTranslation();
   const throughput = calculateTokenRate(
     responseOutputTokens ?? usage?.outputTokens ?? 0,
     responseDurationMs,
   );
+  // Completed turns with usage replace the legacy estimated-throughput chip
+  // with the full turn capsule; only usage-less turns keep the estimate.
+  const showTurnUsage =
+    usage !== undefined && turnUsageBreakdown(usage).totalTokens > 0;
   const showThroughput = !usage && throughput !== undefined;
-  if (!modelId && !showThroughput) {
+  if (!modelId && !showThroughput && !showTurnUsage) {
     return null;
   }
   return (
@@ -179,6 +189,13 @@ export function MessageMeta({
         <span className="message-meta-chip model" title={modelId}>
           {modelId}
         </span>
+      ) : null}
+      {usage && showTurnUsage ? (
+        <TurnUsageCapsule
+          usage={usage}
+          throughput={throughput}
+          estimated={responseOutputEstimated}
+        />
       ) : null}
       {showThroughput ? (
         <span className="message-meta-chip throughput">
@@ -487,7 +504,7 @@ function SessionChip({ sessionId, fallbackName, ...position }: {
     (state) => state.sessions.find((session) => session.id === sessionId)?.title,
   );
   const name = (liveTitle ?? "").trim() || fallbackName;
-  const label = `${t("chat.sessionReference")} · ${name}`;
+  const label = `@${name}`;
   const open = () => void selectSession(sessionId).catch(() => undefined);
   // This chip carries a conversation title, so it can be wider than whatever
   // space a line has left. Chromium never fragments a `<button>` across lines:
@@ -503,7 +520,8 @@ function SessionChip({ sessionId, fallbackName, ...position }: {
       {...position}
       data-action="open-session-reference"
       data-session-id={sessionId}
-      title={t("chat.sessionReferenceOpen", { title: name })}
+      data-mention=""
+      title={t("mention.tooltip", { title: name })}
       aria-label={label}
       onClick={open}
       onKeyDown={(event) => {
@@ -512,9 +530,6 @@ function SessionChip({ sessionId, fallbackName, ...position }: {
         open();
       }}
     >
-      <span className="composer-chip-icon" aria-hidden>
-        <IconChat size={13} />
-      </span>
       <span className="composer-chip-name">{label}</span>
     </span>
   );
@@ -702,14 +717,13 @@ export const ThinkingRow = memo(function ThinkingRow({
         <span className="tool-row-icon" aria-hidden>
           <IconSparkles size={15} />
         </span>
-        <span className="tool-row-name running">
-          {t("chat.thinking", { defaultValue: "Thinking" })}
+        <span className="tool-row-name">
+          <TextShimmer text={t("chat.thinking", { defaultValue: "Thinking" })} />
         </span>
       </div>
     ) : null;
   }
   const text = thinkingText(message);
-  const summary = text.replace(/\s+/g, " ").trim();
   return (
     <div className={`tool-row thinking ${open ? "open" : ""}`}>
       <button
@@ -723,10 +737,12 @@ export const ThinkingRow = memo(function ThinkingRow({
         <span className="tool-row-icon">
           <IconSparkles size={15} aria-hidden />
         </span>
-        <span className={`tool-row-name ${streaming ? "running" : ""}`}>
-          {t("chat.thinking", { defaultValue: "Thinking" })}
+        <span className="tool-row-name">
+          <TextShimmer
+            text={t("chat.thinking", { defaultValue: "Thinking" })}
+            active={streaming && !open}
+          />
         </span>
-        <span className="tool-row-summary">{summary}</span>
         <span className="tool-row-caret" aria-hidden>
           <IconChevronRight size={12} />
         </span>

@@ -36,12 +36,16 @@ const REDIRECT_ENV = [
 ] as const;
 
 function runGit(cwd: string, args: string[]): Promise<RunResult> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       GIT_OPTIONAL_LOCKS: "0",
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_NO_LAZY_FETCH: "1",
     };
-    for (const name of REDIRECT_ENV) delete env[name];
+    for (const name of Object.keys(env)) {
+      if ((REDIRECT_ENV as readonly string[]).includes(name) || /^GIT_CONFIG_(KEY|VALUE)_/.test(name)) delete env[name];
+    }
 
     const child = spawn(
       "git",
@@ -50,18 +54,28 @@ function runGit(cwd: string, args: string[]): Promise<RunResult> {
         "core.fsmonitor=false",
         "-c",
         `core.hooksPath=${NULL_HOOKS_PATH}`,
+        "-c", "core.pager=cat",
+        "-c", "core.quotepath=false",
         ...args,
       ],
       { cwd, env },
     );
+    child.stdin.end();
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (d) => (stdout += String(d)));
-    child.stderr.on("data", (d) => (stderr += String(d)));
-    child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
-    child.on("error", (err) =>
-      resolve({ code: 1, stdout: "", stderr: String(err) }),
-    );
+    let bytes = 0;
+    const timer = setTimeout(() => { child.kill(); reject(new Error("Git read timed out")); }, 15000);
+    const append = (data: Buffer, error: boolean) => {
+      bytes += data.length;
+      if (bytes > 4 * 1024 * 1024) {
+        child.kill(); reject(new Error("Git output exceeds the 4 MiB read limit")); return;
+      }
+      if (error) stderr += String(data); else stdout += String(data);
+    };
+    child.stdout.on("data", (data: Buffer) => append(data, false));
+    child.stderr.on("data", (data: Buffer) => append(data, true));
+    child.on("close", (code) => { clearTimeout(timer); resolve({ code: code ?? 1, stdout, stderr }); });
+    child.on("error", (error) => { clearTimeout(timer); reject(error); });
   });
 }
 
@@ -233,6 +247,7 @@ export function parseFilePatch(
 export async function collectWorkspaceDiff(cwd: string): Promise<WorkspaceDiff> {
   const probe = await runGit(cwd, ["rev-parse", "--is-inside-work-tree"]);
   if (probe.code !== 0 || probe.stdout.trim() !== "true") {
+    if (probe.code !== 0 && !/not a git repository/i.test(probe.stderr)) throw new Error(probe.stderr.trim() || "Git read failed");
     return { repo: false, clean: true, files: [] };
   }
 
@@ -241,13 +256,17 @@ export async function collectWorkspaceDiff(cwd: string): Promise<WorkspaceDiff> 
     "--porcelain=v1",
     "-z",
     "--untracked-files=all",
+    "--", ".",
   ]);
   if (status.code !== 0) {
-    return { repo: false, clean: true, files: [] };
+    throw new Error(status.stderr.trim() || "Git status failed");
   }
-  const entries = parseStatusZ(status.stdout);
+  const prefixResult = await runGit(cwd, ["rev-parse", "--show-prefix"]);
+  if (prefixResult.code !== 0) throw new Error(prefixResult.stderr.trim() || "Git path lookup failed");
+  const prefix = prefixResult.stdout.trim();
+  const entries = parseStatusZ(status.stdout).map((entry) => ({ ...entry, path: prefix ? entry.path.slice(prefix.length) : entry.path }));
   if (entries.length === 0) {
-    return { repo: true, clean: true, files: [] };
+    return { repo: true, clean: true, files: [], stagedFiles: [], unstagedFiles: [] };
   }
 
   const truncated = entries.length > MAX_DIFF_FILES;
@@ -256,29 +275,23 @@ export async function collectWorkspaceDiff(cwd: string): Promise<WorkspaceDiff> 
     scoped.filter((e) => e.untracked).map((e) => e.path),
   );
 
-  const files: DiffFile[] = [];
-
-  // Tracked changes: one spawn covers staged + unstaged vs HEAD. A repo
-  // without any commit yet has no HEAD; fall back to the empty tree so
-  // freshly-initialized repos still diff.
+  // Keep the aggregate files view for existing consumers and expose the index
+  // and working tree separately: staged edits can cancel out in the net diff.
   const head = await runGit(cwd, ["rev-parse", "--verify", "HEAD"]);
-  const base =
-    head.code === 0 ? "HEAD" : "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-  const tracked = await runGit(cwd, [
-    "diff",
-    base,
-    "--no-color",
-    "--no-ext-diff",
-    "--no-textconv",
-    "-M",
-    "--unified=3",
-  ]);
-  if (tracked.code === 0 || tracked.stdout) {
-    for (const chunk of splitUnifiedDiff(tracked.stdout)) {
+  const empty = head.code === 0 ? null : await runGit(cwd, ["hash-object", "-t", "tree", "--stdin"]);
+  if (empty && empty.code !== 0) throw new Error(empty.stderr.trim() || "Git empty tree lookup failed");
+  const base = head.code === 0 ? "HEAD" : empty!.stdout.trim();
+  const trackedDiff = async (layer: string[]) => {
+    const result = await runGit(cwd, ["diff", "--relative", "--no-color", "--no-ext-diff", "--no-textconv", "-M", "--unified=3", ...layer, "--", "."]);
+    if (result.code !== 0) throw new Error(result.stderr.trim() || "Git diff failed");
+    return splitUnifiedDiff(result.stdout).flatMap((chunk) => {
       const file = parseFilePatch(chunk);
-      if (file && !untrackedPaths.has(file.path)) files.push(file);
-    }
-  }
+      return file && !untrackedPaths.has(file.path) ? [file] : [];
+    });
+  };
+  const files = await trackedDiff([base]);
+  const stagedFiles = await trackedDiff(["--cached", base]);
+  const unstagedFiles = await trackedDiff([]);
 
   // Untracked files: --no-index against /dev/null; exit code 1 means "differs".
   for (const entry of scoped) {
@@ -294,27 +307,33 @@ export async function collectWorkspaceDiff(cwd: string): Promise<WorkspaceDiff> 
       "/dev/null",
       entry.path,
     ]);
+    if (res.code > 1) throw new Error(res.stderr.trim() || "Untracked file diff failed");
     const chunk = splitUnifiedDiff(res.stdout)[0];
     const file = chunk ? parseFilePatch(chunk, "untracked") : null;
     if (file) {
       files.push(file);
+      unstagedFiles.push(file);
     } else {
       // Unreadable or empty new file — still list it.
-      files.push({
+      const emptyFile: DiffFile = {
         path: entry.path,
         status: "untracked",
         additions: 0,
         deletions: 0,
         hunks: [],
-      });
+      };
+      files.push(emptyFile);
+      unstagedFiles.push(emptyFile);
     }
   }
 
   files.sort((a, b) => a.path.localeCompare(b.path));
   return {
     repo: true,
-    clean: files.length === 0,
-    files,
-    truncated: truncated || undefined,
+    clean: false,
+    files: files.slice(0, MAX_DIFF_FILES),
+    stagedFiles: stagedFiles.slice(0, MAX_DIFF_FILES),
+    unstagedFiles: unstagedFiles.slice(0, MAX_DIFF_FILES),
+    truncated: truncated || files.length > MAX_DIFF_FILES || stagedFiles.length > MAX_DIFF_FILES || unstagedFiles.length > MAX_DIFF_FILES || undefined,
   };
 }

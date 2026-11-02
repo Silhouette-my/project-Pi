@@ -22,6 +22,8 @@ export type ComposerIpcDependencies = {
     description?: string;
   }>>;
   disabledBuiltinSkills?: () => Promise<string[]>;
+  /** Selects GenUI guidance for local sessions; legacy guidance stays the default. */
+  inlineVisualizationsEnabled?: () => Promise<boolean>;
   pluginActiveInProject: (pluginId: string, projectPath: string | null | undefined) => boolean;
   loadComposerTemplatesCached: (root: string | null) => Promise<Array<{
     name: string;
@@ -31,8 +33,16 @@ export type ComposerIpcDependencies = {
   }>>;
 };
 
+export type ComposerCommandOptions = {
+  /** Remote sessions use the legacy contained-file visualization contract. */
+  remote?: boolean;
+};
+
 export type ComposerCommandService = {
-  buildComposerCommands: (root: string | null) => Promise<ComposerCommand[]>;
+  buildComposerCommands: (
+    root: string | null,
+    options?: ComposerCommandOptions,
+  ) => Promise<ComposerCommand[]>;
 };
 
 export function createComposerCommandService({
@@ -42,14 +52,18 @@ export function createComposerCommandService({
   agentExtensions,
   activeUserSkills,
   disabledBuiltinSkills = async () => [],
+  inlineVisualizationsEnabled = async () => false,
   pluginActiveInProject,
   loadComposerTemplatesCached,
 }: Omit<ComposerIpcDependencies, "registrar" | "optionalWorkspaceRoot">): ComposerCommandService {
   const loadComposerSkillCommands = async (
     root: string | null,
+    remote: boolean,
   ): Promise<ComposerCommand[]> => {
     const builtins = builtinSkills({
       workspacePath: root,
+      remote,
+      inlineVisualizations: await inlineVisualizationsEnabled(),
       pluginPaths: plugins.listLoaded().map((loaded) => loaded.path),
       disabledIds: await disabledBuiltinSkills(),
     });
@@ -84,6 +98,7 @@ export function createComposerCommandService({
 
   const buildComposerCommands = async (
     root: string | null,
+    options: ComposerCommandOptions = {},
   ): Promise<ComposerCommand[]> => {
     await refreshUserMcp?.(root);
     await userMcp?.toolsForProject(root);
@@ -113,7 +128,7 @@ export function createComposerCommandService({
       description: command.description ?? command.extensionLabel,
       id: trustedExtensionCommandId(command.name),
     }));
-    const skillCommands = await loadComposerSkillCommands(root).catch(() => []);
+    const skillCommands = await loadComposerSkillCommands(root, options.remote === true).catch(() => []);
     const statuses = userMcp?.listStatuses() ?? [];
     const ready = new Set(statuses
       .filter((status) => status.state === "ready" && status.toolCount > 0)

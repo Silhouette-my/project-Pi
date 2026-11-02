@@ -33,8 +33,10 @@ pub(crate) const PORTABLE_APPLICATION_FIELDS: &[&str] = &[
     "language",
     "fontFamily",
     "fontScale",
+    "accentColor",
     "showThinking",
     "thinkingDisplayMode",
+    "transcriptDisplayMode",
     "keepCommandsExpanded",
     "enterToSend",
     "largePasteThreshold",
@@ -99,8 +101,10 @@ pub const DOMAIN_ADAPTERS: &[DomainAdapterSpec] = &[
             "language",
             "fontFamily",
             "fontScale",
+            "accentColor",
             "showThinking",
             "thinkingDisplayMode",
+            "transcriptDisplayMode",
             "enterToSend",
             "keepCommandsExpanded",
             "keybindings",
@@ -628,14 +632,18 @@ mod tests {
     fn adapter_registry_covers_every_portable_domain() {
         assert_eq!(DOMAIN_ADAPTERS.len(), ALL_DOMAINS.len());
         assert!(!PORTABLE_APPLICATION_FIELDS.contains(&"defaultPermissionMode"));
-        // The explicit reasoning-display boolean, its legacy fallback, and the
-        // command-folding preference are portable, and each is advertised by the
-        // application adapter.
+        // The reasoning-display boolean, its legacy fallback, the transcript
+        // display mode and the deprecated command-folding preference are portable,
+        // and each is advertised by the application adapter.
         assert!(PORTABLE_APPLICATION_FIELDS.contains(&"showThinking"));
+        assert!(PORTABLE_APPLICATION_FIELDS.contains(&"transcriptDisplayMode"));
         assert!(PORTABLE_APPLICATION_FIELDS.contains(&"thinkingDisplayMode"));
         assert!(PORTABLE_APPLICATION_FIELDS.contains(&"keepCommandsExpanded"));
         let application = adapter_for(DOMAIN_APPLICATION).expect("application adapter");
         assert!(application.exportable_fields.contains(&"showThinking"));
+        assert!(application
+            .exportable_fields
+            .contains(&"transcriptDisplayMode"));
         assert!(application
             .exportable_fields
             .contains(&"thinkingDisplayMode"));

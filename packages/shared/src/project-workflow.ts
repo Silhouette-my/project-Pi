@@ -27,6 +27,8 @@ export const WorkflowAcceptanceSchema = object({
 export const WorkflowOwnerSchema = object({ kind: literals("user", "session", "agent"), ref: id });
 export const WorkflowWorkstreamSchema = object({
   id, projectId: id, title: id, goal: text, acceptance: Type.Array(WorkflowAcceptanceSchema),
+  /** Absent records retain bounded authorization and checkpoint semantics. */
+  executionMode: Type.Optional(Type.Literal("session")),
   owner: WorkflowOwnerSchema,
   status: literals("draft", "ready", "executing", "paused", "blocked", "awaiting_user", "completed", "cancelled"),
   priority: Type.Integer(), order: Type.Number(), dependencyIds: strings,
@@ -37,8 +39,20 @@ export const WorkflowWorkstreamSchema = object({
 export type WorkflowWorkstream = Type.Static<typeof WorkflowWorkstreamSchema>;
 export type WorkflowStatus = WorkflowWorkstream["status"];
 
-export const WorkflowFolderSchema = object({ id, name: id, parentId: optionalId, order: Type.Number() });
+export const WorkflowTreeScopeSchema = literals("chats", "projects", "project");
+export type WorkflowTreeScope = Type.Static<typeof WorkflowTreeScopeSchema>;
+/** Built-in sidebar categories; user-defined categories use their own ids. */
+export const WORKFLOW_CHATS_CATEGORY = "chats";
+export const WORKFLOW_PROJECTS_CATEGORY = "projects";
+export const WorkflowCategorySchema = object({ id, name: id, order: Type.Number() });
+export type WorkflowCategory = Type.Static<typeof WorkflowCategorySchema>;
+export const WorkflowFolderSchema = object({ id, name: id, parentId: optionalId, order: Type.Number(),
+  scope: Type.Optional(WorkflowTreeScopeSchema), projectId: optionalId, categoryId: optionalId });
 export type WorkflowFolder = Type.Static<typeof WorkflowFolderSchema>;
+export const WorkflowProjectNavigationSchema = object({ projectId: id, folderId: optionalId, order: Type.Number(), categoryId: optionalId,
+  /** Absent means not a favourite, so rows written before the flag load unchanged. */
+  favorite: Type.Optional(Type.Boolean()) });
+export type WorkflowProjectNavigation = Type.Static<typeof WorkflowProjectNavigationSchema>;
 export const WorkflowConversationSchema = object({
   sessionId: id, projectId: id, workstreamId: id,
   parentSessionId: optionalId, sourceMessageId: optionalId, sourceRevision: revision,
@@ -75,7 +89,8 @@ export const WorkflowEffectSchema = object({
 });
 export const WorkflowRunSchema = object({
   id, projectId: id, workstreamId: id, sessionId: id, executor: id,
-  workstreamRevision: revision, decisionRevision: revision, authorizationId: id,
+  executionMode: Type.Optional(Type.Literal("session")),
+  workstreamRevision: revision, decisionRevision: revision, authorizationId: optionalId,
   state: literals("queued", "executing", "paused", "completed", "failed", "cancelled", "interrupted", "unknown"),
   outcome: text, effects: Type.Array(WorkflowEffectSchema),
   startedAt: id, updatedAt: id, completionKey: optionalId,
@@ -111,7 +126,7 @@ export const WorkflowDeliverySchema = object({
 });
 export type WorkflowDelivery = Type.Static<typeof WorkflowDeliverySchema>;
 export const WorkflowNavigationSchema = object({
-  sessionId: id, folderId: optionalId, order: Type.Number(), favorite: Type.Boolean(),
+  sessionId: id, folderId: optionalId, categoryId: optionalId, order: Type.Number(), favorite: Type.Boolean(),
   lastAccessedAt: Type.Optional(id), lastMessageId: optionalId,
 });
 export type WorkflowNavigation = Type.Static<typeof WorkflowNavigationSchema>;
@@ -121,6 +136,10 @@ export type ProjectAgent = Type.Static<typeof ProjectAgentSchema>;
 export const ProjectWorkflowSnapshotSchema = object({
   schemaVersion: Type.Literal(PROJECT_WORKFLOW_VERSION), revision,
   projectAgents: Type.Optional(Type.Array(ProjectAgentSchema)),
+  projectNavigation: Type.Optional(Type.Array(WorkflowProjectNavigationSchema)),
+  categories: Type.Optional(Type.Array(WorkflowCategorySchema)),
+  /** Display order of every category id, built-ins included; absent = default order. */
+  categoryOrder: Type.Optional(strings),
   folders: Type.Array(WorkflowFolderSchema), navigation: Type.Array(WorkflowNavigationSchema),
   expandedIds: strings, workstreams: Type.Array(WorkflowWorkstreamSchema),
   conversations: Type.Array(WorkflowConversationSchema), resources: Type.Array(WorkflowResourceSchema),
@@ -136,13 +155,22 @@ const common = { commandId: id, expectedRevision: revision };
 const command = <T extends Type.TProperties, K extends string>(kind: K, properties: T) =>
   object({ ...common, kind: Type.Literal(kind), ...properties });
 const scope = { projectId: id, workstreamId: id };
+const treeTarget = object({ kind: literals("folder", "session", "project"), id });
 export const ProjectWorkflowUserCommandSchema = Type.Union([
   command("folder.create", { folder: WorkflowFolderSchema }),
   command("folder.update", { folder: WorkflowFolderSchema }),
   command("folder.remove", { folderId: id }),
-  command("navigation.move", { sessionIds: strings, folderId: optionalId }),
+  command("category.create", { category: WorkflowCategorySchema }),
+  command("category.update", { category: WorkflowCategorySchema }),
+  command("category.remove", { categoryId: id }),
+  command("category.reorder", { categoryIds: Type.Array(id, { maxItems: 1000 }) }),
+  command("navigation.move", { sessionIds: strings, folderId: optionalId, categoryId: optionalId }),
   command("navigation.update", { navigation: WorkflowNavigationSchema }),
   command("navigation.expand", { expandedIds: strings }),
+  command("project.favorite", { projectId: id, favorite: Type.Boolean(), order: Type.Optional(Type.Number()) }),
+  command("tree.move", { target: treeTarget,
+    scope: WorkflowTreeScopeSchema, projectId: optionalId, folderId: optionalId, categoryId: optionalId, order: Type.Number(),
+    siblingOrder: Type.Optional(Type.Array(treeTarget, { maxItems: 1000 })) }),
   command("workstream.create", { workstream: WorkflowWorkstreamSchema }),
   command("workstream.update", { ...scope, patch: object({
     title: Type.Optional(id), goal: Type.Optional(text), acceptance: Type.Optional(Type.Array(WorkflowAcceptanceSchema)),
@@ -152,6 +180,11 @@ export const ProjectWorkflowUserCommandSchema = Type.Union([
     currentCandidateId: Type.Optional(Type.Union([id, Type.Null()])), mainSessionId: optionalId,
   }) }),
   command("conversation.link", { conversation: WorkflowConversationSchema }),
+  // Return policy is the one conversation field that stays user-editable after
+  // linking; context and ancestry remain immutable (ADR conversation-return-policy-mutable).
+  command("conversation.policy", { ...scope, sessionId: id, returnPolicy: WorkflowConversationSchema.properties.returnPolicy }),
+  // "Return to conversation": the host records a proposal or a report per the stored policy.
+  command("conversation.return", { ...scope, sessionId: id, recordId: id, title: id, text, createdAt: id }),
   command("resource.put", { resource: WorkflowResourceSchema }),
   command("decision.propose", { decision: WorkflowDecisionSchema }),
   command("decision.resolve", { ...scope, decisionId: id, resolution: literals("adopt", "dismiss", "alternative"), source: WorkflowSourceSchema }),
@@ -184,7 +217,7 @@ export type ProjectWorkflowChanged = { revision: number; commandId: string; kind
 const actionBase = { ...common, ...scope };
 export const ProjectWorkflowActionSchema = Type.Union([
   object({ ...common, kind: Type.Literal("agent.open"), projectId: id }),
-  object({ ...actionBase, kind: Type.Literal("start"), sessionId: optionalId, authorizationId: id }),
+  object({ ...actionBase, kind: Type.Literal("start"), sessionId: optionalId, authorizationId: optionalId }),
   object({ ...actionBase, kind: Type.Literal("discuss"), sessionId: optionalId, pause: Type.Boolean() }),
   object({ ...actionBase, kind: Type.Literal("adopt"), decisionId: id, source: WorkflowSourceSchema }),
   object({ ...actionBase, kind: Type.Literal("pause") }),

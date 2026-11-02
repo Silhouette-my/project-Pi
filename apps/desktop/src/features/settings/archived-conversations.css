@@ -1,0 +1,33 @@
+.dialog.archived-conversations-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(700px, calc(100dvh - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.archived-conversations-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.archived-conversations-heading h2 { margin: 0; font-size: var(--text-lg-plus); }
+.archived-conversations-list { margin: 0; padding: 0; overflow: auto; list-style: none; }
+.archived-conversation {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--ds-border-default);
+}
+.archived-conversation:last-child { border-bottom: none; }
+.archived-conversation-info { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.archived-conversation-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archived-conversation-meta { color: var(--ds-text-secondary); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.archived-conversation-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.archived-conversations-empty, .archived-conversations-notice { color: var(--ds-text-secondary); margin: 0; }
+.archived-conversations-empty { padding: 24px 0; text-align: center; }
+@media (max-width: 600px) {
+  .archived-conversation { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .archived-conversation-info { width: 100%; }
+}

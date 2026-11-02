@@ -108,5 +108,8 @@ describe("host ports", () => {
       createdAt: "2026-10-20T00:00:00Z", idempotencyKey: "workflow:legacy", userMessageId: "workflow-run:workflow:legacy" };
     expect(fromHostQueueEntry(entry).workflowRunId).toBe("workflow:legacy");
     expect(fromHostQueueEntry({ ...entry, userMessageId: "ordinary-user-id" }).workflowRunId).toBeUndefined();
+    const sessionEntry = fromHostQueueEntry({ ...entry, userMessageId: "83cc7671-8c42-4c21-967d-c9f5278f4f62" });
+    expect(sessionEntry.workflowRunId).toBeUndefined();
+    expect(sessionEntry.userMessageId).toBe("83cc7671-8c42-4c21-967d-c9f5278f4f62");
   });
 });

@@ -37,7 +37,10 @@ import { ModelConfigPage } from "../../components/settings/ModelConfigPage";
 import { KeyboardShortcutsSection } from "../../components/settings/KeyboardShortcutsSection";
 import { FontFamilyRow } from "../../components/settings/FontFamilyRow";
 import { ShowThinkingRow } from "../../components/settings/ShowThinkingRow";
-import { KeepCommandsExpandedRow } from "../../components/settings/KeepCommandsExpandedRow";
+import { AccentColorRow } from "../../components/settings/AccentColorRow";
+import { panelPinMode, setPanelPinMode } from "../../lib/panel-pin";
+import { TranscriptDisplayModeRow } from "../../components/settings/TranscriptDisplayModeRow";
+import { RadialMenuSettings } from "../../components/settings/RadialMenuSettings";
 import { FontSizeRow } from "../../components/settings/FontSizeRow";
 import { LanguageRow } from "../../components/settings/LanguageRow";
 import { SettingsMenuSelect } from "../../components/settings/SettingsMenuSelect";
@@ -63,6 +66,7 @@ import { CloseBehaviorSection, DeveloperSection } from "./developer-sections";
 import { PluginScenicThemesDestination } from "../../components/settings/PluginScenicThemesDestination";
 import { ConfigSyncPage } from "../../components/settings/ConfigSyncPage";
 import { StorageSettingsSection } from "./StorageSettingsSection";
+import { ArchivedConversationsSection } from "./ArchivedConversationsSection";
 
 type SettingsTab = ReturnType<typeof useAppStore.getState>["settingsTab"];
 
@@ -412,6 +416,7 @@ export function SettingsPage() {
             <div className="settings-stack">
               <SettingsCard title={t("settings.appearance")}>
                 <ThemeRow settings={settings} saveSettings={saveSettings} />
+                <AccentColorRow settings={settings} saveSettings={saveSettings} />
                 <LanguageRow settings={settings} saveSettings={saveSettings} />
                 <FontFamilyRow settings={settings} saveSettings={saveSettings} />
                 <FontSizeRow settings={settings} saveSettings={saveSettings} />
@@ -469,9 +474,51 @@ export function SettingsPage() {
                 </SettingsRow>
               </SettingsCard>
 
+              <SettingsCard title={t("settings.panelLayout")}>
+                {(["sidebarPinned", "workPanelPinned"] as const).map((key) => (
+                  <SettingsRow
+                    key={key}
+                    title={t(`settings.${key}`)}
+                    description={t(`settings.${key}Desc`)}
+                  >
+                    <SegmentedControl
+                      value={panelPinMode(settings, key)}
+                      label={t(`settings.${key}`)}
+                      onChange={(mode) => void setPanelPinMode(key, mode)}
+                      options={(["auto", "pinned", "hidden"] as const).map((mode) => ({
+                        value: mode,
+                        label: t(`settings.panelMode.${mode}`),
+                      }))}
+                    />
+                  </SettingsRow>
+                ))}
+              </SettingsCard>
+
+              <SettingsCard title={t("settings.scheduledTasks")}>
+                <SettingsRow
+                  title={t("settings.scheduledTasks")}
+                  description={t("settings.scheduledTasksDesc")}
+                >
+                  <SettingsToggle
+                    checked={settings.scheduledTasksEnabled !== false}
+                    label={t("settings.scheduledTasks")}
+                    onChange={() => void saveSettings({
+                      scheduledTasksEnabled: settings.scheduledTasksEnabled === false,
+                    })}
+                  />
+                </SettingsRow>
+              </SettingsCard>
+
+              <RadialMenuSettings
+                settings={settings}
+                saveSettings={saveSettings}
+              />
+
               <NetworkProxySection settings={settings} saveSettings={saveSettings} />
 
               <StorageSettingsSection />
+
+              <ArchivedConversationsSection />
 
               <SettingsCard title={t("settings.power")}>
                 <SettingsRow
@@ -547,7 +594,7 @@ export function SettingsPage() {
                 <CommandShellRow settings={settings} saveSettings={saveSettings} />
                 <LinkOpenTargetRow settings={settings} saveSettings={saveSettings} />
                 <ShowThinkingRow settings={settings} saveSettings={saveSettings} />
-                <KeepCommandsExpandedRow settings={settings} saveSettings={saveSettings} />
+                <TranscriptDisplayModeRow settings={settings} saveSettings={saveSettings} />
                 <ContextUsageDisplayRow
                   settings={settings}
                   saveSettings={saveSettings}
@@ -580,6 +627,20 @@ export function SettingsPage() {
                     checked={settings.smoothStreaming !== false}
                     label={t("settings.smoothStreaming")}
                     onChange={() => void saveSettings({ smoothStreaming: !(settings.smoothStreaming !== false) })}
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  title={t("settings.inlineVisualizations")}
+                  description={t("settings.inlineVisualizationsDesc")}
+                >
+                  <SettingsToggle
+                    checked={settings.inlineVisualizations === true}
+                    label={t("settings.inlineVisualizations")}
+                    onChange={() =>
+                      void saveSettings({
+                        inlineVisualizations: settings.inlineVisualizations !== true,
+                      })
+                    }
                   />
                 </SettingsRow>
                 <LargePasteThresholdRow

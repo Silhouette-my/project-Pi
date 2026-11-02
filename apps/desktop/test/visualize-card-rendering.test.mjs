@@ -116,7 +116,7 @@ test("the card document carries the CSP, design system, bridge, and fragment", a
     // stricter content policy can apply. Do not permit arbitrary web frames.
     const { readFile } = await import("node:fs/promises");
     const parentHtml = await readFile(new URL("../index.html", import.meta.url), "utf8");
-    assert.match(parentHtml, /frame-src 'self' pi-visualize:;/);
+    assert.match(parentHtml, /frame-src 'self' pi-visualize: pi-genui:;/);
     assert.doesNotMatch(parentHtml, /frame-src[^;]*(?:https?:|\*)/);
     // The design system and the bridge are injected around the fragment.
     assert.match(doc, /--viz-series-1/);

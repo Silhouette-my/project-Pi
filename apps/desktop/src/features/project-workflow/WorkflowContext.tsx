@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowDecision, WorkflowResource, WorkflowSource } from "@pi-desktop/shared";
 import { Badge, Button, Field, Input, Select, Textarea } from "../../components/ui";
+import { useAppStore } from "../../stores/app-store";
+import { sideSourceTitle } from "../project-panel/side-source";
+import { formatWorkflowTime } from "./workflow-display";
 import { useProjectWorkflow } from "./useProjectWorkflow";
 import { WorkflowRecord, WorkflowReference, type WorkflowSurfaceProps } from "./WorkflowReference";
 import "./context-artifacts-styles.css";
@@ -51,8 +54,9 @@ export function WorkflowContext({
   workstreamId,
   onOpenReference,
 }: WorkflowSurfaceProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const workflow = useProjectWorkflow();
+  const sessions = useAppStore((state) => state.sessions);
   const [resource, setResource] = useState<ResourceDraft | null>(null);
   const [proposal, setProposal] = useState<{
     title: string;
@@ -85,12 +89,15 @@ export function WorkflowContext({
     id
       ? (workstreams.find((item) => item.id === id)?.title ?? id)
       : t("workflowContext.projectScope");
-  const sourceLabel = (source: WorkflowSource) =>
-    t("workflowContext.sourceValue", {
+  const sourceLabel = (source: WorkflowSource) => {
+    const sideTitle = sideSourceTitle(snapshot, sessions, source, t("projectPanel.untitled"));
+    if (sideTitle !== undefined) return t("projectPanel.sourceFromSide", { title: sideTitle });
+    return t("workflowContext.sourceValue", {
       kind: t(`workflowContext.sourceKinds.${source.kind}`),
       ref: source.ref,
       revision: source.revision || t("workflowContext.unspecified"),
     });
+  };
   function editResource(item: WorkflowResource) {
     setResource({
       ...item,
@@ -150,8 +157,10 @@ export function WorkflowContext({
     <section className="workflow-context-artifacts" aria-label={t("workflowContext.title")}>
       <div className="workflow-record-heading">
         <h3>{t("workflowContext.resources")}</h3>
+        <span className="project-section-count">{resources.length}</span>
         <Button
-          variant="secondary"
+          variant="ghost"
+          className="workflow-heading-action"
           disabled={workflow.busy}
           onClick={() => setResource(newResource(workstreamId))}
         >
@@ -159,7 +168,7 @@ export function WorkflowContext({
         </Button>
       </div>
       {resources.length === 0 ? (
-        <p className="workflow-record-muted">{t("workflowContext.noResources")}</p>
+        <p className="project-empty-line">{t("workflowContext.noResources")}</p>
       ) : (
         resources.map((item) => (
           <WorkflowRecord
@@ -169,11 +178,13 @@ export function WorkflowContext({
           >
             <div className="workflow-record-heading">
               <strong>{item.label}</strong>
-              <Badge>{t(`workflowContext.resourceStates.${item.state}`)}</Badge>
+              {item.state === "superseded" ? (
+                <Badge>{t(`workflowContext.resourceStates.${item.state}`)}</Badge>
+              ) : null}
+              <span className="workflow-record-kind">
+                {t(`workflowContext.resourceKinds.${item.kind}`)} · {scopeLabel(item.workstreamId)}
+              </span>
             </div>
-            <p className="workflow-record-muted">
-              {t(`workflowContext.resourceKinds.${item.kind}`)} · {scopeLabel(item.workstreamId)}
-            </p>
             <WorkflowReference
               reference={{ kind: "resource", id: item.id }}
               uri={item.uri}
@@ -183,13 +194,13 @@ export function WorkflowContext({
               <dt>{t("workflowContext.revision")}</dt>
               <dd>{item.revision || t("workflowContext.unspecified")}</dd>
               <dt>{t("workflowContext.updatedAt")}</dt>
-              <dd>{item.updatedAt}</dd>
+              <dd><time dateTime={item.updatedAt} title={item.updatedAt}>{formatWorkflowTime(item.updatedAt, i18n.language)}</time></dd>
               <dt>{t("workflowContext.source")}</dt>
               <dd>{sourceLabel(item.source)}</dd>
             </dl>
             {item.state === "effective" ? (
               <div className="workflow-record-actions">
-                <Button variant="ghost" disabled={workflow.busy} onClick={() => editResource(item)}>
+                <Button variant="secondary" disabled={workflow.busy} onClick={() => editResource(item)}>
                   {t("workflowContext.editReference")}
                 </Button>
                 <Button
@@ -245,9 +256,10 @@ export function WorkflowContext({
                 onChange={(event) => setResource({ ...resource, label: event.target.value })}
               />
             </Field>
-            <Field label={t("workflowContext.uri")} hint={t("workflowContext.referenceHint")}>
+            <Field label={t("workflowContext.uri")}>
               <Input
                 required
+                title={t("workflowContext.referenceHint")}
                 value={resource.uri}
                 onChange={(event) => setResource({ ...resource, uri: event.target.value })}
               />
@@ -348,8 +360,10 @@ export function WorkflowContext({
       ) : null}
       <div className="workflow-record-heading">
         <h3>{t("workflowContext.decisions")}</h3>
+        <span className="project-section-count">{decisions.length}</span>
         <Button
-          variant="secondary"
+          variant="ghost"
+          className="workflow-heading-action"
           disabled={workflow.busy || !workstreams.length}
           onClick={() =>
             setProposal({
@@ -433,7 +447,7 @@ export function WorkflowContext({
         </WorkflowRecord>
       ) : null}
       {decisions.length === 0 ? (
-        <p className="workflow-record-muted">{t("workflowContext.noDecisions")}</p>
+        <p className="project-empty-line">{t("workflowContext.noDecisions")}</p>
       ) : (
         decisions.map((item) => (
           <WorkflowRecord
@@ -443,7 +457,9 @@ export function WorkflowContext({
           >
             <div className="workflow-record-heading">
               <strong>{item.title}</strong>
-              <Badge>{t(`workflowContext.decisionStates.${item.state}`)}</Badge>
+              {item.state !== "effective" ? (
+                <Badge>{t(`workflowContext.decisionStates.${item.state}`)}</Badge>
+              ) : null}
             </div>
             <p className="workflow-record-prose">{item.statement}</p>
             <p className="workflow-record-muted">{scopeLabel(item.workstreamId)}</p>
@@ -451,7 +467,7 @@ export function WorkflowContext({
               <dt>{t("workflowContext.source")}</dt>
               <dd>{item.sources.map(sourceLabel).join("; ")}</dd>
               <dt>{t("workflowContext.createdAt")}</dt>
-              <dd>{item.createdAt}</dd>
+              <dd><time dateTime={item.createdAt} title={item.createdAt}>{formatWorkflowTime(item.createdAt, i18n.language)}</time></dd>
               {item.adoptedRevision !== undefined ? (
                 <>
                   <dt>{t("workflowContext.adoptedRevision")}</dt>

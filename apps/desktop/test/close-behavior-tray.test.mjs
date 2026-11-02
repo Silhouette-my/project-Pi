@@ -115,14 +115,16 @@ test("close behavior is not settable on macOS", () => {
   assert.match(body, /behavior !== "tray" && behavior !== "quit"/);
 });
 
-test("explicit quit asks for confirmation except probes and update restarts", () => {
+test("explicit quit asks for confirmation only while work runs, except probes and update restarts", () => {
   assert.match(closeBehaviorSource, /const confirmQuitDialog = async/);
   assert.match(closeBehaviorSource, /labels\.tray\.confirmQuitTitle/);
   const quitHandler = shutdownSource.slice(
     shutdownSource.indexOf('app.on("before-quit"'),
   );
   const body = quitHandler.slice(0, quitHandler.indexOf("shutdownPromise ="));
-  assert.match(body, /PI_DESKTOP_BOOT_PROBE/);
+  assert.match(body, /quitConfirmationDisabled\(\)/);
+  assert.match(body, /hasRunningWork\(\{ activeTurns, getHost, liveCallService \}\)/);
+  assert.match(shutdownSource, /PI_DESKTOP_BOOT_PROBE/);
   assert.match(
     body,
     /!state\.quitConfirmed && !isAutomatedMode && !isUpdateRestart/,

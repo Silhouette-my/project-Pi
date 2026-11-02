@@ -55,15 +55,24 @@ command.
 
 ## Workflow invariants
 
+- New task creation explicitly sets `executionMode: "session"`; Runs freeze the
+  same marker. Missing markers retain the bounded contract below. The marker is
+  immutable after creation; existing snapshots and records are not migrated to
+  broader authority.
 - A proposal becomes effective only through an explicit adoption with a source.
   Adoption advances the workstream decision revision.
-- A run records the workstream and decision revisions plus its authorization
+- A bounded run records the workstream and decision revisions plus its authorization
   at start. A later decision fences conflicting stale results; stale delivery
   may be retained as evidence but cannot replace effective state.
 - Authorization names a user source, action/resource scope, permission ceiling,
   run budget and stop conditions. It cannot grant more than existing host or
   tool permissions; a session transcript or model proposal is not authority.
-- Run completion is not workstream acceptance. Evidence is tied to an exact
+- Session-backed tasks use ordinary Agent tools, plugins, delegates, model and
+  session permission mode. They require no workflow authorization or structured
+  checkpoint. A successful current main Run with a terminal receipt and known
+  effects completes the task; optional acceptance items are not auto-satisfied.
+  Completion means the Agent turn ended, not user acceptance or passing tests.
+- Bounded Run completion is not workstream acceptance. Evidence is tied to an exact
   candidate revision, environment and acceptance item. Completion requires an
   explicit acceptance update and current-candidate passed evidence for every
   condition.
@@ -74,14 +83,22 @@ command.
 - Unknown external effects remain `unknown` for reconciliation and are not
   replayed. Pause, cancel, blocked and awaiting-user states apply to affected
   work; unrelated work remains independent.
-- Startup first observes and persists all existing runs, then admits authorized
+- Startup first observes and persists all existing runs, then admits bounded authorized
   continuations. Terminal callbacks arriving during recovery are retained and
   drained before public actions become ready. Recovery failure keeps admission
   disabled; retry preserves the accepted checkpoint's exact next step and scope.
+  Session-backed tasks never infer or replay a successor during startup. Their
+  normal final reply is retained in the existing transcript and result delivery.
 
-## Turn-bound tool authority
+## Session-backed and turn-bound tool authority
 
-`session.beginTurn` accepts optional `workflowRunId`. Host validates the active
+Session-backed Runs use ordinary AgentHost turn admission without `workflowRunId`
+or an extra permission ceiling. Host captures no workflow resource scope for
+them, and the normal session/Host/plugin permission paths remain authoritative.
+The project is the normal working directory, not an additional filesystem
+sandbox. New and historical bounded Runs cannot exchange their execution mode.
+
+For bounded Runs, `session.beginTurn` accepts optional `workflowRunId`. Host validates the active
 run, session, project, decision revision and user authorization before persisting
 its binding to the real turn. The initial dispatch resources are immutable;
 later tool receipts cannot expand them. Queue persistence retains this identity.
@@ -98,6 +115,44 @@ Other uncontained tools, background and delegated execution return
 `WORKFLOW_RESOURCE_DENIED` before effects. A path grant is not a process sandbox.
 Ordinary turns without a workflow binding retain their existing behavior.
 
+## Navigation trees
+
+Folders support arbitrary depth. Optional `scope` is `chats`, `projects`, or
+`project`; omitted scope retains the standalone Chat meaning. `chats` and
+`projects` are one category space: the optional `categories` collection holds
+user-defined categories, and optional `categoryId` on folders, session
+navigation and project placements names the category (built-in ids `chats` and
+`projects`; absent derives from scope or the default). A category mixes
+folders, standalone conversations and projects; `category.create|update|remove`
+manage them and removal moves contents to the matching built-in. See ADR
+`project-navigation-tree`. Only `project`
+folders carry a stable ProjectGroup `projectId`. The optional
+`projectNavigation` collection stores stable project placements, separate from
+session navigation. Old version-1 snapshots remain readable. Before the first
+placement, projects retain their existing visible/manual order and project-main
+path metadata; conversations without navigation records remain reachable.
+
+`tree.move` changes navigation only. Its target is a folder, project, or session,
+and its destination contains a scope, optional project and folder, and numeric
+order. Optional `siblingOrder` normalizes the visible mixed folder/item order in
+the same CAS transaction, including entries without prior placement records.
+Host validates identity, scope, project membership and arbitrary-depth folder
+cycles. Scope is immutable for folders. Removing a folder promotes its direct
+children and placements to its parent; no sessions or projects are deleted.
+Existing unscoped `navigation.move/update` retain their historical contract.
+
+Project membership includes explicit conversation links and workstream main
+sessions, including legacy sessions with no workspace. Filing such a session
+never assigns a workspace. Project archive/pin filtering remains in Sidebar,
+execution history stays reachable, and the fixed conversations/history wrapper
+is removed. Independent Chat and project trees share drag-before, drag-after,
+drop-inside, and root drop behavior. Recent/Favorites references use the same
+drag source as their canonical conversation. Folder and item move menus provide
+a keyboard-accessible alternative.
+
+Git trees, Archify architecture and session relationship trees are deferred to
+a subsequent overview iteration; no placeholder panels are rendered.
+
 ## Project Agent discussion
 
 `agent.open` opens the project's canonical discussion session without requiring
@@ -106,6 +161,10 @@ the existing project and session identities; old snapshots without that
 collection remain valid. Reopening or restarting reuses the live associated
 session. Opening the entry alone sends no prompt and creates no workstream, run,
 or execution authorization.
+
+The project title, sidebar Home row, project page header and project-aware chat
+top bar expose an icon action to the same discussion; the Agent has no session
+row in Sidebar. These entries share in-flight opening state.
 
 The discussion uses the existing ChatSurface, transcript, model picker and
 prompt queue. Project instructions, memory and current workflow context remain

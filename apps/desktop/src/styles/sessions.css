@@ -305,62 +305,30 @@
   opacity: 0.68;
 }
 
+/* The status dot sits in the row's right slot (the same slot the hover "..."
+ * takes over). Only running, permission and failed states are drawn; completed
+ * and unread are intentionally quiet. */
 .thread-item-status {
-  display: inline-flex;
-  width: 12px;
-  height: 12px;
+  display: block;
+  width: 6px;
+  height: 6px;
   flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  color: var(--ds-text-muted);
-  position: absolute;
-  left: 4px;
-  top: 50%;
-  transform: translateY(-50%);
+  border-radius: var(--radius-full);
+  background: var(--ds-text-faint);
 }
 
-.thread-item-status.running::before {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--radius-full);
-  background: var(--ds-warning);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ds-warning) 15%, transparent);
-  content: "";
+.thread-item-status.running {
+  background: var(--ds-accent);
   animation: sidebar-status-breathe 1.6s ease-in-out 2;
 }
 
-.thread-item-status.permission::before {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--radius-full);
+.thread-item-status.permission {
   background: var(--ds-purple);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ds-purple) 15%, transparent);
-  content: "";
   animation: sidebar-status-pulse-purple 1.2s ease-in-out 2;
 }
 
-.thread-item-status.selected::before {
-  width: 9px;
-  height: 9px;
-  border: 1.5px solid var(--ds-accent);
-  border-radius: var(--radius-full);
-  content: "";
-}
-
-.thread-item-status.completed {
-  color: var(--ds-success);
-}
-
 .thread-item-status.failed {
-  color: var(--ds-error);
-}
-
-.thread-item-status.completed svg {
-  stroke-width: 3;
-}
-
-.thread-item-status.failed svg {
-  stroke-width: 2.25;
+  background: var(--ds-error);
 }
 
 @keyframes sidebar-status-breathe {
@@ -388,10 +356,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .thread-item-status.running::before {
-    animation: none;
-  }
-  .thread-item-status.permission::before {
+  .thread-item-status.running,
+  .thread-item-status.permission {
     animation: none;
   }
 }
@@ -1146,3 +1112,4 @@
   outline: 1px dashed var(--ds-border-strong);
   outline-offset: -2px;
 }
+

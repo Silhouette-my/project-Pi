@@ -37,6 +37,8 @@ export type JevKeyCheckResult = {
  */
 export type CloseBehavior = "ask" | "tray" | "quit";
 
+export type TranscriptDisplayMode = "flat" | "command-first" | "fully-folded";
+
 export type AppSettings = {
   imageGeneration?: import("../image-generation.js").ImageGenerationBinding | null;
   /** All models marked for image generation; absent falls back to imageGeneration. */
@@ -61,6 +63,8 @@ export type AppSettings = {
   jevEnabled?: boolean;
   /** Prevent idle system sleep while this desktop app runs; off when absent. */
   keepAwakeWhileRunning?: boolean;
+  /** Enable scheduled task UI, tools and new runs. Absent means enabled. */
+  scheduledTasksEnabled?: boolean;
   /** Configured command shell for the agent Bash protocol tool. */
   defaultCommandShell?: CommandShellId;
   /** @deprecated Retained for one-time migration into pi.prompt-enhancement. */
@@ -99,6 +103,13 @@ export type AppSettings = {
    */
   fontScale?: number;
   /**
+   * Global theme accent: a preset id (`blue`, `teal`, `green`, `amber`,
+   * `rose`, `violet`, `graphite`) or a custom `#rrggbb`. Absent means the
+   * default preset `blue`. Used only by a small set of shared primitives
+   * (primary button, toggle, checkbox, focus ring, composer send).
+   */
+  accentColor?: string;
+  /**
    * Show model reasoning in the transcript. Off keeps the live thinking
    * indicator visible and hides completed reasoning rows and excerpts; absent
    * falls back to the legacy `thinkingDisplayMode`. This is a presentation
@@ -107,13 +118,19 @@ export type AppSettings = {
    */
   showThinking?: boolean;
   /**
-   * Keep shell calls (`Bash`, `exec`, `shell`, …) as their own rows instead of
-   * folding them into the surrounding tool group. Absent means `true`, so an
-   * existing install keeps today's scannable command rows.
+   * How the assistant turn's process is grouped in the transcript.
    *
-   * The turn's process disclosure itself is not affected: both values render
-   * exactly one top-level disclosure per turn. This preference only decides
-   * whether a run row sits inside a group or beside it.
+   * - `flat`: one outer process disclosure, no nested activity groups.
+   * - `command-first`: run rows stay standalone; other activity groups.
+   * - `fully-folded`: the v0.20.0 layout; run rows join activity groups.
+   *
+   * Absent means `fully-folded`, preserving the released transcript layout.
+   * This is presentation only and never changes tool execution or stored data.
+   */
+  transcriptDisplayMode?: TranscriptDisplayMode;
+  /**
+   * @deprecated Replaced by `transcriptDisplayMode`. Retained for persisted
+   * settings and older clients; current rendering no longer reads it.
    */
   keepCommandsExpanded?: boolean;
   /**
@@ -185,6 +202,16 @@ export type AppSettings = {
    */
   smoothStreaming?: boolean;
   /**
+   * Render inline interactive visualizations in the transcript (ADR
+   * `gen-ui-inline-visualization`). Absent and false keep the feature off: the
+   * system prompt carries no visualization directory, the
+   * `pi-desktop/visualize` skill is withheld from the catalog and the `/` menu,
+   * and an existing `::visualize` reference line is hidden without loading a
+   * card. `true` opts in for local sessions; remote-host sessions stay without
+   * it because their tools write on the remote machine.
+   */
+  inlineVisualizations?: boolean;
+  /**
    * Prevent the display from sleeping while the app is running. Uses
    * Electron's `powerSaveBlocker` with `prevent-display-sleep` on all
    * platforms. Absent and false mean the system manages sleep normally.
@@ -206,8 +233,27 @@ export type AppSettings = {
    * disabled, so a fresh install shows a clean sidebar until the user opts in.
    */
   sidebarSessionTime?: boolean;
+  /**
+   * Dock the main sidebar permanently. Absent or false means the sidebar
+   * auto-hides: it takes no layout width and slides in over the content when
+   * the pointer reaches the left window edge (or on Cmd/Ctrl+B).
+   */
+  sidebarPinned?: boolean;
+  /**
+   * Dock the work panel permanently. Absent or false means the panel
+   * auto-hides: it takes no layout width and slides in over the content when
+   * the pointer reaches the right window edge (or on Cmd/Ctrl+J). The panel
+   * stays unavailable while no session is active.
+   */
+  workPanelPinned?: boolean;
   /** Voice input settings (D-voice-runtime). */
   voice?: VoiceInputSettings;
+  /**
+   * Opt-in radial context menu for the empty transcript background. Absent
+   * keeps the vertical menu; see `RadialMenuPreferences` for the direction
+   * defaults.
+   */
+  radialMenu?: RadialMenuPreferences;
   onboardingDismissed: boolean;
 };
 
@@ -228,3 +274,34 @@ export type VoiceInputSettings = {
 export type LinkOpenTarget = "workpanel" | "external";
 
 export type ContextUsageDisplay = "remaining" | "used";
+
+/**
+ * One action the transcript background radial menu can place on a direction.
+ * `none` leaves that direction empty, so a ring can carry fewer than four
+ * actions without inventing a fifth one.
+ */
+export type RadialMenuAction =
+  | "copy-conversation"
+  | "select-conversation"
+  | "copy-last-answer"
+  | "scroll-top"
+  | "scroll-bottom"
+  | "open-browser"
+  | "open-work-panel"
+  | "open-project-folder"
+  | "none";
+
+export type RadialMenuDirection = "up" | "right" | "down" | "left";
+
+/**
+ * Per-direction placement for the transcript background radial menu.
+ * Absent fields fall back to the released defaults; `enabled` is opt-in, so an
+ * absent object keeps the vertical context menu every existing build ships.
+ */
+export type RadialMenuPreferences = {
+  enabled?: boolean;
+  up?: RadialMenuAction;
+  right?: RadialMenuAction;
+  down?: RadialMenuAction;
+  left?: RadialMenuAction;
+};

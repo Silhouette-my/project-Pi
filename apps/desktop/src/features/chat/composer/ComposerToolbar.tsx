@@ -55,9 +55,10 @@ export type ComposerToolbarProps = {
   modelMenu: ModelMenuController;
   /** Present only for ChatGPT conversation models on local sessions. */
   chatInstructionMenu?: ChatInstructionMenuController;
-  chatInstructionPreset?: string | null;
   modelLabel: string;
   thinkingLabel: string;
+  /** The selected model asks for OpenAI's priority tier (ADR 0334). */
+  modelFastMode?: boolean;
   contextUsage: ContextUsage | null;
   value: string;
   modelReady: boolean;
@@ -99,9 +100,9 @@ export function ComposerToolbar({
   showToast,
   modelMenu,
   chatInstructionMenu,
-  chatInstructionPreset,
   modelLabel,
   thinkingLabel,
+  modelFastMode = false,
   contextUsage,
   value,
   modelReady,
@@ -198,11 +199,10 @@ export function ComposerToolbar({
       <div className="composer-right">
         {localToolsAllowed ? <ComposerControlSlots side="right" /> : null}
         {contextUsage ? <ContextUsageInspector {...contextUsage} /> : null}
-        {chatInstructionMenu?.enabled ? (
+        {chatInstructionMenu ? (
           <ComposerChatInstructionPicker
             t={t}
             controller={chatInstructionMenu}
-            currentPreset={chatInstructionPreset}
             controlsBlocked={controlsBlocked}
             onCloseOtherMenus={() => {
               modelMenu.setOpen(false);
@@ -216,6 +216,7 @@ export function ComposerToolbar({
           controller={modelMenu}
           modelLabel={modelLabel}
           thinkingLabel={thinkingLabel}
+          fastMode={modelFastMode}
           thinkingLevel={thinkingLevel}
           selectedProviderId={providerId}
           selectedModelId={modelId}

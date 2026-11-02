@@ -1,9 +1,15 @@
-import { type CSSProperties, lazy, type ReactNode, Suspense, useEffect } from "react";
+import {
+  type CSSProperties,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useEffect,
+  useState,
+} from "react";
 import { ConversationTopbar } from "../../components/ConversationTopbar";
 import { ExtensionPromptHost } from "../../components/ExtensionPromptDialog";
 import { PluginRendererHost } from "../../plugins/renderer-host/PluginRendererHost";
 import {
-  IconNewSession,
   IconPanel,
   IconPanelOpen,
 } from "../../components/icons";
@@ -25,6 +31,7 @@ import { CollapsedTitlebarActions, RoutePending } from "./chrome";
 import { useAppShellRuntime } from "./useAppShellRuntime";
 import { ProjectWorkflowProvider, useProjectWorkflow } from "../project-workflow/useProjectWorkflow";
 import { WorkflowConversationBar } from "../project-workflow/WorkflowConversationBar";
+import { useProjectPanelDefaults } from "../project-panel/useProjectPanelDefaults";
 import { useAppStore } from "../../stores/app-store";
 
 const ProjectConsole = lazy(() => import("../project-workflow/ProjectConsole").then((module) => ({ default: module.ProjectConsole })));
@@ -68,6 +75,7 @@ function AppShellContent() {
     ready,
     page,
     activeSessionId,
+    panelContextKey,
     workPanelOpen,
     searchOpen,
     setSearchOpen,
@@ -79,8 +87,7 @@ function AppShellContent() {
     handleSidebarWidthChange,
     handleSidebarWidthCommit,
     handleSidebarResizeCollapse,
-    toggleSidebar,
-    reopenSidebar,
+    toggleSidebarFromChrome,
     autoCollapseSidebar,
     appShellRef,
     shellWidth,
@@ -105,8 +112,16 @@ function AppShellContent() {
     sidebarToggleShortcut,
     workPanelToggleTooltip,
     requestedWorkPanelWidth,
+    sidebarPinned,
+    workPanelPinned,
+    leftReveal,
+    rightReveal,
+    toggleSidebarPinned,
+    toggleWorkPanelPinned,
   } = useAppShellRuntime();
+  const [toastAnchor, setToastAnchor] = useState<HTMLElement | null>(null);
   useCopyTex();
+  useProjectPanelDefaults();
 
   useEffect(() => {
     void loadChatSurface().catch((error: unknown) => {
@@ -120,6 +135,15 @@ function AppShellContent() {
       console.error("Failed to preload the work panel", error);
     });
   }, [page, ready, workPanelOpen]);
+
+  // An unpinned panel is revealed without its store flag: preload it too.
+  const rightRevealOpen = rightReveal.open;
+  useEffect(() => {
+    if (!ready || page !== "chat" || !rightRevealOpen) return;
+    void loadWorkPanel().catch((error: unknown) => {
+      console.error("Failed to preload the work panel", error);
+    });
+  }, [page, ready, rightRevealOpen]);
 
   const pendingWorkPanelWidth = workPanelLayout({
     containerWidth: shellWidth,
@@ -157,14 +181,44 @@ function AppShellContent() {
               <Sidebar
                 className={cx(sidebarEntering && "is-entering", sidebarExiting && "is-exiting")}
                 onAnimationEnd={handleSidebarAnimationEnd}
-                onToggleSidebar={toggleSidebar}
+                onToggleSidebar={toggleSidebarFromChrome}
                 sidebarToggleShortcut={sidebarToggleShortcut}
                 sidebarWidth={sidebarWidth}
                 widthMax={sidebarWidthMax}
                 onWidthChange={handleSidebarWidthChange}
                 onWidthCommit={handleSidebarWidthCommit}
                 onResizeCollapse={handleSidebarResizeCollapse}
+                pinned={sidebarPinned}
+                onTogglePin={toggleSidebarPinned}
+                onOpenSearch={() => setSearchOpen(true)}
+                onNewTask={() => void runMenuCommand("newTask")}
               />
+            ) : null}
+
+            {/* Unpinned: the sidebar takes no layout width. It stays mounted
+                (scroll position, expanded groups) and slides in over the
+                content from the left edge. */}
+            {!sidebarPinned ? (
+              <>
+                {leftReveal.enabled ? (
+                  <div className="edge-reveal-zone" {...leftReveal.zoneProps} />
+                ) : null}
+                <Sidebar
+                  className="edge-panel"
+                  edgePanel={leftReveal.panelProps}
+                  onToggleSidebar={toggleSidebarFromChrome}
+                  sidebarToggleShortcut={sidebarToggleShortcut}
+                  sidebarWidth={sidebarWidth}
+                  widthMax={sidebarWidthMax}
+                  onWidthChange={handleSidebarWidthChange}
+                  onWidthCommit={handleSidebarWidthCommit}
+                  onResizeCollapse={handleSidebarResizeCollapse}
+                  pinned={false}
+                  onTogglePin={toggleSidebarPinned}
+                  onOpenSearch={() => setSearchOpen(true)}
+                  onNewTask={() => void runMenuCommand("newTask")}
+                />
+              </>
             ) : null}
 
             {workPanelMaximized && (
@@ -178,36 +232,23 @@ function AppShellContent() {
               >
                 {sidebarCollapsed && (
                   <CollapsedTitlebarActions
-                    onToggleSidebar={toggleSidebar}
+                    onToggleSidebar={toggleSidebarFromChrome}
                     onNewTask={() => void runMenuCommand("newTask")}
                     sidebarToggleShortcut={sidebarToggleShortcut}
                   />
-                )}
-                {!sidebarCollapsed && (
-                  <TooltipButton
-                    type="button"
-                    className="title-nav-btn"
-                    tooltip={t("nav.newTask")}
-                    ariaLabel={t("nav.newTask")}
-                    data-nav="new-task"
-                    onClick={() => void runMenuCommand("newTask")}
-                  >
-                    <IconNewSession size={15} />
-                  </TooltipButton>
                 )}
                 <div className="window-chrome-drag" aria-hidden />
               </div>
             )}
 
             {!workPanelMaximized && (
-              <section className="main-pane">
+              <section ref={setToastAnchor} className="main-pane">
                 {page === "chat" ? (
                   <ConversationTopbar
                     sidebarCollapsed={sidebarCollapsed}
                     workPanelOpen={presentedWorkPanelOpen}
-                    onToggleSidebar={toggleSidebar}
+                    onToggleSidebar={toggleSidebarFromChrome}
                     onNewTask={() => void runMenuCommand("newTask")}
-                    onOpenSearch={() => setSearchOpen(true)}
                   />
                 ) : (
                   <div
@@ -219,7 +260,7 @@ function AppShellContent() {
                     {sidebarCollapsed && (
                       <div className="main-titlebar-left no-drag">
                         <CollapsedTitlebarActions
-                          onToggleSidebar={reopenSidebar}
+                          onToggleSidebar={toggleSidebarFromChrome}
                           onNewTask={() => void runMenuCommand("newTask")}
                           sidebarToggleShortcut={sidebarToggleShortcut}
                         />
@@ -336,6 +377,47 @@ function AppShellContent() {
                   onAutoCollapseSidebar={autoCollapseSidebar}
                   maximized={workPanelMaximized}
                   onToggleMaximize={toggleWorkPanelMaximize}
+                  pinned={workPanelPinned}
+                  onTogglePin={toggleWorkPanelPinned}
+                />
+              </Suspense>
+            )}
+
+            {/* Unpinned: the panel is mounted only while revealed, so its
+                native views follow it in and out, and it never changes the
+                main pane's width. */}
+            {!workPanelPinned && rightReveal.enabled ? (
+              <div className="edge-reveal-zone" {...rightReveal.zoneProps} />
+            ) : null}
+            {!workPanelPinned && rightReveal.mounted && (
+              <Suspense
+                fallback={
+                  <aside
+                    className="work-panel work-panel-pending edge-panel"
+                    role="status"
+                    aria-label={t("app.loadingView")}
+                    data-edge-reveal="right"
+                    data-edge-state="open"
+                    style={
+                      {
+                        "--work-panel-width": `${pendingWorkPanelWidth}px`,
+                        width: pendingWorkPanelWidth,
+                      } as CSSProperties
+                    }
+                  >
+                    <span className="route-pending-indicator" aria-hidden />
+                  </aside>
+                }
+              >
+                <WorkPanel
+                  panelBlocked={searchOpen || rightReveal.phase === "closing"}
+                  containerWidth={shellWidth}
+                  sidebarWidth={sidebarWidth}
+                  sidebarCollapsed
+                  edgePanel={rightReveal.panelProps}
+                  onCloseOverlay={rightReveal.closePanel}
+                  pinned={false}
+                  onTogglePin={toggleWorkPanelPinned}
                 />
               </Suspense>
             )}
@@ -345,8 +427,12 @@ function AppShellContent() {
               className="app-work-panel-toggle no-drag"
               tooltip={workPanelToggleTooltip}
               ariaLabel={workPanelToggleTooltip}
-              aria-pressed={workPanelOpen || presentedWorkPanelOpen}
-              disabled={!activeSessionId && !presentedWorkPanelOpen && !workPanelExiting}
+              aria-pressed={
+                workPanelPinned
+                  ? workPanelOpen || presentedWorkPanelOpen
+                  : rightReveal.open
+              }
+              disabled={!panelContextKey && !presentedWorkPanelOpen && !workPanelExiting}
               onClick={togglePresentedWorkPanel}
             >
               <span className="app-work-panel-toggle-icon" aria-hidden>
@@ -362,7 +448,7 @@ function AppShellContent() {
           </Suspense>
         ) : null}
         <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
-        <ToastHost />
+        <ToastHost anchorElement={page === "settings" ? null : toastAnchor} />
         <LiveVoiceStatusHost />
         <PluginRendererHost />
         <ExtensionPromptHost />

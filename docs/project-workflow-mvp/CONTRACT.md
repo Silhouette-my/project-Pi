@@ -24,6 +24,17 @@ session and message IDs retain their existing meaning.
 
 ### Revisions, authority and errors
 
+- Session-backed task extension: new producers explicitly write
+  `Workstream.executionMode: "session"`; every Run freezes the same field.
+  Missing fields retain the legacy bounded contract in this document. The user
+  update surface cannot change the field. Session Runs omit `authorizationId`
+  and enter ordinary AgentHost execution without `workflowRunId` or an extra
+  permission ceiling. `start.authorizationId` is optional in the action schema,
+  but remains mandatory for bounded Workstreams at runtime and Host validation.
+  Natural-language completion with a trusted terminal receipt may finish a
+  session task without Candidate/Evidence or satisfied acceptance. Optional
+  acceptance states retain their existing meaning. See
+  [session execution ADR](../adr/workflow-session-execution.md).
 - Empty state has `schemaVersion: 1`, global `revision: 0`. Every accepted mutation
   requires a unique `commandId` and current `expectedRevision`; one atomic mutation
   increments the global revision. Repeating the same command returns `replayed: true`
@@ -35,7 +46,7 @@ session and message IDs retain their existing meaning.
 - Workstream `revision` advances for relevant state changes; `decisionRevision`
   advances on adoption. Runs/deliveries capture these fences. A stale delivery may
   be retained/consumed as stale, never replace current effective decisions.
-- `authorization.grant` requires an explicit user source; it describes scope, not
+- For bounded tasks, `authorization.grant` requires an explicit user source; it describes scope, not
   extra host/tool permissions. `start` names that authorization. Main validates
   renderer commands using `isProjectWorkflowUserCommand`; runtime-only transitions,
   run observations and deliveries are available only through the trusted host port.
@@ -45,7 +56,7 @@ session and message IDs retain their existing meaning.
   must name an allowed action and a subset of these resources. `maxRuns` counts
   main and side Work runs under the same authorization. Existing tool permissions
   remain the independent ceiling.
-- `run.observe` completion does not complete a workstream. `evidence.add` records
+- For bounded tasks, `run.observe` completion does not complete a workstream. `evidence.add` records
   evidence and its acceptance association, but does not automatically satisfy it.
   Submit an explicit acceptance update before `workstream.transition: completed`;
   completion requires all conditions satisfied and passed current-candidate evidence.
@@ -71,7 +82,7 @@ session and message IDs retain their existing meaning.
   user message identity. Tool execution resolves the Host-owned binding, not a
   model-supplied resource list; out-of-scope tools return
   `WORKFLOW_RESOURCE_DENIED` before effects.
-- Foreground workflow Bash requires a separate user decision on every exact
+- Foreground bounded workflow Bash requires a separate user decision on every exact
   invocation. Host emits the existing permission request with optional
   `ToolPermissionRequest.approvalScope: "workflow-shell"` and complete arguments.
   Auto mode and session grants do not bypass this request; only `allow-once`

@@ -52,7 +52,7 @@ test("a topology node opens a real subagent tab in the work panel", () => {
   // The overlay state and its actions are gone: closing happens per tab.
   assert.doesNotMatch(storeSource, /subagentPanel/);
   assert.doesNotMatch(storeSource, /toggleSubagentPanel|closeSubagentPanel/);
-  assert.match(tabsSource, /\| "plugin"\s*\|\s*"subagent";/);
+  assert.match(tabsSource, /\| "plugin"\s*\|\s*"subagent"\s*\|\s*"sidechat"\s*\|\s*"project-agent"\s*\|\s*"project-side";/);
   assert.match(
     tabsSource,
     /export function subagentWorkPanelTab\(\s*delegationId: string,\s*agentName\?: string,\s*\): WorkPanelTab \{/,
@@ -69,7 +69,7 @@ test("a topology node opens a real subagent tab in the work panel", () => {
 test("the work panel renders the delegation tab like every other resource", () => {
   assert.match(workPanelSource, /subagent: IconBot/);
   assert.match(workPanelSource, /if \(tab\.kind === "subagent"\) return tab\.label \?\? t\("panel\.tabs\.subagent"\);/);
-  assert.match(workPanelSource, /const subagentTabsInOrder = tabs\.filter\(\(tab\) => tab\.kind === "subagent"\)/);
+  assert.match(workPanelSource, /const subagentTabsInOrder = tabs\.filter\(\s*\(tab\) => tab\.kind === "subagent" \|\| tab\.kind === "sidechat",\s*\)/);
   assert.match(workPanelSource, /subagentTabDisplayLabels\(/);
   assert.match(workPanelSource, /\{activeTab\?\.kind === "subagent" && \(/);
   assert.match(
@@ -81,7 +81,7 @@ test("the work panel renders the delegation tab like every other resource", () =
   assert.doesNotMatch(workPanelSource, /subagentPanel\?: SubagentPanelSelection/);
   assert.doesNotMatch(workPanelSource, /!subagentPanel &&/);
   // The shell no longer overrides visibility for a dock-only surface.
-  assert.match(appSource, /const workPanelVisible = workPanelOpen;/);
+  assert.match(appSource, /const workPanelVisible = workPanelOpen && workPanelPinned;/);
   assert.doesNotMatch(appSource, /subagentPanelOpen/);
 });
 

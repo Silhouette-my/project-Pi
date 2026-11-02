@@ -1,4 +1,9 @@
-import type { ProjectWorkspace, SessionSort } from "@pi-desktop/shared";
+import {
+  type AccentPresetId,
+  normalizeAccentPresetId,
+  type ProjectWorkspace,
+  type SessionSort,
+} from "@pi-desktop/shared";
 export type { SessionSort } from "@pi-desktop/shared";
 export { sortSessions, sessionIsPinned, sessionIsArchived } from "@pi-desktop/shared";
 
@@ -32,6 +37,8 @@ export type ProjectMeta = {
   archived?: boolean;
   collapsed?: boolean;
   order?: number;
+  /** Per-project accent: a preset id only. Absent follows the theme colour. */
+  color?: AccentPresetId;
 };
 export type SidebarPreferences = {
   sessionMeta: Record<string, SessionMeta>;
@@ -40,6 +47,14 @@ export type SidebarPreferences = {
   sessionView: { sort: SessionSort; archived: boolean };
   openProjectPaths: string[];
 };
+
+/** Metadata for a project path, tolerant of un-normalized stored keys. */
+export function projectMetaFor(
+  path: string,
+  projectMeta: Record<string, ProjectMeta>,
+): ProjectMeta {
+  return projectMeta[normalizeProjectPath(path) || path] ?? projectMeta[path] ?? {};
+}
 
 export const SIDEBAR_PREFERENCES_KEY = "pi.desktop.sidebarPreferences";
 export const SIDEBAR_WIDTH_KEY = "pi.desktop.sidebarWidth";
@@ -131,11 +146,13 @@ function cleanProjectMeta(value: unknown): Record<string, ProjectMeta> {
     const archived = bool(raw.archived);
     const collapsed = bool(raw.collapsed);
     const order = manualOrder(raw.order);
+    const color = normalizeAccentPresetId(raw.color);
     if (name !== undefined) item.name = name;
     if (pinned !== undefined) item.pinned = pinned;
     if (archived !== undefined) item.archived = archived;
     if (collapsed !== undefined) item.collapsed = collapsed;
     if (order !== undefined) item.order = order;
+    if (color !== undefined) item.color = color;
     if (Object.keys(item).length) output[path] = item;
   }
   return output;

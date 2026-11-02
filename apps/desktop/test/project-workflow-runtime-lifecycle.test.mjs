@@ -20,6 +20,7 @@ function load(name) {
   new Function("require", "exports", "module", outputText)((id) => {
     if (id === "@pi-desktop/shared") return shared;
     if (id === "node:crypto") return crypto;
+    if (id === "node:fs") return fs;
     if (id === "node:fs/promises") return fsPromises;
     if (id === "node:path") return nodePath;
     if (id === "node:url") return nodeUrl;
@@ -33,6 +34,7 @@ function load(name) {
 const { createProjectWorkflowRuntime } = load("project-workflow-runtime");
 const { createProjectWorkflowExecution } = load("project-workflow-execution");
 const { assembleWorkflowContext } = load("project-workflow-context");
+const { durableUserMessageId } = load("../prompt-attachments");
 const timestamp = "2026-10-20T00:00:00Z";
 const checkpoint = (summary, next, overrides = {}) => "Done\n```project-workflow-checkpoint\n" + JSON.stringify({ summary, next, stop: false, artifacts: [], evidence: [], ...overrides }) + "\n```";
 const next = (prompt, action = "check", resources = ["/synthetic/project"]) => ({ prompt, action, resources });
@@ -67,7 +69,8 @@ function durableHost(initial) {
         case "run.start": {
           const auth = state.authorizations.find((a) => a.id === command.run.authorizationId);
           assert.equal(command.run.workstreamRevision, w.revision);
-          for (const effect of command.run.effects) {
+          assert.equal(command.run.executionMode, w.executionMode);
+          for (const effect of command.run.executionMode === "session" ? [] : command.run.effects) {
             assert.ok(auth.actions.includes(effect.action), "planned effect action must be authorized");
             assert.ok(auth.resources.includes(effect.resource), "planned effect resource must be authorized");
           }
@@ -84,7 +87,11 @@ function durableHost(initial) {
           Object.assign(run, { state: command.state, outcome: command.outcome, effects: command.effects, completionKey: command.completionKey }); break;
         }
         case "delivery.publish": state.deliveries.push(command.delivery); break;
-        case "delivery.consume": Object.assign(state.deliveries.find((d) => d.id === command.deliveryId), { state: "consumed", disposition: command.disposition }); break;
+        case "delivery.consume": {
+          const delivery = state.deliveries.find((d) => d.id === command.deliveryId);
+          assert.equal(delivery.state, "delivered", "Host consumes a delivered result only once");
+          Object.assign(delivery, { state: "consumed", disposition: command.disposition }); break;
+        }
         case "decision.propose": state.decisions.push(command.decision); break;
         case "decision.resolve": {
           const decision = state.decisions.find((d) => d.id === command.decisionId);
@@ -102,6 +109,267 @@ function durableHost(initial) {
     failOnce(kind) { failKind = kind; },
   };
 }
+
+for (const permissionMode of ["ask", "auto"]) test(`Session task retains ${permissionMode} permissions and finishes with natural language`, async () => {
+  const f = await setup((state) => {
+    state.workstreams[0].executionMode = "session";
+    state.workstreams[0].acceptance = [];
+    state.authorizations = [];
+  });
+  f.summaries.get("session-1").permissionMode = permissionMode;
+  await f.action("start", { sessionId: "session-1" });
+  assert.equal(f.prompts[0].effectivePermissionMode, permissionMode);
+  assert.equal(f.prompts[0].workflowRunId, undefined, "ordinary Agent admission owns tools and permissions");
+  assert.doesNotMatch(f.prompts[0].content, /project-workflow-checkpoint/);
+  assert.doesNotMatch(f.prompts[0].content, /Assigned resources/);
+  const started = (await f.host.snapshot()).runs[0];
+  assert.equal(started.executionMode, "session");
+  assert.equal(started.authorizationId, undefined);
+  const persistedId = JSON.parse(started.effects[0].detail).userMessageId;
+  assert.match(persistedId, /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i);
+  assert.equal(f.prompts[0].userMessageId, persistedId);
+  assert.equal(f.transcripts.get("session-1")[0].id, persistedId);
+  await f.finish("session-1", "Fixed the task and ran the relevant test.", "completed", [{ id: "check", role: "tool", toolName: "Bash", toolCallId: "check", toolStatus: "success", toolResult: { details: { exitCode: 0 } } }]);
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].state, "completed");
+  assert.equal(state.workstreams[0].status, "completed");
+  assert.deepEqual(state.workstreams[0].acceptance, []);
+  assert.equal(f.prompts.length, 1);
+  await f.restart(true).recoverAll();
+  assert.equal(JSON.parse((await f.host.snapshot()).runs[0].effects[0].detail).userMessageId, persistedId);
+  assert.equal(f.prompts.length, 1, "restart must not rerun a natural-language result");
+});
+
+test("Session task completion preserves optional acceptance and can repair a nonzero check", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.action("start", { sessionId: "session-1" });
+  await f.finish("session-1", "The first test failed; I fixed it and the second passed.", "completed", [
+    { id: "check-failed", role: "tool", toolName: "Bash", toolCallId: "check-failed", toolStatus: "error", toolResult: { details: { exitCode: 1 } } },
+    { id: "check-passed", role: "tool", toolName: "Bash", toolCallId: "check-passed", toolStatus: "success", toolResult: { details: { exitCode: 0 } } },
+  ]);
+  const state = await f.host.snapshot();
+  assert.equal(state.workstreams[0].status, "completed");
+  assert.equal(state.workstreams[0].acceptance[0].status, "pending", "turn completion is not user acceptance");
+  assert.equal(state.runs[0].effects.find((effect) => effect.id === "check-failed").state, "confirmed");
+});
+
+for (const toolName of ["Read", "Glob", "Grep"]) test(`Session ${toolName} failure can be recovered inside the same Agent turn`, async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.action("start", { sessionId: "session-1" });
+  await f.finish("session-1", "The initial lookup failed; I found the right file and finished.", "completed", [
+    { id: "lookup", role: "tool", toolName, toolCallId: "lookup", toolStatus: "error", toolResult: { details: { code: "FILE_NOT_FOUND" } } },
+  ]);
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].effects.find((effect) => effect.id === "lookup").state, "failed");
+  assert.equal(state.workstreams[0].status, "completed");
+});
+
+test("Session side work returns natural language to the main conversation and next explicit turn", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.action("start", { sessionId: "session-1" });
+  const discussion = await f.action("discuss", { pause: false });
+  const side = await f.action("side.create", { purpose: "work", visibility: "project", task: "Inspect the independent piece",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true } });
+  const sideRun = (await f.host.snapshot()).runs.find((run) => run.sessionId === side.sessionId);
+  assert.equal(sideRun.executionMode, "session");
+  assert.equal(sideRun.authorizationId, undefined);
+  await f.finish(side.sessionId, "SIDE_RESULT: The independent piece is ready.");
+  const state = await f.host.snapshot();
+  assert.equal(state.deliveries.find((delivery) => delivery.sourceRunId === sideRun.id).state, "consumed");
+  assert.match(f.transcripts.get("session-1").at(-1).content, /SIDE_RESULT/);
+  assert.match(f.transcripts.get(discussion.sessionId).at(-1).content, /SIDE_RESULT/);
+  assert.equal(f.prompts.length, 2, "delivery does not silently launch another main turn");
+  await f.finish("session-1", "Main work completed.");
+  await f.action("start", { sessionId: "session-1" });
+  assert.match(f.prompts.at(-1).content, /SIDE_RESULT/);
+});
+
+for (const interruptedPublish of [false, true]) test(`Explicit session Start consumes published side work without waiting for return integration (${interruptedPublish ? "torn integration" : "main not yet linked"})`, async () => {
+  const f = await setup((state) => {
+    state.workstreams[0].executionMode = "session"; state.authorizations = [];
+    if (!interruptedPublish) delete state.workstreams[0].mainSessionId;
+  });
+  const side = await f.action("side.create", { purpose: "work", visibility: "project", sourceSessionId: "session-1", task: "Independent measurement",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true } });
+  if (interruptedPublish) f.host.failOnce("delivery.consume");
+  const finishing = f.finish(side.sessionId, "PENDING_SIDE_MEASUREMENT: 42");
+  if (interruptedPublish) await assert.rejects(finishing, /Synthetic Host interruption/);
+  else await finishing;
+  const before = await f.host.snapshot();
+  const delivery = before.deliveries[0];
+  assert.equal(delivery.state, "delivered");
+  assert.equal(f.prompts.length, 1, "publication does not launch a main turn");
+  f.host.edit((state) => state.deliveries.push({ ...structuredClone(delivery), id: "obsolete-result", summary: "STALE_SIDE_SECRET", decisionRevision: 99 }));
+  await f.action("start", { sessionId: "session-1" });
+  assert.match(f.prompts.at(-1).content, /PENDING_SIDE_MEASUREMENT: 42/);
+  assert.doesNotMatch(f.prompts.at(-1).content, /STALE_SIDE_SECRET/);
+  const admitted = await f.host.snapshot();
+  const mainRun = admitted.runs.find((run) => run.sessionId === "session-1");
+  assert.deepEqual(JSON.parse(mainRun.effects[0].detail).deliveryIds, [delivery.id]);
+  assert.equal(admitted.deliveries.find((d) => d.id === "obsolete-result").disposition, "stale");
+  assert.equal(admitted.deliveries.find((d) => d.id === delivery.id).state, "delivered", "queue admission alone is not consumption");
+  await f.finish("session-1", "Incorporated the measurement, 42.");
+  const after = await f.host.snapshot();
+  assert.equal(after.deliveries.find((d) => d.id === delivery.id).disposition, "integrated");
+  assert.equal(after.deliveries.find((d) => d.id === delivery.id).state, "consumed");
+  assert.equal(after.workstreams[0].status, "completed");
+  await f.restart().recoverAll();
+  assert.equal(f.prompts.length, 2, "recovery finishes the torn return without replaying either turn");
+});
+
+test("Session side returnPolicy none does not enter main, discussion or explicit Start context", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  const discussion = await f.action("discuss", { pause: false });
+  const side = await f.action("side.create", { purpose: "work", visibility: "project", task: "Private inspection",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true } });
+  f.host.edit((state) => { state.conversations.find((c) => c.sessionId === side.sessionId).returnPolicy = "none"; });
+  await f.finish(side.sessionId, "PRIVATE_SIDE_RESULT");
+  assert.equal(f.transcripts.get("session-1").length, 0);
+  assert.ok(f.transcripts.get(discussion.sessionId).every((message) => !message.content.includes("PRIVATE_SIDE_RESULT")));
+  await f.action("start", { sessionId: "session-1" });
+  assert.doesNotMatch(f.prompts.at(-1).content, /PRIVATE_SIDE_RESULT/);
+  const main = (await f.host.snapshot()).runs.find((run) => run.sessionId === "session-1");
+  assert.deepEqual(JSON.parse(main.effects[0].detail).deliveryIds, []);
+});
+
+test("Session turn completion includes same-turn steering and promoted user input", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.action("start", { sessionId: "session-1" });
+  f.transcripts.get("session-1").push({ id: "promoted-user", role: "user", steering: true, content: "Also check the related file", status: "complete", createdAt: timestamp });
+  await f.finish("session-1", "Completed the original and added request.");
+  const state = await f.host.snapshot();
+  assert.equal(state.runs[0].outcome, "Completed the original and added request.");
+  assert.equal(state.workstreams[0].status, "completed");
+});
+
+test("Session exploration can propose a natural-language conclusion without adopting it", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  const side = await f.action("side.create", { purpose: "explore", visibility: "project", task: "Compare the approaches",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true } });
+  assert.doesNotMatch(f.prompts[0].content, /project-workflow-checkpoint/);
+  await f.finish(side.sessionId, "Prefer the simpler local approach.");
+  const proposal = (await f.host.snapshot()).decisions.find((decision) => decision.id === `explore:${side.sessionId}:conclusion`);
+  assert.equal(proposal.statement, "Prefer the simpler local approach.");
+  assert.equal(proposal.state, "proposed");
+});
+
+test("Explore without its transient identity cannot borrow an unrelated final reply after restart", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  const side = await f.action("side.create", { purpose: "explore", visibility: "project", task: "Compare the approaches",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true } });
+  f.execution.dispose();
+  await f.finish(side.sessionId, "A reply whose turn identity was lost.");
+  assert.equal((await f.host.snapshot()).decisions.length, 0);
+});
+
+test("A late side context cannot replace the actual main Agent final reply", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.action("start", { sessionId: "session-1" });
+  const side = await f.action("side.create", { purpose: "work", visibility: "project", task: "Side inspection",
+    readContext: { resourceIds: [], includeDecisions: true, includeArtifacts: true } });
+  const mainTurn = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
+  f.transcripts.get("session-1").push({ id: "actual-main-final", role: "assistant", content: "ACTUAL_MAIN_RESULT", status: "complete", createdAt: timestamp });
+  f.agentHost.endTurn("session-1", mainTurn, "completed");
+  await f.finish(side.sessionId, "LATE_SIDE_RESULT");
+  assert.match(f.transcripts.get("session-1").at(-1).id, /^workflow-context:/);
+  await f.runtime.onTurnSettled("session-1");
+  const mainRun = (await f.host.snapshot()).runs.find((run) => run.sessionId === "session-1");
+  assert.equal(mainRun.outcome, "ACTUAL_MAIN_RESULT");
+});
+
+test("A later independent ordinary turn cannot replace an unsettled session task result", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.action("start", { sessionId: "session-1" });
+  const originalTurn = (await f.agentHost.workSnapshot("session-1")).activeTurnId;
+  f.transcripts.get("session-1").push({ id: "original-final", role: "assistant", content: "ORIGINAL_RESULT", status: "complete", createdAt: timestamp });
+  f.agentHost.endTurn("session-1", originalTurn, "completed");
+  const later = await f.agentHost.startTurn(principal, { sessionId: "session-1", admission: "queue",
+    input: { text: "A different ordinary task", userMessageId: "later-user" }, context: { requestId: "later-user" } });
+  f.transcripts.get("session-1").push({ id: "later-final", role: "assistant", content: "LATER_RESULT", status: "complete", createdAt: timestamp });
+  f.agentHost.endTurn("session-1", later.turn.id, "completed");
+  await f.runtime.onTurnSettled("session-1");
+  assert.equal((await f.host.snapshot()).runs[0].outcome, "ORIGINAL_RESULT");
+});
+
+for (const terminal of ["failed", "interrupted", "canceled"]) test(`Session task ${terminal} cannot become completed`, async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.action("start", { sessionId: "session-1" });
+  await f.finish("session-1", "Execution stopped.", terminal);
+  assert.equal((await f.host.snapshot()).workstreams[0].status, "awaiting_user");
+  await f.restart(true).recoverAll();
+  assert.equal(f.prompts.length, 1);
+});
+
+test("Session task retains unknown Shell effects and never replays them on resume", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.action("start", { sessionId: "session-1" });
+  await f.finish("session-1", "The command timed out.", "completed", [
+    { id: "uncertain", role: "tool", toolName: "Bash", toolCallId: "uncertain", toolStatus: "error", toolResult: { details: { code: "TOOL_TIMEOUT" } } },
+  ]);
+  assert.equal((await f.host.snapshot()).workstreams[0].status, "awaiting_user");
+  await assert.rejects(() => f.action("resume"), { code: "WORKFLOW_EFFECT_UNKNOWN" });
+  assert.equal(f.prompts.length, 1);
+});
+
+test("Independent session tasks sharing a user owner use ordinary per-session admission", async () => {
+  const f = await setup((state) => {
+    const main = state.workstreams[0]; main.executionMode = "session"; state.authorizations = [];
+    state.workstreams.push({ ...structuredClone(main), id: "work-2", mainSessionId: "session-2" });
+    state.conversations.push({ ...structuredClone(state.conversations[0]), sessionId: "session-2", workstreamId: "work-2" });
+  });
+  await f.action("start", { sessionId: "session-1" });
+  await f.runtime.action({ kind: "start", commandId: "independent-start", projectId: "project-1", workstreamId: "work-2", sessionId: "session-2",
+    expectedRevision: (await f.host.snapshot()).revision });
+  assert.equal(f.prompts.length, 2);
+  assert.equal((await f.host.snapshot()).workstreams.find((work) => work.id === "work-2").status, "executing");
+});
+
+test("An unused legacy authorization record cannot stop a session task", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; });
+  await f.action("start", { sessionId: "session-1" });
+  await f.runtime.onHostChanged({ revision: (await f.host.snapshot()).revision, kind: "authorization.revoke", commandId: "unused-auth-revoke",
+    projectId: "project-1", workstreamId: "work-1" });
+  assert.deepEqual(f.stops, []);
+  assert.deepEqual(f.aborts, []);
+});
+
+test("Session task queues behind an already-active ordinary turn in the same session", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.agentHost.startTurn(principal, { sessionId: "session-1", admission: "queue",
+    input: { text: "Existing ordinary work", userMessageId: "existing-user" }, context: { requestId: "existing-user" } });
+  await f.action("start", { sessionId: "session-1" });
+  assert.equal(f.prompts.length, 1, "Workflow cannot bypass ordinary session admission");
+  assert.equal((await f.host.snapshot()).runs[0].state, "queued");
+  assert.equal(f.agentHost.queue.list("session-1").length, 1);
+});
+
+test("Legacy workstreams retain accountable-owner serialization", async () => {
+  const f = await setup((state) => {
+    const main = state.workstreams[0];
+    state.workstreams.push({ ...structuredClone(main), id: "work-2", mainSessionId: "session-2" });
+    state.conversations.push({ ...structuredClone(state.conversations[0]), sessionId: "session-2", workstreamId: "work-2" });
+    state.authorizations.push({ ...structuredClone(state.authorizations[0]), id: "auth-other", workstreamId: "work-2", resources: ["/synthetic/other"] });
+  });
+  await f.action("start", { sessionId: "session-1", authorizationId: "auth-1" });
+  await f.runtime.action({ kind: "start", commandId: "legacy-owner-start", projectId: "project-1", workstreamId: "work-2", sessionId: "session-2",
+    authorizationId: "auth-other", expectedRevision: (await f.host.snapshot()).revision });
+  assert.equal(f.prompts.length, 1);
+  assert.equal((await f.host.snapshot()).workstreams.find((work) => work.id === "work-2").status, "blocked");
+});
+
+test("Session pause uses ordinary turn interruption and resume retains prior receipts", async () => {
+  const f = await setup((state) => { state.workstreams[0].executionMode = "session"; state.authorizations = []; });
+  await f.action("start", { sessionId: "session-1" });
+  await f.action("pause");
+  assert.deepEqual(f.aborts, ["session-1"]);
+  assert.deepEqual(f.resolvedTools, [], "there is no extra workflow Shell approval layer");
+  await f.finish("session-1", "Stopped at the requested boundary.", "interrupted");
+  assert.equal((await f.host.snapshot()).workstreams[0].status, "paused");
+  await f.action("resume");
+  assert.equal(f.prompts.length, 2);
+  assert.match(f.prompts[1].content, /Continue the interrupted task/);
+  assert.equal(f.prompts[1].workflowRunId, undefined);
+});
 
 async function setup(modify = () => {}) {
   const initial = projectWorkflowFixture();
@@ -121,7 +389,11 @@ async function setup(modify = () => {}) {
   const modelEdge = {
     async prompt(request) {
       prompts.push(request);
-      transcripts.get(request.sessionId).push({ id: request.userMessageId, role: "user", content: request.content, status: "complete", createdAt: timestamp });
+      const messages = transcripts.get(request.sessionId);
+      // The production ordinary agentPrompt adapter accepts only fresh UUIDs.
+      // Preserve its actual identity policy instead of echoing every requested ID.
+      const id = request.workflowRunId !== undefined ? `workflow-run:${request.workflowRunId}` : durableUserMessageId(request.userMessageId, messages);
+      messages.push({ id, role: "user", content: request.content, status: "complete", createdAt: timestamp });
       return { turnId: `turn-${++count}` };
     },
     async stop(sessionId) { stops.push(sessionId); return { requested: true }; },

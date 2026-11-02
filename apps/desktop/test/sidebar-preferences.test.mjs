@@ -132,6 +132,40 @@ test("project display names are trimmed, persisted, and bounded by Unicode chara
   }
 });
 
+test("project colour persists as a preset id and drops anything else", () => {
+  const values = new Map();
+  const previousStorage = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+    clear: () => values.clear(),
+    key: () => null,
+    get length() {
+      return values.size;
+    },
+  };
+  try {
+    saveSidebarPreferences({
+      sessionMeta: {},
+      projectMeta: {
+        "/work/a": { color: "rose", pinned: true },
+        "/work/b": { color: "#ff0000" },
+        "/work/c": { color: "not-a-preset", archived: true },
+      },
+      projectSort: "recent",
+      sessionView: { sort: "recent", archived: false },
+      openProjectPaths: [],
+    });
+    const loaded = loadSidebarPreferences();
+    assert.deepEqual(loaded.projectMeta["/work/a"], { pinned: true, color: "rose" });
+    assert.equal(loaded.projectMeta["/work/b"], undefined);
+    assert.deepEqual(loaded.projectMeta["/work/c"], { archived: true });
+  } finally {
+    globalThis.localStorage = previousStorage;
+  }
+});
+
 test("projects sort by name while retaining pinned priority", () => {
   const projects = sortProjects(
     [

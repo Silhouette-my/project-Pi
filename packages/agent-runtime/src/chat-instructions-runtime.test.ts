@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { systemPromptContent } from "./system-transcript.js";
 import { DesktopAgentRuntime, type RuntimeMatchConfig } from "./runtime.js";
 import type { RuntimeProviderConfig } from "./provider-binding.js";
+import { BUILTIN_CHAT_INSTRUCTIONS } from "./builtin-chat-instructions.js";
 import {
   DEFAULT_CHAT_SYSTEM_PROMPT,
   DEFAULT_RUNTIME_SYSTEM_PROMPT,
@@ -69,6 +72,16 @@ function matchConfig(overrides: { chatInstructions?: string } = {}): RuntimeMatc
 }
 
 describe("chat instruction system prompt gating", () => {
+  it.each([...BUILTIN_CHAT_INSTRUCTIONS])("composes the bundled %s preset verbatim", async (_id, content) => {
+    const runtime = makeRuntime({ chatInstructions: content });
+    try {
+      expect(internals(runtime).composedSystemPrompt).toBe(content);
+      expect(internals(runtime).composedSections).toEqual({ runtime: content });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("uses the built-in chat persona when no chat instruction is set", async () => {
     const runtime = makeRuntime({});
     try {
@@ -105,7 +118,7 @@ describe("chat instruction system prompt gating", () => {
     }
   });
 
-  it("leaves non-chat providers composing the desktop agent prompt", async () => {
+  it("appends the instruction to the agent prompt for non-chat providers", async () => {
     const runtime = makeRuntime({
       provider: { ...chatProvider, apiStyle: undefined },
       chatInstructions: "Answer in haiku.",
@@ -113,7 +126,36 @@ describe("chat instruction system prompt gating", () => {
     try {
       const prompt = internals(runtime).composedSystemPrompt ?? "";
       expect(prompt).toContain(DEFAULT_RUNTIME_SYSTEM_PROMPT);
-      expect(prompt).not.toBe("Answer in haiku.");
+      expect(prompt.endsWith("Answer in haiku.")).toBe(true);
+      expect(internals(runtime).composedSections.chatInstruction).toBe("Answer in haiku.");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps the appended instruction in the system transcript the model request is built from", async () => {
+    const runtime = makeRuntime({
+      provider: { ...chatProvider, apiStyle: undefined },
+      chatInstructions: "Answer in haiku.",
+    });
+    try {
+      const agent = (runtime as unknown as { agent: { state: { messages: AgentMessage[] } } }).agent;
+      const text = systemPromptContent(agent.state.messages);
+      expect(text).toContain(DEFAULT_RUNTIME_SYSTEM_PROMPT);
+      expect(text.endsWith("Answer in haiku.")).toBe(true);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it.each([undefined, ""])("adds nothing for non-chat providers when the instruction is %j", async (chatInstructions) => {
+    const runtime = makeRuntime({
+      provider: { ...chatProvider, apiStyle: undefined },
+      ...(chatInstructions !== undefined ? { chatInstructions } : {}),
+    });
+    try {
+      expect(internals(runtime).composedSections).not.toHaveProperty("chatInstruction");
+      expect(internals(runtime).composedSystemPrompt).toContain(DEFAULT_RUNTIME_SYSTEM_PROMPT);
     } finally {
       await runtime.dispose();
     }
@@ -125,6 +167,7 @@ describe("chat instruction system prompt gating", () => {
       expect(
         runtime.matches(matchConfig({ chatInstructions: "Answer in haiku." })),
       ).toBe(true);
+      expect(runtime.firstMismatch(matchConfig({ chatInstructions: "" }))).toBe("chatInstructions");
       expect(runtime.matches(matchConfig({ chatInstructions: "" }))).toBe(false);
       expect(
         runtime.matches(matchConfig({ chatInstructions: "Other preset." })),
@@ -147,6 +190,7 @@ describe("chat instruction system prompt gating", () => {
     try {
       expect(runtime.matches({ ...matchConfig({ chatInstructions: "" }), chatWorkflowContext: "decision 1" })).toBe(true);
       expect(runtime.matches({ ...matchConfig({ chatInstructions: "" }), chatWorkflowContext: "decision 2" })).toBe(false);
+      expect(runtime.firstMismatch({ ...matchConfig({ chatInstructions: "" }), chatWorkflowContext: "decision 2" })).toBe("chatWorkflowContext");
     } finally { await runtime.dispose(); }
   });
 

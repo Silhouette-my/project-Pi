@@ -291,6 +291,7 @@ function buildChipElement(
   onExpandText: (token: string) => void,
   onOpenImage: (token: string) => void,
   onOpenSession: (token: string) => void,
+  tooltip?: string,
 ): HTMLElement {
   const chip = document.createElement("span");
   chip.className = "composer-chip";
@@ -299,7 +300,7 @@ function buildChipElement(
   // A mark names the plugin that put it there where a file names its path.
   const origin = isPluginMark(reference) ? (reference.plugin?.pluginId ?? "") : reference.path;
   if (isPluginMark(reference)) chip.dataset.pluginMark = reference.plugin?.kind;
-  chip.title = origin;
+  chip.title = tooltip ?? origin;
   // An image keeps the compact chip and opens its preview, a session chip opens
   // that conversation, and only plain text expands into editable draft text.
   const image = chipIconKey(reference) === "image";
@@ -315,7 +316,10 @@ function buildChipElement(
         ? () => onOpenSession(token)
         : undefined;
   chip.setAttribute("role", activate ? "button" : "listitem");
-  chip.setAttribute("aria-label", `${reference.name} — ${origin}`);
+  chip.setAttribute("aria-label", session ? `@${reference.name}` : `${reference.name} — ${origin}`);
+  // A conversation mention is a quiet `@title` tile: no icon, no remove button
+  // (Backspace takes the whole token).
+  if (session) chip.dataset.mention = "";
   if (activate) {
     chip.tabIndex = 0;
     // Only a text reference expands into editable text; an image chip opens
@@ -341,7 +345,7 @@ function buildChipElement(
 
   const nameSpan = document.createElement("span");
   nameSpan.className = "composer-chip-name";
-  nameSpan.textContent = reference.name;
+  nameSpan.textContent = session ? `@${reference.name}` : reference.name;
 
   const remove = document.createElement("button");
   remove.type = "button";
@@ -360,7 +364,8 @@ function buildChipElement(
     onRemove(token);
   });
 
-  chip.append(icon, nameSpan, remove);
+  if (session) chip.append(nameSpan);
+  else chip.append(icon, nameSpan, remove);
   return chip;
 }
 
@@ -374,6 +379,7 @@ export function paintEditorValue(
   onExpandText: (token: string) => void,
   onOpenImage: (token: string) => void,
   onOpenSession: (token: string) => void,
+  tooltipFor?: (reference: ComposerFileReference) => string | undefined,
 ): void {
   el.replaceChildren();
   let textBuffer = "";
@@ -397,6 +403,7 @@ export function paintEditorValue(
             onExpandText,
             onOpenImage,
             onOpenSession,
+            tooltipFor?.(reference),
           ),
         );
         continue;

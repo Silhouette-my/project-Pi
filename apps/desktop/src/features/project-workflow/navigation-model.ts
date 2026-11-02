@@ -15,8 +15,25 @@ export function workflowGroupForPath(groups: ProjectGroupRecord[], path: string)
   );
 }
 
+/** A standalone Chat does not inherit the last workspace's project context. */
+export function workflowContextProjectId(
+  snapshot: ProjectWorkflowSnapshot | null,
+  groups: ProjectGroupRecord[],
+  session?: Pick<SessionSummary, "id" | "projectPath">,
+  workspacePath?: string | null,
+) {
+  if (session) {
+    const linked = snapshot?.projectAgents?.find(item => item.sessionId === session.id)?.projectId
+      ?? snapshot?.conversations.find(item => item.sessionId === session.id)?.projectId
+      ?? snapshot?.workstreams.find(item => item.mainSessionId === session.id)?.projectId;
+    if (linked) return linked;
+  }
+  const path = session ? session.projectPath : workspacePath;
+  return path ? workflowGroupForPath(groups, path)?.id : undefined;
+}
+
 /** Keep the existing visible/manual order; multiple open roots of one group share one row. */
-export function workflowProjectEntries<T extends { path: string; sessions: SessionSummary[] }>(
+export function workflowProjectEntries<T extends { path: string; sessions: SessionSummary[]; name?: string; meta?: { name?: string } }>(
   entries: T[],
   groups: ProjectGroupRecord[],
 ): T[] {
@@ -32,7 +49,7 @@ export function workflowProjectEntries<T extends { path: string; sessions: Sessi
         ...entry.sessions.filter((session) => !ids.has(session.id)),
       ];
     } else {
-      const visible = { ...entry, sessions: [...entry.sessions] };
+      const visible = { ...entry, name: entry.meta?.name ?? group?.name ?? entry.name, sessions: [...entry.sessions] };
       result.push(visible);
       if (group) byGroup.set(group.id, visible);
     }
@@ -48,6 +65,7 @@ export function navigationSessions(
   const linked = new Set([
     ...snapshot.conversations.map((item) => item.sessionId),
     ...(snapshot.projectAgents ?? []).map((item) => item.sessionId),
+    ...(snapshot.workstreams ?? []).flatMap((item) => item.mainSessionId ? [item.mainSessionId] : []),
   ]);
   const navigation = new Map(snapshot.navigation.map((item) => [item.sessionId, item]));
   return sessions
@@ -70,6 +88,7 @@ export function navigationHighlights(snapshot: ProjectWorkflowSnapshot, sessions
   const associated = new Set([
     ...snapshot.conversations.map((item) => item.sessionId),
     ...(snapshot.projectAgents ?? []).map((item) => item.sessionId),
+    ...(snapshot.workstreams ?? []).flatMap((item) => item.mainSessionId ? [item.mainSessionId] : []),
   ]);
   const eligible = sessions.filter((item) => !item.projectPath && !associated.has(item.id));
   const byId = new Map(eligible.map((item) => [item.id, item]));
@@ -85,10 +104,16 @@ export function navigationHighlights(snapshot: ProjectWorkflowSnapshot, sessions
   return { favorites, recent, promotedIds: new Set([...favorites, ...recent].map((item) => item.id)) };
 }
 
-/** Two folder levels keep organizational trees shallow without changing execution context. */
+/** Any depth is allowed; only the edited folder and its descendants are excluded. */
 export function folderParents(folders: WorkflowFolder[], folder?: WorkflowFolder) {
-  const hasChildren = folder && folders.some((item) => item.parentId === folder.id);
-  return folders.filter((item) => !item.parentId && item.id !== folder?.id && !hasChildren);
+  if (!folder) return folders;
+  const excluded = new Set([folder.id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const item of folders) if (item.parentId && excluded.has(item.parentId) && !excluded.has(item.id)) { excluded.add(item.id); changed = true; }
+  }
+  return folders.filter(item => !excluded.has(item.id));
 }
 
 export function orderedFolders(folders: WorkflowFolder[], parentId?: string) {

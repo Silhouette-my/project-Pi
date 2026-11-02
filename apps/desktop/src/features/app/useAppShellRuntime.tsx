@@ -6,6 +6,7 @@ import {
   type KeyboardShortcutId,
   keybindingDisplayParts,
   keybindingMatchesEvent,
+  resolveAccentColor,
   resolveFontScale,
   resolveKeybinding,
   type ShortcutPlatform,
@@ -25,6 +26,7 @@ import {
 } from "../../lib/sidebar-preferences";
 import { sidebarWidthBudget } from "../../lib/sidebar-resize";
 import { commitWorkPanelPresentation } from "../../lib/work-panel-presentation";
+import { workPanelContextKey } from "../../lib/project-panel";
 import {
   MAIN_PANE_MIN_WIDTH,
   workPanelRequestedWidth,
@@ -36,6 +38,8 @@ import {
   pluginWorkPanelTab,
 } from "../../lib/work-panel-tabs";
 import { useAppStore } from "../../stores/app-store";
+import { setPanelPinned } from "../../lib/panel-pin";
+import { useSidePanelReveal } from "./useSidePanelReveal";
 import { useSidebarTransition } from "./useSidebarTransition";
 import { useStartupWatchdog } from "./useStartupWatchdog";
 import { useTraySessions } from "./useTraySessions";
@@ -60,6 +64,9 @@ export function useAppShellRuntime() {
   const ready = useAppStore((s) => s.ready);
   const page = useAppStore((s) => s.page);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
+  const projectConsoleId = useAppStore((s) => s.projectConsoleId);
+  /** The work-panel context on screen: the project's on the project page, else the session's. */
+  const panelContextKey = workPanelContextKey({ page, projectConsoleId, activeSessionId });
   const acknowledgeSessionOutcome = useAppStore(
     (s) => s.acknowledgeSessionOutcome,
   );
@@ -68,6 +75,11 @@ export function useAppShellRuntime() {
   const handlePlansChanged = useAppStore((s) => s.handlePlansChanged);
   const abort = useAppStore((s) => s.abort);
   const settings = useAppStore((s) => s.settings);
+  useEffect(() => {
+    if (page === "scheduled" && settings?.scheduledTasksEnabled === false) {
+      useAppStore.getState().setPage("chat", { record: false });
+    }
+  }, [page, settings?.scheduledTasksEnabled]);
   const workPanelOpen = useAppStore((s) => s.workPanelOpen);
   const workPanelWidth = useAppStore((s) => s.workPanelWidth);
   const workPanelYieldedWidth = useAppStore((s) => s.workPanelYieldedWidth);
@@ -86,10 +98,31 @@ export function useAppShellRuntime() {
       ? (s.sessions.find((session) => session.id === s.activeSessionId)?.projectPath ?? null)
       : null,
   );
-  const workPanelVisible = workPanelOpen;
+  // Pin state and the edge-reveal overlays of both side panels. An unpinned
+  // panel takes no layout width, so everything below that budgets the dock
+  // treats it as collapsed (docs/adr/auto-hide-side-panels.md).
+  const { sidebarPinned, workPanelPinned, leftReveal, rightReveal } =
+    useSidePanelReveal({ ready, page, contextKey: panelContextKey, workPanelOpen, settings });
+  const workPanelVisible = workPanelOpen && workPanelPinned;
+
+  useEffect(() => {
+    if (!ready || !activeSessionId || activeSessionId.startsWith("remote:")) return;
+    const state = useAppStore.getState();
+    const tabs = state.workPanelContexts[activeSessionId]?.tabs ?? state.workPanelTabs;
+    let current = true;
+    void api.browserGetPages(activeSessionId).then((pages) => {
+      if (!current) return;
+      const live = useAppStore.getState();
+      const liveTabs = live.workPanelContexts[activeSessionId]?.tabs ?? live.workPanelTabs;
+      if (live.activeSessionId !== activeSessionId || liveTabs !== tabs) return;
+      live.restoreBrowserWorkPanelTabs(activeSessionId, pages);
+    }).catch((error) => console.warn("Browser tab restore failed", error));
+    return () => { current = false; };
+  }, [ready, activeSessionId, workPanelOpen]);
 
   const [searchOpen, setSearchOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarDockCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarCollapsed = sidebarDockCollapsed || !sidebarPinned;
   const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth());
   const { sidebarEntering, sidebarExiting, handleSidebarAnimationEnd } = useSidebarTransition(
     sidebarCollapsed,
@@ -159,16 +192,24 @@ export function useAppShellRuntime() {
     setSidebarWidth(nextWidth);
     saveSidebarWidth(nextWidth);
   }, []);
+  const sidebarPinnedRef = useRef(sidebarPinned);
+  sidebarPinnedRef.current = sidebarPinned;
+  const workPanelPinnedRef = useRef(workPanelPinned);
+  workPanelPinnedRef.current = workPanelPinned;
+  const closeLeftOverlay = leftReveal.closePanel;
   const handleSidebarResizeCollapse = useCallback(() => {
     autoCollapsedSidebarRef.current = false;
-    setSidebarCollapsed(true);
-  }, []);
+    // Dragging an overlay below the threshold retracts it; only a docked
+    // sidebar has a collapsed state of its own.
+    if (!sidebarPinnedRef.current) closeLeftOverlay();
+    else setSidebarCollapsed(true);
+  }, [closeLeftOverlay]);
   // Reopening prefers the right column: the work panel gives up width first so
   // MainChat keeps the width it already had, and only a would-be breach of the
   // 450px floor falls back to the 460px reopen target. The column comes back at
   // the user's preferred width, which a collapsing drag never overwrites. The
   // panel only lends that width: its own preferred width stays stored.
-  const reopenSidebar = useCallback(() => {
+  const reopenDockedSidebar = useCallback(() => {
     if (!sidebarCollapsedRef.current) return;
     const preferredWidth = clampSidebarWidth(sidebarPreferredWidthRef.current);
     if (workPanelOpenRef.current && !workPanelMaximizedRef.current) {
@@ -192,16 +233,61 @@ export function useAppShellRuntime() {
     setSidebarWidth(preferredWidth);
     setSidebarCollapsed(false);
   }, []);
+  // An unpinned sidebar has no dock to reopen: revealing it is the equivalent.
+  const openLeftOverlay = leftReveal.openPanel;
+  const reopenSidebar = useCallback(() => {
+    if (!sidebarPinnedRef.current) openLeftOverlay();
+    else reopenDockedSidebar();
+  }, [openLeftOverlay, reopenDockedSidebar]);
   useTraySessions({ setSearchOpen, reopenSidebar });
 
   // Stable identity: the keydown and native-menu handlers register once and
   // must never capture a stale `sidebarCollapsed`. Every invocation is a user
   // action, so it clears an automatic-collapse record before toggling.
+  const toggleLeftOverlay = leftReveal.toggle;
   const toggleSidebar = useCallback(() => {
     autoCollapsedSidebarRef.current = false;
+    // An unpinned sidebar has no dock: the shortcut shows or hides its overlay.
+    if (!sidebarPinnedRef.current) {
+      toggleLeftOverlay();
+      return;
+    }
     if (sidebarCollapsedRef.current) reopenSidebar();
     else setSidebarCollapsed(true);
-  }, [reopenSidebar]);
+  }, [reopenSidebar, toggleLeftOverlay]);
+
+  // Pinning docks the panel exactly as before (the sidebar reopens through the
+  // same width-lending path); unpinning returns it to auto-hide. Each side
+  // persists its own flag.
+  const closeRightOverlay = rightReveal.closePanel;
+  const toggleSidebarPinned = useCallback(() => {
+    if (sidebarPinnedRef.current) {
+      void setPanelPinned("sidebarPinned", false);
+      return;
+    }
+    closeLeftOverlay();
+    reopenDockedSidebar();
+    void setPanelPinned("sidebarPinned", true);
+  }, [closeLeftOverlay, reopenDockedSidebar]);
+  // The visible sidebar button is how people bring the sidebar back, so on an
+  // unpinned sidebar it docks it again (a hover overlay that retracts would
+  // read as "cannot restore"); the shortcut keeps the transient overlay.
+  const toggleSidebarFromChrome = useCallback(() => {
+    if (!sidebarPinnedRef.current) {
+      toggleSidebarPinned();
+      return;
+    }
+    toggleSidebar();
+  }, [toggleSidebar, toggleSidebarPinned]);
+  const toggleWorkPanelPinned = useCallback(() => {
+    if (workPanelPinnedRef.current) {
+      void setPanelPinned("workPanelPinned", false);
+      return;
+    }
+    closeRightOverlay();
+    void setPanelPinned("workPanelPinned", true);
+    useAppStore.getState().openWorkPanel();
+  }, [closeRightOverlay]);
 
   // The layout, not the user, yields the sidebar when the panel would push
   // MainChat under its floor. The record is remembered only until the panel
@@ -275,8 +361,15 @@ export function useAppShellRuntime() {
     setWorkPanelMaximized((current) => !current);
   }, []);
 
+  const toggleRightOverlay = rightReveal.toggle;
   const togglePresentedWorkPanel = useCallback(() => {
     const store = useAppStore.getState();
+    // An unpinned panel is an overlay: the toggle shows or hides it. It stays
+    // unavailable without a session, exactly like the docked toggle.
+    if (!workPanelPinnedRef.current) {
+      if (workPanelContextKey(store)) toggleRightOverlay();
+      return;
+    }
     if (workPanelExitingRef.current) {
       store.openWorkPanel();
       return;
@@ -294,7 +387,7 @@ export function useAppShellRuntime() {
       return;
     }
     store.openWorkPanel();
-  }, []);
+  }, [toggleRightOverlay]);
 
   const finishWorkPanelExit = useCallback((generation: number) => {
     if (generation !== workPanelExitGeneration.current) return;
@@ -328,7 +421,7 @@ export function useAppShellRuntime() {
     const pageHidesWorkPanel =
       page === "settings" || page === "plugins" || page === "scheduled";
     const shouldPresent =
-      ready && !pageHidesWorkPanel && workPanelOpen;
+      ready && !pageHidesWorkPanel && workPanelVisible;
     const request = ++workPanelReservationRequest.current;
 
     if (shouldPresent) {
@@ -364,7 +457,7 @@ export function useAppShellRuntime() {
       isCurrent: () => request === workPanelReservationRequest.current,
       commit: () => setPresentedWorkPanelOpen(shouldPresent),
     });
-  }, [page, ready, workPanelOpen]);
+  }, [page, ready, workPanelVisible]);
 
   // Fallback if animationend is skipped (display:none mid-flight, etc.).
   useEffect(() => {
@@ -610,6 +703,17 @@ export function useAppShellRuntime() {
     );
   }, [settings?.fontScale, settings?.fontSize]);
 
+  // Theme accent: both theme variants are published on :root and tokens.css
+  // picks the one that matches the active theme, so no JS tracks the theme.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    const accent = resolveAccentColor(settings?.accentColor);
+    root.setProperty("--ds-theme-accent-light", accent.light);
+    root.setProperty("--ds-theme-accent-dark", accent.dark);
+    root.setProperty("--ds-on-theme-accent-light", accent.onLight);
+    root.setProperty("--ds-on-theme-accent-dark", accent.onDark);
+  }, [settings?.accentColor]);
+
   useEffect(() => {
     if (bootstrapStartedRef.current) return;
     bootstrapStartedRef.current = true;
@@ -686,6 +790,7 @@ export function useAppShellRuntime() {
       }
       state.openWorkPanelTabForSession(event.sessionId, {
         ...browserPluginTab(event.path ?? event.url),
+        ...(event.tabId ? { id: event.tabId } : {}),
       });
     });
     const offBrowserOpenFile = api.onBrowserOpenFile(({ path }) => {
@@ -899,7 +1004,8 @@ export function useAppShellRuntime() {
           case "openWorkPanel": {
             const p = useAppStore.getState().page;
             if (p !== "settings" && p !== "plugins" && p !== "scheduled") {
-              useAppStore.getState().toggleWorkPanel();
+              if (workPanelPinnedRef.current) useAppStore.getState().toggleWorkPanel();
+              else if (workPanelContextKey(useAppStore.getState())) toggleRightOverlay();
             }
             break;
           }
@@ -956,6 +1062,7 @@ export function useAppShellRuntime() {
     projectPath,
     settings?.keybindings,
     toggleSidebar,
+    toggleRightOverlay,
   ]);
 
   useEffect(() => installRendererApi(), []);
@@ -1063,6 +1170,7 @@ export function useAppShellRuntime() {
     ready,
     page,
     activeSessionId,
+    panelContextKey,
     workPanelOpen,
     searchOpen,
     setSearchOpen,
@@ -1101,5 +1209,12 @@ export function useAppShellRuntime() {
     startupRetrying,
     sidebarToggleShortcut,
     workPanelToggleTooltip,
+    sidebarPinned,
+    workPanelPinned,
+    leftReveal,
+    rightReveal,
+    toggleSidebarPinned,
+    toggleSidebarFromChrome,
+    toggleWorkPanelPinned,
   };
 }

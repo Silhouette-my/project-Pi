@@ -29,6 +29,7 @@ export type OptimisticSessionConfiguration = {
   // null clears the chat instruction preset back to the built-in persona; the
   // host response replaces this transient value with the persisted state.
   promptPreset?: string | null;
+  fastMode?: boolean;
 };
 
 export type ThinkingProviderLike = {

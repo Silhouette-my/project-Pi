@@ -2,7 +2,7 @@ import type { WorkflowRun } from "@pi-desktop/shared";
 import type { WorkflowStep } from "./project-workflow-checkpoint";
 
 /** Runtime-owned details of the admitted bounded assignment, not new authority. */
-export type WorkflowAssignmentReceipt = { step: WorkflowStep; deliveryIds: string[]; turnId?: string; pausePendingShell?: boolean; resumedFromRunId?: string };
+export type WorkflowAssignmentReceipt = { step: WorkflowStep; deliveryIds: string[]; userMessageId?: string; turnId?: string; pausePendingShell?: boolean; resumedFromRunId?: string };
 export function workflowAssignment(run: WorkflowRun): WorkflowAssignmentReceipt {
   return JSON.parse(run.effects.find((effect) => effect.id === "dispatch")!.detail);
 }

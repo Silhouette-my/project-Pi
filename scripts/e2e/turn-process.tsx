@@ -6,7 +6,7 @@ import { en } from "@pi-desktop/i18n";
 import type { AppSettings, UiMessage } from "@pi-desktop/shared";
 import { AssistantTurn } from "../../apps/desktop/src/features/chat/transcript/AssistantTurn";
 import { ShowThinkingRow } from "../../apps/desktop/src/components/settings/ShowThinkingRow";
-import { KeepCommandsExpandedRow } from "../../apps/desktop/src/components/settings/KeepCommandsExpandedRow";
+import { TranscriptDisplayModeRow } from "../../apps/desktop/src/components/settings/TranscriptDisplayModeRow";
 import { buildTranscriptEntries } from "../../apps/desktop/src/lib/assistant-turns";
 import { TranscriptSearchContext } from "../../apps/desktop/src/lib/transcript-search-context";
 import type { TranscriptSearchTarget } from "../../apps/desktop/src/lib/transcript-reading";
@@ -67,6 +67,7 @@ export async function turnProcessProbe() {
     theme: "light",
     enterToSend: true,
     onboardingDismissed: true,
+    transcriptDisplayMode: "command-first",
   };
   const setSettings = (patch: Partial<AppSettings> = {}) =>
     flushSync(() => useAppStore.setState({ settings: { ...baseSettings, ...patch } }));
@@ -187,7 +188,7 @@ export async function turnProcessProbe() {
   try {
     // One disclosure per turn: the Bash rows are rows inside the turn's process,
     // not siblings of it, so a long turn collapses in one gesture.
-    render(mixed);
+    render(mixed, true, null, "settling-activity-group");
     const bash1Row = row("bash1");
     const bash2Row = row("bash2");
     check(Boolean(bash1Row) && Boolean(bash2Row), "both adjacent Bash rows render");
@@ -215,7 +216,24 @@ export async function turnProcessProbe() {
         i18n.t("chat.processTools", { count: 5 }),
       "the process header counts every tool once",
     );
-    check(allCollapsed(), "the completed process starts fully collapsed");
+    const activeGroupHeader = row("read")?.closest<HTMLElement>(
+      ".process-activity-group.grouped",
+    )?.querySelector<HTMLElement>(".tool-activity-header");
+    check(
+      activeGroupHeader?.getAttribute("aria-expanded") === "true",
+      "the active small activity group starts open",
+    );
+    render(mixed, false, null, "settling-activity-group");
+    const completedGroupHeader = row("read")?.closest<HTMLElement>(
+      ".process-activity-group.grouped",
+    )?.querySelector<HTMLElement>(".tool-activity-header");
+    check(
+      processHeaders()[0]?.getAttribute("aria-expanded") === "false" &&
+        [...container.querySelectorAll<HTMLElement>(".tool-row:not(.thinking) .tool-row-header")].every(
+          (header) => header.getAttribute("aria-expanded") === "false",
+        ),
+      "the completed process and tool payload rows start closed",
+    );
     check(
       !visible(bash1Row) && !visible(bash2Row),
       "Bash rows are revealed by the turn's process, not left outside it",
@@ -230,6 +248,10 @@ export async function turnProcessProbe() {
     check(
       visible(bash1Row) && visible(bash2Row),
       "opening the process reveals the Bash rows",
+    );
+    check(
+      visible(row("read")) && completedGroupHeader?.getAttribute("aria-expanded") === "true",
+      "opening the process reveals the already-open activity group with its tool rows",
     );
 
     // Real geometry and hit testing: the turn title, a nested group title and a
@@ -256,10 +278,20 @@ export async function turnProcessProbe() {
         nearLeft(leftOf(nestedLabel), leftOf(bashLabel)),
       "turn, group and run titles share one text line",
     );
+    const topProcess = topHeader?.parentElement ?? null;
     check(
-      nearLeft(leftOf(topHeader), leftOf(nestedHeader)) &&
+      topHeader !== null &&
+        topProcess !== null &&
+        Math.abs(
+          topHeader.getBoundingClientRect().width -
+            topProcess.getBoundingClientRect().width,
+        ) < 1,
+      "the turn header hairline spans the transcript band",
+    );
+    check(
+      nearLeft(leftOf(topHeader), leftOf(topIcon)) &&
         nearLeft(leftOf(nestedHeader), leftOf(bashHead)),
-      "turn, group and run header fills share one left edge",
+      "the turn row starts at the prose edge and nested fills share their gutter",
     );
     check(
       owns(topHeader, pointIn(topIcon)) &&
@@ -284,7 +316,9 @@ export async function turnProcessProbe() {
       topRail !== null && railHit(topRail) === topRail,
       "the turn collapse rail owns its gutter hit target",
     );
-    click(nestedHeader);
+    if (nestedHeader?.getAttribute("aria-expanded") !== "true") {
+      click(nestedHeader);
+    }
     const nestedBody = nestedHeader?.parentElement?.querySelector<HTMLElement>(
       ":scope > .process-activity-body",
     ) ?? null;
@@ -511,9 +545,16 @@ export async function turnProcessProbe() {
       Boolean(container.querySelector(".tool-row.thinking")),
       "turning show thinking back on restores the completed reasoning row",
     );
+    click(processHeaders()[0] ?? null);
+    const restoredThinking = container.querySelector<HTMLElement>(
+      ".tool-row.thinking .tool-row-header",
+    );
+    if (restoredThinking?.getAttribute("aria-expanded") !== "true") {
+      click(restoredThinking);
+    }
     check(
       container.textContent?.includes("Reasoning before the answer"),
-      "the restored row shows the retained reasoning text",
+      "the restored row shows the retained reasoning text when opened",
     );
 
     // Search reveal opens the process chunk that owns the named message.
@@ -540,7 +581,7 @@ export async function turnProcessProbe() {
         container.querySelectorAll(".turn-run-row").length === 2,
       "the mounted turn starts with standalone command rows",
     );
-    setSettings({ keepCommandsExpanded: false });
+    setSettings({ transcriptDisplayMode: "fully-folded" });
     check(
       container.querySelectorAll(".turn-process").length === 1 &&
         container.querySelectorAll(".turn-run-row").length === 0,
@@ -575,9 +616,21 @@ export async function turnProcessProbe() {
       "toggling command folding back restores standalone rows without a remount",
     );
 
+    // Flat keeps the outer process but suppresses nested activity groups and
+    // standalone run wrappers.
+    setSettings({ transcriptDisplayMode: "flat" });
+    render(contiguous, false, null, "flat-mode");
+    check(
+      container.querySelector(".turn-process") !== null &&
+        container.querySelectorAll(".process-activity-group").length === 0 &&
+        container.querySelectorAll(".turn-run-row").length === 0,
+      "flat mode renders one outer process with no nested activity groups",
+    );
+    setSettings();
+
     // The active tail may be wrapped in a merged off-mode part; the merged group
     // must still receive the live disclosure defaults.
-    setSettings({ keepCommandsExpanded: false });
+    setSettings({ transcriptDisplayMode: "fully-folded" });
     render(
       [read, grep, run("live-folded-bash", "pnpm test")],
       true,
@@ -588,6 +641,77 @@ export async function turnProcessProbe() {
       visible(row("live-folded-bash")) &&
         container.querySelector(".process-activity-group.grouped.open") !== null,
       "the merged group keeps its live disclosure default",
+    );
+
+    const earlierThinking = message("earlier-thinking", "assistant", "", {
+      thinking: "Earlier reasoning remains available.",
+      status: "complete",
+    });
+    const liveThinking = message("live-thinking", "assistant", "", {
+      thinking: "Latest reasoning remains available.",
+      status: "streaming",
+    });
+    const completedThinking = { ...liveThinking, status: "complete" as const };
+    const thinkingAnswer = message("thinking-answer", "assistant", "Done.", {
+      status: "complete",
+    });
+    render(
+      [earlierThinking, read, liveThinking, thinkingAnswer],
+      true,
+      null,
+      "fully-folded-thinking-settlement",
+    );
+    const liveThinkingHeaders = [
+      ...container.querySelectorAll<HTMLElement>(".tool-row.thinking .tool-row-header"),
+    ];
+    check(
+      liveThinkingHeaders.length === 2 &&
+        liveThinkingHeaders.every((header) => header.getAttribute("aria-expanded") === "true"),
+      "fully folded expands each visible thinking row by default",
+    );
+    render(
+      [earlierThinking, read, completedThinking, thinkingAnswer],
+      false,
+      null,
+      "fully-folded-thinking-settlement",
+    );
+    check(
+      processHeaders()[0]?.getAttribute("aria-expanded") === "false",
+      "the completed process still starts closed",
+    );
+    click(processHeaders()[0] ?? null);
+    const settledThinkingHeaders = [
+      ...container.querySelectorAll<HTMLElement>(".tool-row.thinking .tool-row-header"),
+    ];
+    const settledThinkingGroupHeader = row("read")?.closest<HTMLElement>(
+      ".process-activity-group.grouped",
+    )?.querySelector<HTMLElement>(".tool-activity-header");
+    check(
+      settledThinkingGroupHeader?.getAttribute("aria-expanded") === "true" &&
+        settledThinkingHeaders.length === 2 &&
+        settledThinkingHeaders.every((header) => header.getAttribute("aria-expanded") === "true") &&
+        container.textContent?.includes("Earlier reasoning remains available.") === true &&
+        container.textContent?.includes("Latest reasoning remains available.") === true &&
+        row("read")?.querySelector<HTMLElement>(".tool-row-header")?.getAttribute("aria-expanded") === "false",
+      "reopening the process reveals the open group and reasoning while tool payloads stay collapsed",
+    );
+
+    const largeGroup = Array.from({ length: 5 }, (_, index) =>
+      tool(`large-group-${index}`, "Read", { toolResult: `result ${index}` }),
+    );
+    render(
+      [...largeGroup, thinkingAnswer],
+      false,
+      null,
+      "large-completed-activity-group",
+    );
+    const largeGroupHeader = row("large-group-0")?.closest<HTMLElement>(
+      ".process-activity-group.grouped",
+    )?.querySelector<HTMLElement>(".tool-activity-header");
+    click(processHeaders()[0] ?? null);
+    check(
+      largeGroupHeader?.getAttribute("aria-expanded") === "false",
+      "large activity groups remain collapsed by default",
     );
     setSettings();
 
@@ -630,29 +754,32 @@ export async function turnProcessProbe() {
       "an aborted running Bash row reports the turn stopped",
     );
 
-    // The Settings row is a boolean command-folding toggle, defaulting to on.
-    let foldSaved: Partial<AppSettings> | undefined;
+    // The Settings row is a three-way transcript display mode control.
+    let modeSaved: Partial<AppSettings> | undefined;
     flushSync(() =>
       root.render(
         <I18nextProvider i18n={i18n}>
-          <KeepCommandsExpandedRow
+          <TranscriptDisplayModeRow
             settings={{ ...baseSettings }}
             saveSettings={async (patch) => {
-              foldSaved = patch;
+              modeSaved = patch;
             }}
           />
         </I18nextProvider>,
       ),
     );
-    const foldToggle = container.querySelector<HTMLElement>('[role="switch"]');
-    check(
-      foldToggle?.getAttribute("aria-checked") === "true",
-      "the command-folding row defaults to keeping commands expanded",
+    const modeButtons = Array.from(
+      container.querySelectorAll<HTMLElement>('[role="radiogroup"] button'),
     );
-    click(foldToggle);
     check(
-      foldSaved?.keepCommandsExpanded === false,
-      "the command-folding row saves the boolean preference",
+      modeButtons.length === 3 &&
+        modeButtons[1]?.getAttribute("aria-checked") === "true",
+      "the transcript-display row exposes flat, command-first and fully-folded with command-first selected",
+    );
+    click(modeButtons[2] ?? null);
+    check(
+      modeSaved?.transcriptDisplayMode === "fully-folded",
+      "the transcript-display row saves the selected mode",
     );
 
 

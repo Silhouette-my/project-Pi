@@ -90,6 +90,11 @@ export class LiveCallService {
     });
   }
 
+  /** True while a call slot is held (preparing through closing); read by the quit confirmation. */
+  hasActiveCall(): boolean {
+    return this.current !== null;
+  }
+
   async status(): Promise<LiveStatus> {
     const snapshot = await this.readSettings();
     const bindings: LiveBindingReadiness[] = [];
@@ -638,7 +643,8 @@ export class LiveCallService {
         if (event.code === "LIVE_EXECUTION_NOT_CONNECTED") {
           slot.notice = { code: event.code, retriable: false };
           this.publish(slot);
-        } else void this.failAndCleanup(slot, liveError(event.code), "protocol");
+        } else void this.failAndCleanup(slot,
+          Object.assign(new Error(event.reason ?? event.code), { errorCode: event.code }), "protocol");
         return;
       case "turn-complete":
         slot.assistantSpeaking = false;

@@ -16,15 +16,15 @@ The rules below govern every change to the PI-Desktop codebase and documentation
 
 - Every code, config, or UX change that alters observable behavior must update the relevant `docs/spec/` document before or alongside the change.
 - Architectural boundary changes (process model, IPC contract, storage ownership, security boundary) also require an ADR — see `docs/adr/README.md`.
-- Pure refactor that preserves behavior and API contracts does not require spec updates, but must still be committed (R2).
+- Pure refactor that preserves behavior and API contracts does not require spec updates. Commit authorization follows R2.
 
-### R2 — Commit-per-change
+### R2 — Explicit commit authorization
 
-> **Every completed logical change must be git committed.**
+> **Commit only when the user asks, as required by AGENTS.md §17.**
 
-- No large uncommitted piles of work. Each logical unit of work — a feature, a fix, a spec update, a chore — gets its own commit.
-- Uncommitted work at session end is a violation of this rule.
-- If a change is incomplete, either commit it as a draft with a `WIP:` prefix or roll it back.
+- Keep each logical change reviewable in its dedicated request worktree.
+- Without commit authorization, retain the candidate and its validation record
+  there. Do not discard completed or incomplete work merely to clear the tree.
 
 ### R3 — E2E coverage doc
 
@@ -41,9 +41,10 @@ The rules below govern every change to the PI-Desktop codebase and documentation
 > dedicated branch and worktree. Opening or updating a pull request
 > requires that head to contain the latest `origin/main`.**
 
-- Before editing, preserve any existing uncommitted work, fetch `origin/main`,
-  fast-forward local `main` when its worktree is clean, and create a new request
-  branch and worktree from that up-to-date commit. Existing work in the primary
+- Before editing, preserve any existing uncommitted work, fetch the applicable
+  upstream base, and create a new request branch and worktree. For an authorized
+  fork update, retain the fork branch and integrate that upstream in the request
+  worktree. Do not fast-forward or replace a divergent local `main`. Existing work in the primary
   checkout must never be moved, stashed, or overwritten merely to start a new
   request.
 - Use one short-lived branch per request. Name it

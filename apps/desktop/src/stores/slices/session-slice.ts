@@ -23,6 +23,7 @@ import {
   sessionNeedsModelPin,
 } from "../../lib/session-model";
 import {
+  attachDetachedTranscript,
   retainSessionPane,
 } from "../../lib/session-panes";
 import {
@@ -35,6 +36,7 @@ import {
   type SessionMeta,
 } from "../../lib/sidebar-preferences";
 import { api } from "../../lib/api";
+import { dropAskDraft } from "../../lib/pending-asks";
 import { isRemoteSession, safeSessionSummary, sessionAllows } from "../../lib/remote-session-safety";
 import { createRefreshCoordinator } from "../../lib/refresh-coordinator";
 import { openRemoteProjectSession, remoteProjectForSession } from "../../lib/remote-project-session";
@@ -161,11 +163,13 @@ export function createSessionSlice({
   | "restorePendingPlan"
   | "refreshPlanCheckpoints"
   | "prefetchSession"
+  | "attachSessionTranscript"
   | "selectSession"
   | "newSession"
   | "forkSession"
   | "forkAssistantMessage"
   | "configureActiveSession"
+  | "configureSession"
   | "abortSession"
 > {
   const pendingInteractiveRestoreGenerations = new Map<string, number>();
@@ -344,15 +348,24 @@ export function createSessionSlice({
           sessionId,
           pendingPermissions,
         );
+        const keptAskIds = new Set(pendingAsks.map((ask) => ask.requestId));
+        let askDrafts = state.askDrafts;
+        for (const ask of state.pendingAsks[sessionId] ?? []) {
+          if (!keptAskIds.has(ask.requestId)) {
+            askDrafts = dropAskDraft(askDrafts, ask.requestId);
+          }
+        }
         if (
           nextPendingAsks === state.pendingAsks &&
-          nextPendingPermissions === state.pendingPermissions
+          nextPendingPermissions === state.pendingPermissions &&
+          askDrafts === state.askDrafts
         ) {
           return {};
         }
         return {
           pendingAsks: nextPendingAsks,
           pendingPermissions: nextPendingPermissions,
+          askDrafts,
         };
       });
     },
@@ -375,6 +388,22 @@ export function createSessionSlice({
         messageLimit: 100,
         contentLimit: 64 * 1024,
       });
+    },
+
+    attachSessionTranscript: async (id) => {
+      if (!id) return;
+      if (!runtime.sessionTranscriptCache.has(id)) {
+        await runtime.loadSessionDetail(id, {
+          messageLimit: 100,
+          contentLimit: 64 * 1024,
+        });
+      }
+      const messages = runtime.sessionTranscriptCache.get(id) ?? [];
+      set((state) =>
+        state.activeSessionId === id
+          ? {}
+          : attachDetachedTranscript(state, id, messages),
+      );
     },
 
     selectSession: async (id, opts) => {
@@ -612,10 +641,20 @@ export function createSessionSlice({
                 thinkingLevel: selected.thinkingLevel,
               });
             } else {
-              void api.configureSession(id, {
+              // The active-session branch reports a refused write through its
+              // flush; a background session must not drop the pin silently,
+              // because the row keeps the optimistic value while the host
+              // reverts to the previous model on the next launch.
+              const pinWrite = api.configureSession(id, {
                 mode: selected.mode,
                 providerId: pin.providerId,
                 modelId: pin.modelId,
+              });
+              void pinWrite.catch((error) => {
+                get().showToast(
+                  error instanceof Error ? error.message : String(error),
+                  { variant: "error" },
+                );
               });
             }
           }
@@ -789,6 +828,10 @@ export function createSessionSlice({
         }));
         return;
       }
+      await get().configureSession(sessionId, config);
+    },
+
+    configureSession: async (sessionId, config) => {
       if (!sessionAllows(get().sessions.find((session) => session.id === sessionId), "canConfigureModel")) return;
       if (get().pendingPlans[sessionId]?.status === "pending") return;
       if (

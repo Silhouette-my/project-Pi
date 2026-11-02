@@ -1,0 +1,169 @@
+/*
+  Edge-reveal overlays — shared classes for side panels that are not docked.
+  A panel that is not pinned takes no layout width; `useEdgeReveal` slides it
+  in over the content from its window edge and retracts it again. Compose with
+  the panel's own class: `.sidebar.edge-panel`, `.work-panel.edge-panel`, and
+  later the project Agent dock. See docs/adr/auto-hide-side-panels.md.
+
+  The overlay is a fixed layer, so it never changes the main pane's width and
+  the 450px MainChat floor of the docked three-column budget stays untouched.
+*/
+
+/* Inert marker for the invisible hot zone. The zone is measured from pointer
+   samples, not hit-tested, so this element must never take events: it would
+   steal the transcript scrollbar and the wheel at the window edge. */
+.edge-reveal-zone {
+  position: fixed;
+  top: var(--ds-toolbar-height);
+  bottom: 0;
+  width: 6px;
+  z-index: 19;
+  pointer-events: none;
+}
+
+.edge-reveal-zone[data-edge-zone="left"] {
+  left: 0;
+}
+
+.edge-reveal-zone[data-edge-zone="right"] {
+  right: 0;
+}
+
+.edge-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  height: auto;
+  z-index: 25;
+  flex: none;
+  box-shadow: var(--ds-shadow-edge-panel);
+}
+
+.edge-panel[data-edge-reveal="left"] {
+  left: 0;
+  animation: edge-panel-in-left var(--motion-duration-normal) var(--motion-ease-out)
+    both;
+}
+
+.edge-panel[data-edge-reveal="right"] {
+  right: 0;
+  animation: edge-panel-in-right var(--motion-duration-normal) var(--motion-ease-out)
+    both;
+}
+
+.edge-panel[data-edge-state="closing"] {
+  pointer-events: none;
+}
+
+/* A panel that stays mounted (the sidebar keeps its scroll position and
+   state) is hidden outright while closed; it is also `inert`, so it leaves
+   the tab order and the accessibility tree. */
+.edge-panel[data-edge-reveal][data-edge-state="closed"] {
+  visibility: hidden;
+  pointer-events: none;
+  animation: none;
+}
+
+/* Command reveals focus the panel itself so Tab continues inside it. */
+.edge-panel:focus {
+  outline: none;
+}
+
+.edge-panel[data-edge-reveal="left"][data-edge-state="closing"] {
+  animation: edge-panel-out-left var(--motion-duration-fast) var(--motion-ease-in)
+    both;
+}
+
+.edge-panel[data-edge-reveal="right"][data-edge-state="closing"] {
+  animation: edge-panel-out-right var(--motion-duration-fast) var(--motion-ease-in)
+    both;
+}
+
+@keyframes edge-panel-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes edge-panel-out-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+
+@keyframes edge-panel-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes edge-panel-out-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+/* macOS glass sidebars blur whatever native vibrancy sits behind them. Over
+   the content there is nothing to blur, so an overlay paints the solid
+   sidebar color instead of the translucent tint. */
+:root[data-platform="darwin"] .sidebar-surface.edge-panel {
+  background-color: var(--ds-bg-sidebar, var(--ds-bg-primary));
+  background-image: var(--ds-bg-sidebar-image, none);
+}
+
+/* The dark sidebar colour is pure black because it sits on the vibrancy
+   material; as a floating layer over the #181818 page it reads as a hole.
+   A dark overlay uses the raised secondary surface instead. */
+:root[data-theme="dark"] .sidebar-surface.edge-panel {
+  background-color: var(--ds-bg-secondary);
+}
+
+/* Header pin button shared by every panel. Pressed means docked. */
+.edge-pin-btn svg {
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.edge-pin-btn[aria-pressed="false"] svg {
+  transform: rotate(45deg);
+}
+
+.edge-pin-btn[aria-pressed="true"] {
+  color: var(--ds-text-primary);
+  background: var(--ds-bg-active);
+}
+
+.edge-pin-btn:focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-panel,
+  .edge-panel[data-edge-state="closing"] {
+    animation-duration: 0.01ms !important;
+  }
+
+  .edge-pin-btn svg {
+    transition: none;
+  }
+}

@@ -142,12 +142,12 @@ test("collapsing a project resets its expanded session history", () => {
   );
 });
 
-test("global search stays on the conversation topbar, not the sidebar header", () => {
-  assert.doesNotMatch(sidebarSource, /onOpenSearch|IconSearch|nav\.search/);
+test("global search lives in the sidebar top bar, not the conversation topbar", () => {
+  assert.match(sidebarSource, /onOpenSearch/);
+  assert.match(sidebarSource, /<IconSearch/);
+  assert.match(sidebarSource, /ariaLabel=\{t\("nav\.search"\)\}/);
   assert.doesNotMatch(sidebarSource, /sidebar-session-search|toggleSearch/);
-  assert.match(topbarSource, /onOpenSearch/);
-  assert.match(topbarSource, /<IconSearch/);
-  assert.match(topbarSource, /ariaLabel=\{t\("nav\.search"\)\}/);
+  assert.doesNotMatch(topbarSource, /onOpenSearch|IconSearch/);
 });
 
 test("project rows expose press-and-move title drag and keyboard reorder behavior", () => {

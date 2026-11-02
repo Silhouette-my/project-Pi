@@ -1,3 +1,4 @@
+#[cfg(test)]
 use super::{create_migration_backup, Connection, Context, Path, Result};
 
 /// A single aggregate gives workflow commands one atomic, global CAS boundary.
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS project_workflow_commands (
 );
 "#;
 
+#[cfg(test)]
 pub(crate) fn migrate_v24_to_v25(conn: &Connection, path: &Path) -> Result<()> {
     let backup = create_migration_backup(conn, path, 24)?;
     let tx = conn.unchecked_transaction()?;

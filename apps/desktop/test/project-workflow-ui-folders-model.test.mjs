@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
 register(new URL("./helpers/ts-import-hooks.mjs", import.meta.url));
-const { navigationHighlights, navigationSessions, folderParents, workflowGroupForPath, workflowProjectEntries } =
+const { navigationHighlights, navigationSessions, folderParents, workflowGroupForPath, workflowProjectEntries, workflowContextProjectId } =
   await import("../src/features/project-workflow/navigation-model.ts");
 const { createSessionSlice } = await import("../src/stores/slices/session-slice.ts");
 const { createSessionRuntime } = await import("../src/stores/runtime/session-runtime.ts");
@@ -36,13 +36,13 @@ test("folder projection uses manual order, not background update time; work conv
     ["c"],
   );
 });
-test("folder parent choices prevent cycles and third nesting level", () => {
+test("folder parent choices allow arbitrary depth while preventing cycles", () => {
   const folders = [
     { id: "parent", order: 0 },
     { id: "child", parentId: "parent", order: 1 },
     { id: "other", order: 2 },
   ];
-  assert.deepEqual(folderParents(folders, folders[0]), []);
+  assert.deepEqual(folderParents(folders, folders[0]).map(f => f.id), ["other"]);
   assert.deepEqual(
     folderParents(folders, folders[1]).map((f) => f.id),
     ["parent", "other"],
@@ -102,6 +102,20 @@ test("durable project identity resolves an existing visible path without inventi
     1,
     "projection must not mutate retained project metadata",
   );
+});
+test("logical project name wins over workspace basename while an explicit sidebar rename remains authoritative", () => {
+  const groups = [{ id: "p", name: "Project navigation", primaryPath: "/repo/apps", roots: [] }];
+  const entry = { path: "/repo/apps", name: "apps", sessions: [], meta: {} };
+  assert.equal(workflowProjectEntries([entry], groups)[0].name, "Project navigation");
+  assert.equal(workflowProjectEntries([{ ...entry, meta: { name: "My workspace" } }], groups)[0].name, "My workspace");
+});
+test("topbar project context covers project drafts and legacy links but not independent Chat", () => {
+  const groups = [{ id: "p", name: "Project", primaryPath: "/project", roots: [] }];
+  const snapshot = { conversations: [{ sessionId: "linked", projectId: "p" }], workstreams: [{ mainSessionId: "main", projectId: "p" }] };
+  assert.equal(workflowContextProjectId(snapshot, groups, undefined, "/project"), "p");
+  assert.equal(workflowContextProjectId(snapshot, groups, { id: "chat", projectPath: null }, "/project"), undefined);
+  assert.equal(workflowContextProjectId(snapshot, groups, { id: "linked", projectPath: null }), "p");
+  assert.equal(workflowContextProjectId(snapshot, groups, { id: "main", projectPath: null }), "p");
 });
 function deferred() {
   let resolve;

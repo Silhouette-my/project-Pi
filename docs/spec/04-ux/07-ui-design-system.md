@@ -9,7 +9,7 @@
 
 ## Visual baseline (Codex-aligned)
 
-The desktop shell targets a 1:1 visual match with the local Codex desktop client (ChatGPT.app electron-dark): charcoal surfaces (`#181818`), neutral gray scale (not blue-slate), ~275px sidebar, 46px toolbar rhythm, and a floating pill composer. Semantic token names remain stable; values follow the Codex gray system with a **neutral gray accent** (no blue brand accent).
+The desktop shell targets a 1:1 visual match with the local Codex desktop client (ChatGPT.app electron-dark): charcoal surfaces (`#181818`), neutral gray scale (not blue-slate), ~275px sidebar, 46px toolbar rhythm, and a floating pill composer. Semantic token names remain stable; values follow the Codex gray system. Shell chrome keeps the **neutral gray accent** (`--ds-accent`); a user-chosen **theme colour** (default blue, F670) is applied only to the small set of primitives listed in the Theme colour section.
 
 ## 2. Non-goals
 
@@ -27,7 +27,7 @@ The desktop shell targets a 1:1 visual match with the local Codex desktop client
 | **Clarity over decoration** | No ornamental borders, gradients, or hero images. Every visual element carries information. |
 | **Developer density** | Compact spacing, small-but-readable type, minimal marketing whitespace. Information-rich, not sparse. |
 | **Dark-base defaults** | Dark theme is the primary theme for a coding agent. Light must be fully supported but is secondary. |
-| **Restraint** | One accent color family. No rainbow status colors — use semantic token names (success, warning, error). |
+| **Restraint** | Chrome is neutral gray. The user's theme colour (F670) is one accent family used only on primary actions, switches, checkboxes, focus rings, and the enabled send button; a per-project colour tints only the project glyph and the Project Console accent. No rainbow status colors — success, warning, error, and purple stay semantic and are never replaced by either colour. |
 | **Motion as feedback** | Animations convey state change (streaming, loading, expand/collapse). Never decorative. |
 | **Keyboard-first** | Focus rings, tab order, and shortcut labels are primary UX, not afterthoughts. |
 | **Continuous shell chrome** | Titlebars stay borderless and continuous with their surfaces; reserve faint separators for boundaries that clarify ownership, such as the window-control side seam. |
@@ -66,8 +66,8 @@ selection is suppressed for chrome by default. The selection contract is:
   allowed on shell surfaces.
 - `caret-color` and `accent-color` resolve to `--ds-text-primary` /
   `--ds-accent` so native carets and form accents stay on-theme.
-- Focus-visible rings use `color-mix(in oklab, var(--ds-accent) 80%, transparent)`
-  (no white wash that drifts off the neutral ramp).
+- Keyboard focus rings resolve through `--ds-focus`, which follows the theme colour
+  (`--ds-theme-accent`); the ring never washes toward white.
 
 ### 3.3 Locale-aware chrome labels
 
@@ -210,16 +210,50 @@ Neutral gray scale only — no blue-slate surfaces. Chrome components must consu
 | `--color-text-faint` | `#afafaf` (gray-300) | Placeholder |
 | `--color-border-default` | `color-mix(#1a1c1f 8%, transparent)` | Default borders |
 | `--color-border-subtle` | `color-mix(#1a1c1f 5%, transparent)` | Sidebar edge / dividers |
-| `--color-accent` | `#1a1c1f` | Primary accent, CTA, footer badge (neutral ink) |
+| `--color-accent` | `#1a1c1f` | Neutral accent: chrome ink, footer badge (not the CTA colour, see theme colour tokens) |
 | `--color-success` / warning / error | green-500 / orange-500 / red-500 | Status |
 
 **Invariant:** never paint chrome text with raw `gray-0` (`#fff`) under `data-theme="light"`. Use `--ds-text-primary` / `--ds-text-secondary`.
 
 Shared buttons must use semantic theme tokens for both their surface and ink:
-primary actions pair `--ds-accent` with `--ds-bg-primary`, while secondary
+primary actions pair `--ds-theme-accent` with `--ds-on-theme-accent`, while secondary
 actions sit on the `--ds-tile` fill with primary text and no stroke (D297).
 Hover states use the corresponding accent/tile-hover tokens rather than
 opacity-only changes, so actions remain legible in dark and light themes.
+
+#### Theme colour and project colour (F670)
+
+`AppSettings.accentColor` is a preset id (`blue` default, `teal`, `green`,
+`amber`, `rose`, `violet`, `graphite`) or a custom `#rrggbb`. The renderer
+publishes `--ds-theme-accent-light/-dark` and `--ds-on-theme-accent-light/-dark`
+on `:root` (`resolveAccentColor` in `@pi-desktop/shared`; a custom colour gets
+an OKLab-lifted dark variant and black or white ink chosen for at least 4.5:1).
+`tokens.css` maps them to `--ds-theme-accent` / `--ds-on-theme-accent` in each
+theme block, so no script tracks the active theme. `--ds-accent` stays neutral.
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--ds-theme-accent` | preset light value (blue `#2f6fed`) | preset dark value (blue `#5b93ff`) | the surfaces listed below |
+| `--ds-on-theme-accent` | black or white, >= 4.5:1 on the light value | black or white, >= 4.5:1 on the dark value | ink on those surfaces |
+| `--ds-project-accent` | project preset light value | project preset dark value | Project Console only, set on `.workflow-console` when the project has a colour |
+
+Presets (light / dark): blue `#2f6fed` / `#5b93ff`, teal `#0f8b8d` / `#3cc3c4`,
+green `#1f8a4c` / `#4cc38a`, amber `#b86e00` / `#f0a33a`, rose `#c4365d` /
+`#ff6f93`, violet `#6d4ad8` / `#a68bff`, graphite `#3c3f44` / `#c9cbd0` (the
+former neutral look).
+
+The theme colour applies to exactly these primitives: primary `Button`
+(`.btn-primary`), `SettingsToggle` on-state, `Checkbox` checked/indeterminate
+fill, the keyboard focus ring (`--ds-focus`, plus the toggle focus ring), and
+the enabled composer send button. It never recolours text, links, borders,
+sidebar selection, segmented controls, or status colours; success, warning,
+error, and purple remain semantic.
+
+A project colour is a preset id only, stored in renderer sidebar preferences
+(`ProjectMeta.color`, keyed by project path). It tints the folder glyph in the
+sidebar project header and feeds `--ds-project-accent`, so the Project Console
+uses it for `--workflow-accent`. Absent means follow the
+theme colour.
 
 Light-surface polish (D148):
 
@@ -522,6 +556,15 @@ The expanded sidebar is user-resizable from 240px to 520px (default 275px).
 Dragging the right-edge handle below 160px collapses the column. Collapse/open
 preserves the preferred expanded width.
 
+Auto-hide side panels (the default) use the shared `edge-reveal.css` classes: a
+6px edge hot zone below `--ds-toolbar-height` (inert marker `.edge-reveal-zone`,
+measured from pointer samples so it never steals the scrollbar), and a fixed
+`.edge-panel` overlay (`z-index: 25`, `--ds-shadow-edge-panel`, 24px slide plus
+fade over `--motion-duration-normal`, `0.01ms` under `prefers-reduced-motion`).
+macOS overlays paint the solid `--ds-bg-sidebar` instead of the glass tint. The
+header pin button (`.edge-pin-btn`) shows `aria-pressed` and keeps a 2px
+`--ds-accent` focus ring. Overlays never enter the 450px MainPane budget.
+
 The profile menu is `280px` wide, opens `8px` above the footer, and uses the
 standard opaque elevated-menu surface, subtle border, and dialog shadow. Its
 first block repeats the local identity with the same glyph and two-line text,
@@ -799,7 +842,7 @@ are also explicitly suppressed or collapsed to a static state.
 - No parallax
 - No continuous background animations (particles, waves); the bounded
   foreground mascot loop is the explicit empty-home exception
-- No shimmer/skeleton animations longer than 1s loop — use simple fade-in for loading states
+- No shimmer/skeleton animations longer than 1s loop — use simple fade-in for loading states. Exception: the transcript Thinking indicator's whole-run TextShimmer runs 1.2s with a 220ms fade (ADR turn-process-and-thinking-display); it is not a per-glyph loop and becomes static under reduced motion.
 - No bounce effects
 - No multi-second boot theatrical sequences; splash exits as soon as ready (+ min dwell)
 
@@ -1247,7 +1290,7 @@ Full component contract and usage rules: [08-component-spec.md §17](08-componen
 
 | Property | Value |
 |---|---|
-| Position | top-center viewport, 16px from the top edge, `width: min(360px, 100vw − 32px)` |
+| Position | 16px from the top edge; centered in the main-content safe area when the in-flow shell is visible, falling back to the viewport when no main-content anchor exists; `width: min(360px, safe area − 32px)` |
 | Surface | `bg-elevated-opaque` + 1px `border-subtle` + `shadow-dialog` (same family as floating menus) |
 | Radius | radius-md-plus |
 | Font | text-md, leading-compact-plus |
@@ -1268,7 +1311,7 @@ Implementation: `components/ui.tsx → SettingsToggle`.
 | CSS class | `.settings-toggle` / `.settings-toggle.on` |
 | Role | `role="switch"` with `aria-checked` |
 | Variants | default, `busy` (`.is-busy`, `aria-busy`, disabled) |
-| Background | neutral accent when on (not green); theme-specific override in `theme-overrides.css` |
+| Background | theme colour (`--ds-theme-accent`) when on, knob `--ds-on-theme-accent` (not green) |
 
 Every boolean on/off control in Settings and editor sheets **must** use
 `SettingsToggle`. Inline `<button role="switch">` with manual class
@@ -1459,22 +1502,63 @@ adjacent form inputs; dense surfaces may override that metric locally.
 - Floating composer plate: Codex elevated-primary (`#212121f5` / `color-mix(gray-800 96%, transparent)`) with standard elevation-prominent (`0 0 0 .5px` stroke + `0 3px 7.5px #0000000a` + `0 0 20px #0000000d`); no heavier night-only lift
 - Light workspace chips capsule: elevated gray `#f4f4f4` (not pure white-on-white)
 - Combined workspace chips: elevated translucent plate over main, not flat main gray
-- Stage Manager (macOS only): host re-asserts min bounds while collapsed (permanent watchdog). The watchdog does not run on Windows/Linux, so no platform re-layers its own window unprompted (D447)
+- Stage Manager (macOS only): host re-asserts min bounds while collapsed (permanent watchdog). The watchdog and temporary recovery pin are macOS-only; Windows/Linux bounds recovery stays at the normal window layer so switching to another app never leaves PI-Desktop above it (D447).
 
 ## Destination pages
 
 - **Project Console**: a compact project identity/header sits below the existing
   46px native titlebar safe area. Window controls remain Electron-owned. Overview,
-  Workstreams, Outputs, and Context use a quiet underline navigation; Project Agent
-  is a persistent action here and in the project's sidebar, opening the real chat
-  surface rather than a second transcript implementation. Overview leads with a
-  discussion-only Composer plate, current work rows and recent recorded outputs.
+  Structure, Context and Workstreams (in that order) use a quiet underline navigation. The Project Agent is a tab of the right work panel (its tab strip, pin and
+  resize controls; unpinned it is the panel's `.edge-panel` overlay) that renders
+  the existing session pane and a Composer plate, and reaches the full chat
+  surface through the existing Agent entry rather than a second transcript
+  implementation. Send to conversation and Bring in a conversation are modal
+  dialogs in the Folder/Rename dialog family. Overview leads with one muted summary
+  line of real counts (no KPI tiles), then "Needs attention" (pending decisions, plus workstreams awaiting the user or with an unknown effect; its second line is the next step or resume condition, never the badge text),
+  then one row per remaining current workstream with its status badge, owner (a readable
+  name, never a raw id), next action, blocker, current candidate revision and an
+  "Acceptance n / m" count, then recent recorded outputs. A workstream appears in
+  exactly one Overview list. Cards carry no coloured edge rails. Badges mark exceptions only
+  (no "effective" badge on references; only "superseded"); empty states are one short muted line;
+  explanatory notes live in tooltips, e.g. the history limit on the dashed graph
+  boundary edge and the merge-commit comparison note on the parents label.
   A new project can discuss a goal without first creating a workstream. A work row
-  opens its detail; creation/editing uses the shared modal overlay and existing
+  opens its detail beside the workstream list; creation/editing uses the shared modal overlay and existing
   validated form, keeping execution scope and acceptance controls intact.
   Project instructions, memory and reload live in the project menu; search expands
   from the header. Reuse the shared UI primitives, Composer plate/toolbar classes,
-  project instruction/memory dialogs and semantic theme tokens. Project drafts are
+  project instruction/memory dialogs and semantic theme tokens. Concretely: the
+  identity uses a 36px neutral glyph seat (outlined cube icon) and the Settings page title (`--text-2xl`,
+  strong weight, tighter tracking) with the archive's mono path voice; header actions share the conversation top bar's
+  28px `.ct-icon-btn` seat and tile-backed group; underline tabs are px-3 py-2
+  `--text-sm`, secondary at rest. Tab pages follow the Settings page layout
+  (06-settings-ia): in-page section headings (overview groups, shared context,
+  outputs, Structure and session detail sections) are Settings card headings
+  (`--text-md-plus`, strong weight, sentence case) with their action on the same
+  line, never a second page title; rows below them are separate `--ds-tile` tiles
+  (14px 16px padding, `--radius-md-plus`, 6px apart, `--text-md-plus` medium title,
+  `--text-sm` secondary detail), and card blocks sit 28px apart.
+  Structure filters sit inline in one 32px toolbar row with raised pill pickers;
+  tree and graph rows use the sidebar row voice (`--text-md`, normal weight,
+  `--ds-bg-active` selection); disclosures use the shared chevron rather than the
+  UA triangle; section rhythm stays within 28px and dividers use `border-subtle`.
+  Sidebar navigation-tree actions stay hidden until their row or toolbar is
+  hovered or keyboard-focused, matching native sidebar rows. Detached conversations
+  (the project Agent tab, project side conversations and chat side chats) use
+  the chat Composer plate (`.composer-shell` / `.composer-toolbar`) and the same
+  model × reasoning picker bound to their own session; a choice made before the
+  conversation exists is applied to it before its first prompt, keeping the
+  created session's mode. Status badges are plain
+  `Badge` capsules in the semantic colours (ready/accepted success, executing
+  warning, blocked error, awaiting user purple, others neutral). Record times are
+  localized with the exact value in a tooltip; paths and URIs are single-line mono
+  text with the full value in a tooltip. Workstream controls keep the four P4 flows
+  (Start work, Discuss next, Pause to discuss, side conversation) as one labelled
+  row and operational controls (pause/resume, cancel, execution scope) as a quieter
+  row below. Project pages carry no per-project accent (the stored colour field is kept for
+  compatibility but no longer read or written by the UI); the global theme accent
+  (`--ds-theme-accent`) marks the selected tab, primary actions and keyboard
+  focus; list selection stays the neutral `--ds-bg-active`. Action buttons share one 30px height. Project drafts are
   renderer-memory, keyed by project, retained on navigation/send failure, and
   cleared only after a successful send. Ordinary chat display groups are disjoint:
   Favorites first, then Recent, then remaining folder/Unfiled entries; this changes

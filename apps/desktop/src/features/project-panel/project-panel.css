@@ -1,0 +1,27 @@
+/*
+  Project work-panel tabs: the Agent and project side conversations. They fill
+  the work panel's tab body; the panel owns the header, the tab strip and the
+  pin / resize controls, and the return control floats over the transcript
+  (docs/spec 08 WorkPanel).
+*/
+.project-agent-tab,
+.project-side-tab {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.project-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  color: var(--ds-text-muted);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+.project-panel-empty p {
+  margin: 0;
+}

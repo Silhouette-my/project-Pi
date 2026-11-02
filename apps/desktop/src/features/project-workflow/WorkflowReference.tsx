@@ -47,7 +47,7 @@ export function WorkflowReference({
   return (
     <div className="workflow-reference">
       <Button variant="ghost" disabled={opening} onClick={() => void open()} title={uri}>
-        {uri}
+        <span className="workflow-reference-uri">{uri}</span>
       </Button>
       {error ? <p role="alert">{error}</p> : null}
     </div>

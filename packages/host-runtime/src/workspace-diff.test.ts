@@ -1,6 +1,6 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -28,6 +28,76 @@ afterEach(async () => {
 });
 
 describe("collectWorkspaceDiff", () => {
+  it("reads staged, unstaged and untracked changes without altering the index or working files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-review-git-"));
+    tempDirs.push(root);
+    await runGit(root, ["init", "--quiet"]);
+    await runGit(root, ["config", "user.name", "Review test"]);
+    await runGit(root, ["config", "user.email", "review@example.invalid"]);
+    for (const name of ["tracked.txt", "deleted.txt", "renamed.txt", "cancelled.txt"]) await writeFile(join(root, name), name === "renamed.txt" ? "unique rename source\n" : "original\n");
+    await runGit(root, ["add", "."]);
+    await runGit(root, ["commit", "--quiet", "-m", "base"]);
+    await writeFile(join(root, "tracked.txt"), "staged\n");
+    await writeFile(join(root, "cancelled.txt"), "staged-only\n");
+    await rename(join(root, "renamed.txt"), join(root, "新名称.txt"));
+    await rm(join(root, "deleted.txt"));
+    await runGit(root, ["add", "."]);
+    await writeFile(join(root, "tracked.txt"), "shell-generated\n");
+    await writeFile(join(root, "cancelled.txt"), "original\n");
+    await writeFile(join(root, "plugin output.txt"), "plugin-generated\n");
+    await writeFile(join(root, "empty.txt"), "");
+    const indexBefore = await readFile(join(root, ".git/index"));
+
+    const result = await collectWorkspaceDiff(root);
+
+    expect(result.repo).toBe(true);
+    expect(result.clean).toBe(false);
+    expect(result.stagedFiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "tracked.txt", status: "modified" }),
+      expect.objectContaining({ path: "deleted.txt", status: "deleted" }),
+      expect.objectContaining({ path: "新名称.txt", oldPath: "renamed.txt", status: "renamed" }),
+      expect.objectContaining({ path: "cancelled.txt" }),
+    ]));
+    expect(result.unstagedFiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "tracked.txt" }),
+      expect.objectContaining({ path: "cancelled.txt" }),
+      expect.objectContaining({ path: "plugin output.txt", status: "untracked" }),
+      expect.objectContaining({ path: "empty.txt", status: "untracked" }),
+    ]));
+    expect(result.files.find((file) => file.path === "cancelled.txt")).toBeUndefined();
+    expect(JSON.stringify(result.unstagedFiles)).toContain("shell-generated");
+    expect(JSON.stringify(result.unstagedFiles)).toContain("plugin-generated");
+    expect(await readFile(join(root, ".git/index"))).toEqual(indexBefore);
+    expect(await readFile(join(root, "tracked.txt"), "utf8")).toBe("shell-generated\n");
+  });
+
+  it("reads a new repository and scopes a nested workspace to its own files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-review-unborn-"));
+    tempDirs.push(root);
+    await runGit(root, ["init", "--quiet"]);
+    await mkdir(join(root, "nested"));
+    await writeFile(join(root, "outside.txt"), "outside\n");
+    await writeFile(join(root, "nested/inside.txt"), "inside\n");
+    await runGit(root, ["add", "nested/inside.txt"]);
+    const result = await collectWorkspaceDiff(join(root, "nested"));
+    expect(result.stagedFiles).toEqual([expect.objectContaining({ path: "inside.txt", status: "added" })]);
+    expect(result.files).toEqual([expect.objectContaining({ path: "inside.txt" })]);
+    expect(JSON.stringify(result)).not.toContain("outside.txt");
+    await writeFile(join(root, "nested/new.txt"), "new\n");
+    expect((await collectWorkspaceDiff(join(root, "nested"))).unstagedFiles).toEqual([
+      expect.objectContaining({ path: "new.txt", status: "untracked" }),
+    ]);
+  });
+
+  it("distinguishes a non-Git directory from a failed Git read", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-review-git-errors-"));
+    tempDirs.push(root);
+    expect(await collectWorkspaceDiff(root)).toMatchObject({ repo: false });
+    await runGit(root, ["init", "--quiet"]);
+    await writeFile(join(root, ".git/index"), "invalid index");
+    await expect(collectWorkspaceDiff(root)).rejects.toThrow(/index/i);
+  });
+
   it("does not execute a repository-configured fsmonitor command", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "pi-workspace-diff-fsmonitor-"));
     tempDirs.push(tempRoot);

@@ -1,6 +1,7 @@
 import type { RecentModel } from "../lib/recent-models";
 import type { RemoteProjectTarget } from "../lib/remote-project-session";
 import type {
+  AccentPresetId,
   AgentEventEnvelope,
   BrowserState,
   AgentQueueChangedEvent,
@@ -40,7 +41,7 @@ import type {
   SessionSort,
 } from "../lib/sidebar-preferences";
 import type { PermissionQueues } from "../lib/pending-permissions";
-import type { AskQueues } from "../lib/pending-asks";
+import type { AskDraft, AskDrafts, AskQueues } from "../lib/pending-asks";
 import type {
   QueuedPromptDirection,
   QueuedPrompts,
@@ -51,6 +52,10 @@ import type {
 } from "../lib/composer-smart-stop";
 import type { SidebarSessionOutcome } from "../lib/sidebar-session-status";
 import type { WorkPanelContext, WorkPanelTab } from "../lib/work-panel-tabs";
+import type {
+  SideChatReturnMode,
+  SideChatReturnState,
+} from "../features/chat/side-chat/side-chat-core";
 
 export type { WorkPanelTab } from "../lib/work-panel-tabs";
 
@@ -104,14 +109,31 @@ export type RefreshSessionsOptions = {
   revealImportedProjects?: boolean;
 };
 
-/** Toolbar selections retained on the unpersisted new-task draft. */
-export type DraftSessionConfiguration = {
+/** Configuration shared by active and detached conversations. */
+export type SessionConfigurationInput = {
   mode: Mode;
+  providerId?: string;
+  modelId?: string;
   thinkingLevel: SessionThinkingLevel;
+  permissionMode?: PermissionMode;
+  /** Chat instruction preset id; null resets to the built-in chat persona. */
+  promptPreset?: string | null;
+  fastMode?: boolean;
+};
+
+/**
+ * Toolbar selections retained on the unpersisted new-task draft. An absent
+ * field keeps the default the new session would otherwise start with.
+ */
+export type DraftSessionConfiguration = {
+  mode?: Mode;
+  thinkingLevel?: SessionThinkingLevel;
   providerId?: string;
   modelId?: string;
   permissionMode?: PermissionMode;
   promptPreset?: string | null;
+  /** Session `/fast` switch carried into the created session (ADR 0334). */
+  fastMode?: boolean;
 };
 
 
@@ -177,6 +199,8 @@ export type AppState = {
   pendingPermissions: PermissionQueues;
   /** Inline asktool requests, queued per session without an expiry. */
   pendingAsks: AskQueues;
+  /** In-progress AskTool answers keyed by requestId, so a remount keeps them. */
+  askDrafts: AskDrafts;
   /** Renderer-owned, in-memory prompt queue, isolated by session. */
   queuedPrompts: QueuedPrompts;
   /** Planning state is durable per session, including sessions outside view. */
@@ -213,6 +237,8 @@ export type AppState = {
   bootstrap: () => Promise<void>;
   refreshSessions: (options?: RefreshSessionsOptions) => Promise<void>;
   prefetchSession: (id: string) => Promise<void>;
+  /** Keeps a non-active session's transcript live for a detached surface. */
+  attachSessionTranscript: (id: string) => Promise<void>;
   navigateTranscript: (target: Omit<TranscriptSearchTarget, "requestId">) => Promise<void>;
   restoreTranscriptReading: (sessionId: string, position: TranscriptReadingPosition, signal: AbortSignal) => Promise<boolean>;
   loadTranscriptPage: (sessionId: string, direction: "before" | "after") => Promise<void>;
@@ -229,15 +255,12 @@ export type AppState = {
   }) => Promise<string | void>;
   forkSession: (id: string) => Promise<void>;
   forkAssistantMessage: (messageId: string) => Promise<void>;
-  configureActiveSession: (config: {
-    mode: Mode;
-    providerId?: string;
-    modelId?: string;
-    thinkingLevel: SessionThinkingLevel;
-    permissionMode?: PermissionMode;
-    /** Chat instruction preset id; null resets to the built-in chat persona. */
-    promptPreset?: string | null;
-  }) => Promise<void>;
+  configureActiveSession: (config: SessionConfigurationInput) => Promise<void>;
+  /**
+   * Configure one named session without making it active (detached
+   * conversations); applies the same running-turn queue and optimistic update.
+   */
+  configureSession: (sessionId: string, config: SessionConfigurationInput) => Promise<void>;
   /** Returns true once accepted unless concurrent smart Stop restores it. */
   sendPrompt: (
     content: string,
@@ -333,6 +356,8 @@ export type AppState = {
   setShowArchived: (show: boolean) => void;
   renameProject: (path: string, name: string) => void;
   toggleProjectPinned: (path: string, pinned?: boolean) => void;
+  /** Set (or clear with undefined) a project's preset accent colour. */
+  setProjectColor: (path: string, color: AccentPresetId | undefined) => void;
   toggleProjectArchived: (path: string) => void;
   restoreProject: (path: string) => void;
   restoreProjects: (paths: string[]) => void;
@@ -389,6 +414,10 @@ export type AppState = {
     sessionId: string,
     resolution: AskToolResolution,
   ) => Promise<void>;
+  /** Persist one question card's in-progress answers by requestId. */
+  setAskDraft: (requestId: string, draft: AskDraft) => void;
+  /** Forget a request's draft once it is resolved or dismissed. */
+  dropAskDraft: (requestId: string) => void;
   resolvePlan: (resolution: PlanResolveRequest) => Promise<PlanResolutionResult>;
   showToast: (message: string, options?: ToastOptions) => void;
   dismissToast: (id: number) => void;
@@ -416,6 +445,30 @@ export type AppState = {
   } | null;
   /** Open (or activate) the transcript tab of one delegated subagent. */
   openSubagentTab: (delegationId: string, agentName?: string) => void;
+  /**
+   * Open the side-chat draft tab anchored at one message of the visible
+   * conversation. Creates no session; resolves the tab id, or null when the
+   * message cannot anchor one.
+   */
+  /**
+   * Open a draft side chat anchored at a message. `whole` anchors it at the
+   * conversation's last message as a new side chat every time (the topbar
+   * action); otherwise asking again from the same message reuses its tab.
+   */
+  openSideChat: (anchorMessageId: string, options?: { whole?: boolean }) => string | null;
+  /** First-Send fork: a durable child that is not activated. Resolves its id. */
+  createSideChatChild: (input: {
+    parentSessionId: string;
+    anchorMessageId: string;
+    title: string;
+    tabId: string;
+  }) => Promise<string>;
+  /** Return-to-main-thread state of each side-chat tab, keyed by tab id (renderer only). */
+  sideChatReturn: Record<string, SideChatReturnState>;
+  setSideChatReturnMode: (tabId: string, mode: SideChatReturnMode) => void;
+  patchSideChatReturn: (tabId: string, patch: Partial<SideChatReturnState>) => void;
+  /** Drop the state of tabs that no longer exist. */
+  pruneSideChatReturn: (live: ReadonlySet<string>) => void;
   /** Abort one session's running turn, visible or not. */
   abortSession: (sessionId: string) => Promise<void>;
   openWorkPanel: () => void;
@@ -433,6 +486,8 @@ export type AppState = {
     insertAfter: boolean,
   ) => void;
   closeWorkPanelTab: (tabId: string) => void;
+  closeOtherWorkPanelTabs: (tabId: string) => void;
+  closeAllWorkPanelTabs: () => void;
   collapseWorkPanel: () => void;
   /** Hide the visible panel while retaining its session-owned context. */
   resetWorkPanelContext: () => void;
@@ -445,6 +500,7 @@ export type AppState = {
   ) => void;
   openUrlInWorkPanel: (url: string) => void;
   updateBrowserWorkPanelTab: (state: BrowserState) => void;
+  restoreBrowserWorkPanelTabs: (sessionId: string, pages: BrowserState[]) => void;
 };
 
 export type AppStateData = {

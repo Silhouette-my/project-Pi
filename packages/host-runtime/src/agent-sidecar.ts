@@ -21,6 +21,8 @@ export type LocalToolHandler = (input: {
   sessionId: string;
   toolCallId: string;
   args: unknown;
+  /** Host-captured launch context, never read from model-supplied tool args. */
+  visualizationsDir?: string;
   signal: AbortSignal;
 }) => Promise<LocalToolResult>;
 
@@ -55,6 +57,11 @@ export type ChatGptConversationTransport = {
 // session, so it cannot reach a credential the session was not launched with.
 const HOST_PROXY_ALLOWED = new Set([
   "tools.execute",
+  "tools.fileBatchCapabilities",
+  "tools.fileBatchRegister",
+  "tools.fileBatchSeal",
+  "tools.fileBatchAbandon",
+  "tools.fileBatchClose",
   "tools.abort",
   "tools.list",
   "session.get",
@@ -165,6 +172,7 @@ export class AgentSidecar {
   // ask for auth it is already using, and a session that never bound an OAuth
   // row can ask for nothing at all.
   private vendorAuthBindings = new Map<string, Set<string>>();
+  private visualizationDirectories = new Map<string, string>();
 
   constructor(options: AgentSidecarOptions) {
     const { launch, onStderr } = options;
@@ -222,6 +230,7 @@ export class AgentSidecar {
     this.localToolTimers.clear();
     for (const controller of this.localToolControllers.values()) controller.abort();
     this.localToolControllers.clear();
+    this.visualizationDirectories.clear();
     this.handlers.clear();
     this.stdoutReader?.close();
     this.stdoutReader = undefined;
@@ -583,6 +592,7 @@ export class AgentSidecar {
                   sessionId: String(params.sessionId ?? ""),
                   toolCallId: String(params.toolCallId ?? ""),
                   args: params.args,
+                  visualizationsDir: this.visualizationDirectories.get(String(params.sessionId ?? "")),
                 }, params);
           this.writeToChild(
             JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\n",
@@ -633,6 +643,23 @@ export class AgentSidecar {
 
   async call<T = unknown>(method: string, params: unknown = {}): Promise<T> {
     if (this.closed) throw new Error("agent sidecar is unavailable");
+    if (typeof params === "object" && params !== null) {
+      const launch = params as Record<string, unknown>;
+      if (typeof launch.sessionId === "string") {
+        if (method === "agent.disposeSession") {
+          this.visualizationDirectories.delete(launch.sessionId);
+        } else if (method === "agent.prompt" || method === "agent.compact" || method === "agent.executeApprovedPlan") {
+          // These are trusted host launch calls, unlike the reverse proxy's
+          // model-directed arguments. The runtime uses the same directory as
+          // its cache identity, so Skill stays on that contract for the turn.
+          if (!launch.remoteWorkspace && typeof launch.visualizationsDir === "string" && launch.visualizationsDir) {
+            this.visualizationDirectories.set(launch.sessionId, launch.visualizationsDir);
+          } else {
+            this.visualizationDirectories.delete(launch.sessionId);
+          }
+        }
+      }
+    }
     const id = randomUUID();
     const timeoutMs = rpcTimeoutMs(method, params);
     const payload = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";

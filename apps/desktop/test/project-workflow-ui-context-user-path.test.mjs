@@ -140,7 +140,8 @@ window.contextProbe = async () => {
  check(row.textContent.includes("Alternative"), "Alternative not retained");
  button("Adopt and continue", row).click(); await settle();
  check(calls.some(x => x.channel === IPC.invoke.projectWorkflowAction && x.input.kind === "adopt" && x.input.decisionId === decision.id), "Adoption did not reach runtime action");
- check(document.querySelector('[data-workflow-decision="' + decision.id + '"]').textContent.includes("Effective"), "Adopted state not visible");
+ row = document.querySelector('[data-workflow-decision="' + decision.id + '"]');
+ check(!row.textContent.includes("Proposed") && !row.textContent.includes("Alternative") && ![...row.querySelectorAll("button")].some(x => x.textContent.trim() === "Adopt and continue"), "Adopted state not visible: an effective decision carries no exception badge and no adoption actions");
  row = document.querySelector('[data-workflow-decision="alternative-1"]');
  button("Dismiss", row).click(); await settle();
  check(row.textContent.includes("Dismissed"), "Dismissed state not visible");

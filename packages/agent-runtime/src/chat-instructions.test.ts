@@ -193,6 +193,9 @@ describe("bundled chat instruction examples", () => {
       const content = (await readFile(join(examples, `${id}.md`), "utf8")).trim();
       expect(BUILTIN_CHAT_INSTRUCTIONS.get(id)).toBe(content);
       expect(content.length).toBeGreaterThan(0);
+      expect(await resolveChatInstructions(null, id, {
+        global: join(examples, "missing-presets"),
+      })).toBe(content);
       expect(await resolveChatInstructions(null, id, dirs)).toBe(content);
       expect(chatSystemPromptContent(content)).toBe(content);
     }

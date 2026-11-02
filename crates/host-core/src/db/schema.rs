@@ -80,6 +80,7 @@ CREATE TABLE models (
   context_window    INTEGER,
   max_output_tokens INTEGER,
   deprecated        INTEGER NOT NULL DEFAULT 0,
+  discovery_state   TEXT CHECK (discovery_state IN ('published', 'unlisted')),
   updated_at        INTEGER NOT NULL,
   PRIMARY KEY (provider_id, model_id)
 ) WITHOUT ROWID;
@@ -102,6 +103,7 @@ CREATE TABLE sessions (
   -- the built-in chat persona; 'none' means no system prompt at all. No CHECK:
   -- ids are file stems discovered at launch, so the host cannot enumerate them.
   prompt_preset TEXT,
+  fast_mode   INTEGER NOT NULL DEFAULT 0 CHECK (fast_mode IN (0, 1)),
   source      TEXT,
   deleted_at  INTEGER,
   pinned      INTEGER NOT NULL DEFAULT 0,

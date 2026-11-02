@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowConversation, WorkflowWorkstream } from "@pi-desktop/shared";
-import { Badge, Button, Checkbox, Field, Input, Select, Textarea } from "../../components/ui";
+import { Button, Checkbox, Field, Input, Select, Textarea } from "../../components/ui";
+import { IconChevronRight } from "../../components/icons";
 import { useProjectWorkflow, type WorkflowAction } from "./useProjectWorkflow";
 import { useAppStore } from "../../stores/app-store";
 import { normalizeProjectPath } from "../../lib/sidebar-session-groups";
@@ -16,18 +17,23 @@ export function WorkflowControls({
   workstream,
   projectPaths,
   onOpenSession,
+  onOpenSide,
   onCreateSession,
 }: {
   workstream: WorkflowWorkstream;
   projectPaths: string[];
   onOpenSession: (id: string) => Promise<void>;
+  /** Opens a created side conversation beside the console instead of navigating away. */
+  onOpenSide?: (id: string) => void;
   onCreateSession: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const { snapshot, action, mutate, busy } = useProjectWorkflow();
   const sessions = useAppStore((state) => state.sessions);
   const providers = useAppStore((state) => state.providers);
-  const [executionSessionId, setExecutionSessionId] = useState(workstream.mainSessionId ?? "");
+  const activeSessionId = useAppStore((state) => state.activeSessionId);
+  const sessionTask = workstream.executionMode === "session";
+  const [executionSessionId, setExecutionSessionId] = useState(workstream.mainSessionId);
   const executors = sessions.filter((session) => {
     const provider = providers.find((item) => item.id === session.providerId);
     const link = snapshot?.conversations.find((item) => item.sessionId === session.id);
@@ -42,7 +48,11 @@ export function WorkflowControls({
       (!link || link.workstreamId === workstream.id)
     );
   });
-  const selectedExecutor = executors.find((item) => item.id === executionSessionId);
+  const selectedExecutor = executors.find((item) => item.id === executionSessionId)
+    ?? (sessionTask && executionSessionId === undefined
+      ? executors.find((item) => item.id === activeSessionId)
+        ?? (executors.length === 1 ? executors[0] : undefined)
+      : undefined);
   const [panel, setPanel] = useState<"side" | "authority" | null>(null);
   const [purpose, setPurpose] = useState<WorkflowConversation["purpose"]>("ask");
   const [visibility, setVisibility] = useState<WorkflowConversation["visibility"]>("project");
@@ -72,7 +82,7 @@ export function WorkflowControls({
     return result;
   };
   const createSide = async () => {
-    const result = await run({
+    const result = await action({
       kind: "side.create",
       ...scope,
       purpose,
@@ -80,10 +90,14 @@ export function WorkflowControls({
       task: task.trim(),
       readContext: { selection: selection.trim(), resourceIds, includeDecisions, includeArtifacts },
       sourceSessionId: purpose === "work" ? selectedExecutor?.id : workstream.mainSessionId,
-      ...(purpose === "work" && selectedAuthorization
+      ...(purpose === "work" && !sessionTask && selectedAuthorization
         ? { authorizationId: selectedAuthorization.id }
         : {}),
     });
+    if (result?.sessionId) {
+      if (onOpenSide) onOpenSide(result.sessionId);
+      else await onOpenSession(result.sessionId);
+    }
     if (result) {
       setTask("");
       setPanel(null);
@@ -108,35 +122,41 @@ export function WorkflowControls({
   };
   return (
     <section className="workflow-controls" aria-label={t("workflow.controls")}>
-      <Field label={t("workflow.executionSession")} hint={t("workflow.executionHint")}>
-        <Select
-          value={selectedExecutor?.id ?? ""}
-          onChange={(event) => setExecutionSessionId(event.target.value)}
-        >
-          <option value="">{t("workflow.chooseExecutionSession")}</option>
-          {executors.map((session) => (
-            <option key={session.id} value={session.id}>
-              {session.title} · {session.modelId}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Button disabled={busy} onClick={() => void onCreateSession()}>
-        {t("workflow.newExecutionSession")}
-      </Button>
-      <div className="workflow-actions">
+      <div className="workflow-control-row">
+        <Field label={t("workflow.executionSession")} hint={sessionTask ? t("workflow.sessionExecutionHint") : undefined}>
+          <Select
+            title={t(sessionTask ? "workflow.sessionExecutionHint" : "workflow.executionHint")}
+            value={selectedExecutor?.id ?? ""}
+            onChange={(event) => setExecutionSessionId(event.target.value)}
+          >
+            <option value="">{t("workflow.chooseExecutionSession")}</option>
+            {executors.map((session) => (
+              <option key={session.id} value={session.id}>
+                {session.title} · {session.modelId}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Button variant="ghost" disabled={busy} onClick={() => void onCreateSession()}>
+          {t("workflow.newExecutionSession")}
+        </Button>
+      </div>
+      {/* The four flows of PRODUCT P4 stay visible and labelled; operational
+          controls follow at a lower visual weight. */}
+      <div className="workflow-actions workflow-primary-actions">
         <Button
           variant="primary"
+          title={!sessionTask && !selectedAuthorization ? t("workflow.authorityRequired") : undefined}
           disabled={
-            busy || !selectedAuthorization || !selectedExecutor || workstream.status === "executing"
+            busy || (!sessionTask && !selectedAuthorization) || !selectedExecutor || workstream.status === "executing"
           }
           onClick={() =>
-            selectedAuthorization &&
+            (sessionTask || selectedAuthorization) &&
             selectedExecutor &&
             void run({
               kind: "start",
               ...scope,
-              authorizationId: selectedAuthorization.id,
+              ...(!sessionTask && selectedAuthorization ? { authorizationId: selectedAuthorization.id } : {}),
               sessionId: selectedExecutor.id,
             })
           }
@@ -155,12 +175,22 @@ export function WorkflowControls({
         >
           {t("workflow.pauseDiscuss")}
         </Button>
+        <Button
+          disabled={busy}
+          aria-expanded={panel === "side"}
+          onClick={() => setPanel(panel === "side" ? null : "side")}
+        >
+          {t("workflow.newSide")}
+        </Button>
+      </div>
+      <div className="workflow-actions workflow-secondary-actions">
         {workstream.status === "paused" ? (
-          <Button disabled={busy} onClick={() => void run({ kind: "resume", ...scope })}>
+          <Button variant="ghost" disabled={busy} onClick={() => void run({ kind: "resume", ...scope })}>
             {t("workflow.resume")}
           </Button>
         ) : (
           <Button
+            variant="ghost"
             disabled={
               busy || workstream.status === "completed" || workstream.status === "cancelled"
             }
@@ -170,22 +200,22 @@ export function WorkflowControls({
           </Button>
         )}
         <Button
+          variant="ghost"
           disabled={busy || workstream.status === "cancelled" || workstream.status === "completed"}
           onClick={() => void run({ kind: "cancel", ...scope })}
         >
           {t("workflow.cancelWork")}
         </Button>
-        <Button disabled={busy} onClick={() => setPanel(panel === "side" ? null : "side")}>
-          {t("workflow.newSide")}
-        </Button>
-        <Button
+        {!sessionTask && <Button
+          variant="ghost"
           disabled={busy}
+          aria-expanded={panel === "authority"}
           onClick={() => setPanel(panel === "authority" ? null : "authority")}
         >
           {t("workflow.authority")}
-        </Button>
+        </Button>}
       </div>
-      {authorizations.length > 0 ? (
+      {!sessionTask && authorizations.length > 1 ? (
         <Field label={t("workflow.selectedAuthority")}>
           <Select
             value={selectedAuthorization?.id ?? ""}
@@ -198,12 +228,10 @@ export function WorkflowControls({
             ))}
           </Select>
         </Field>
-      ) : (
-        <p className="workflow-muted">{t("workflow.authorityRequired")}</p>
-      )}
-      {selectedAuthorization && (
+      ) : null}
+      {!sessionTask && selectedAuthorization && (
         <details className="workflow-authority-details">
-          <summary>{t("workflow.selectedAuthority")}</summary>
+          <summary><IconChevronRight size={12} className="project-disclosure-icon" />{t("workflow.selectedAuthority")}</summary>
           <dl>
             <dt>{t("workflow.allowedActions")}</dt>
             <dd>{selectedAuthorization.actions.join(", ")}</dd>
@@ -241,6 +269,7 @@ export function WorkflowControls({
           <div className="workflow-form-grid">
             <Field label={t("workflow.purpose")}>
               <Select
+                title={t(`workflow.policies.${purpose}`)}
                 value={purpose}
                 onChange={(event) => {
                   const next = event.target.value as typeof purpose;
@@ -266,7 +295,6 @@ export function WorkflowControls({
               </Select>
             </Field>
           </div>
-          <p className="workflow-muted">{t(`workflow.policies.${purpose}`)}</p>
           <Field label={t("workflow.assignment")}>
             <Textarea
               autoFocus
@@ -319,7 +347,7 @@ export function WorkflowControls({
               disabled={
                 busy ||
                 !task.trim() ||
-                (purpose === "work" && (!selectedAuthorization || !selectedExecutor))
+                (purpose === "work" && ((!sessionTask && !selectedAuthorization) || !selectedExecutor))
               }
             >
               {t("workflow.createSide")}
@@ -330,7 +358,7 @@ export function WorkflowControls({
           </div>
         </form>
       )}
-      {panel === "authority" && (
+      {!sessionTask && panel === "authority" && (
         <form
           className="workflow-form"
           data-workflow="authorization-editor"
@@ -341,7 +369,7 @@ export function WorkflowControls({
         >
           <h3>{t("workflow.authority")}</h3>
           <p className="workflow-muted">{t("workflow.authorityHint")}</p>
-          <Field label={t("workflow.allowedActions")}>
+                    <Field label={t("workflow.allowedActions")}>
             <Textarea
               required
               rows={2}
@@ -388,14 +416,6 @@ export function WorkflowControls({
           </div>
         </form>
       )}
-      <ul className="workflow-acceptance">
-        {workstream.acceptance.map((item) => (
-          <li key={item.id}>
-            <Badge>{t(`workflow.acceptanceStatus.${item.status}`)}</Badge>
-            <span>{item.title}</span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

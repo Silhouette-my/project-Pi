@@ -12,6 +12,7 @@ import {
   type NativeMenuAction,
 } from "@pi-desktop/shared";
 import { installApplicationMenu } from "../application-menu";
+import { installGenUiProtocol } from "../gen-ui-protocol";
 import { installPluginAssetProtocol } from "../plugin-asset-protocol";
 import { installPluginRendererProtocol } from "../plugin-renderer-protocol";
 import { installVisualizeFrameProtocol } from "../visualize-frame-protocol";
@@ -100,6 +101,7 @@ export type StartupDependencies = {
     theme?: unknown;
     keybindings?: unknown;
     developerMode?: unknown;
+    fontScale?: unknown;
   } | null) => void;
   applyDeveloperMode: (settings?: { developerMode?: unknown } | null) => void;
   applyMacosWindowTranslucency: (
@@ -204,6 +206,7 @@ export function registerApplicationStartup(deps: StartupDependencies): void {
       plugins.resolveRendererSource(pluginId, generation, requestPath),
     );
     installVisualizeFrameProtocol();
+    installGenUiProtocol({ getHost });
     // Load the close-behavior preference before the first window exists: the
     // close handler reads `closeBehavior` synchronously, and a window created
     // while it still held the "ask" default would prompt a user who already
@@ -332,6 +335,7 @@ export function registerApplicationStartup(deps: StartupDependencies): void {
           theme?: unknown;
           keybindings?: unknown;
           developerMode?: unknown;
+          fontScale?: unknown;
           macosWindowTranslucency?: unknown;
           preventScreenSleep?: unknown;
           keepAwakeWhileRunning?: unknown;

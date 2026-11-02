@@ -34,11 +34,13 @@ function currentSystemMessage(messages: readonly AgentMessage[]): SystemMessage 
 
 /** Desktop-owned sections retain their order ahead of extension sections. */
 export const CONTEXT_BUDGET_SECTION = "context_budget";
+/** The selected chat instruction, appended after the agent prompt (D671). */
+export const CHAT_INSTRUCTION_SECTION = "chatInstruction";
 
 function desktopSectionNames(sections: Record<string, unknown>): string[] {
   return ["runtime", TOOL_ACTIVATION_SECTION, "skills", ...Object.keys(sections)
     .filter((name) => name.startsWith(SKILL_SECTION_PREFIX))
-    .sort((a, b) => a.localeCompare(b)), "context"];
+    .sort((a, b) => a.localeCompare(b)), "context", CHAT_INSTRUCTION_SECTION];
 }
 
 export function systemPromptContent(messages: readonly AgentMessage[]): string {

@@ -101,25 +101,43 @@ The renderer can invoke status/login/logout and the explicit previous-Pi login i
 as ChatGPT tools; account-side connectors execute on the service and appear
 as activity in the transcript.
 
-Chat mode never sends the desktop agent system prompt. Its system prompt comes
-from a per-session chat instruction preset. The composer shows a **Chat
-instructions** chip next to the model picker, only for `chatgpt_conversation`
-models on local sessions: **Default** selects the built-in chat persona
-(answer in the user's language; concise, direct, actionable — no tool rules),
-**None** sends no system prompt at all. Casual chat, Exploration, Q&A, and
-Technical discussion are bundled with the application, so a fresh installation
-does not depend on files from a development profile. Their ids are `casual-chat`,
-`exploration`, `q-and-a`, and `technical-discussion`; their labels are localized.
+Chat instructions are a per-session setting available in every conversation
+and side chat, whatever the provider (F671, ADR `chat-instructions-all-sessions`).
+The composer shows a **Chat instructions** chip next to the model picker; the
+detached composers of side chats, project side conversations and the project
+Agent show the same chip bound to their own session (before a side chat exists
+the pick is held as pending configuration and applied when the first send
+creates it). A new conversation, and a new side chat even when its parent has
+an instruction, starts on **None**, which adds no instruction. Choosing a
+preset has two effects by provider. For `chatgpt_conversation` models, which
+have no local tools, the preset **replaces** the desktop agent system prompt
+(chat mode never sends it); **Default** (the built-in chat persona: answer in
+the user's language; concise, direct, actionable, no tool rules) is offered only
+there and is what a session stored before F671 with no preset keeps, and **None**
+there sends no system prompt at all. For every other provider the preset is
+**appended** to the agent system prompt as a last section, so tools, project
+instructions and memory keep working; **None** appends nothing. The chip stays
+visible but disabled, with the reason as its tooltip, for remote-host sessions
+(the RACP `session/configure` carries no instruction and the run happens on the
+other machine) and imported read-only pi-native sessions. Project Agent
+discussions accept instructions too: the preset is appended to the discussion
+prompt and the host workflow snapshot stays separate reference data. Casual
+chat, Exploration, Q&A, and Technical discussion are bundled with the
+application, so a fresh installation does not depend on files from a
+development profile. Their ids are `casual-chat`, `exploration`, `q-and-a`, and
+`technical-discussion`; their labels are localized.
 Additional presets are listed by id. Presets are Markdown files in `<workspace>/.pi/chat-instructions/` and
 `~/.pi/agent/chat-instructions/`; the id is the file stem, a workspace file
 shadows a global file with the same id; either overrides a bundled mode with
 that id. The reserved id `none` is never
 offered as a file. The selection persists as the session's `promptPreset`
-value through `session.configure` (null resets it to Default); a preset id
-that no longer resolves falls back to the built-in persona silently. Electron
-main resolves the id to content at launch and passes it to the sidecar as
-`chatInstructions` (`undefined` = built-in persona, `""` = no system prompt,
-any other string = the preset content verbatim); changing it retires the
+value through `session.configure` (null resets a ChatGPT session to Default);
+`session.create` stores `none` for new sessions, while sessions stored earlier
+keep their NULL. A preset id that no longer resolves falls back to the built-in
+persona (ChatGPT) or adds nothing. Electron main resolves the id to content at
+launch for every provider and passes it to the sidecar as `chatInstructions`
+(`undefined` = built-in persona for ChatGPT / nothing elsewhere, `""` = no
+instruction, any other string = the preset content verbatim); changing it retires the
 reusable runtime so the next turn recomposes. The preset list channel returns
 ids only; file content never reaches the renderer. Before a session exists,
 the chip displays the draft selection and retains it across model changes.
@@ -130,7 +148,9 @@ travels as explicit user-side reference data, separate from the preset. It
 includes shared constraints, progress, decisions and continuation context without
 importing ordinary repository instructions. None still sends no system persona.
 A changed snapshot retires the runtime before the next request.
-SQLite schema v27 adds the nullable preset column after workflow v25/v26.
+The fork introduced the nullable preset column at schema v27 after workflow
+v25/v26. Unified schema v28 retains these values and the latest new-session None
+default while adding upstream fields (see storage convergence).
 Upgrade also accepts the parallel Chat v25 preview: it preserves selected
 presets and sessions while adding the missing workflow tables.
 
@@ -245,9 +265,18 @@ Non-official DeepSeek endpoints also set `requiresNonEmptyReasoningReplay` so
 missing reasoning is filled with a documented placeholder instead of `""`
 (OpenCode / third-party relays reject empty echoes after compaction; see
 ADR 0256 / #296). Official `deepseek.com` rows keep empty-string fill (#223).
-Both official and relay rows set `supportsReasoningEffort: false`; DeepSeek
-does not accept the generic OpenAI `reasoning_effort` request field even when
-thinking is enabled. The overlay does not change `thinkingFormat`.
+Every replayed assistant row carries one reasoning field, named after the
+newest row with real reasoning; real reasoning under another name is moved to
+it, so only rows with no reasoning are filled, and a leading echo of the
+placeholder in stored thinking is neither shown nor replayed (D677, #1945).
+Relay rows set `supportsReasoningEffort: false` because DeepSeek-family relays
+were reported rejecting the generic OpenAI `reasoning_effort` field (#1664).
+Official `deepseek.com` rows leave the flag to pi-ai, which sends
+`reasoning_effort` (low / high / max) next to `thinking: {type: "enabled"}` as
+DeepSeek documents, so the selected thinking level reaches the wire (#1821,
+D672). An explicit per-model `supportsReasoningEffort` selection (`send` or
+`omit`) still overrides this automatic rule on either kind of row. The overlay
+does not change `thinkingFormat`.
 
 Anthropic Messages requests set `forceAdaptiveThinking: true` when the
 models.dev record publishes a reasoning `effort` option and no
@@ -469,6 +498,7 @@ type ModelBinding = {
   defaultThinkingLevel: SessionThinkingLevel | null
   thinkingProtocol?: "legacy" | "adaptive"
   availableForSubagents?: boolean // opt-in for AI-driven delegation
+  fastModeAllowed?: boolean // opt-in for the session /fast switch (ADR 0334)
 }
 
 type SelectedModelRef = {
@@ -500,6 +530,20 @@ runtime consumers. Conversation-level model switching and routing across the
 array remain future work. A legacy provider with only `defaultModelId` is
 materialized as one fallback binding on host read and upgraded to `models` on
 the next provider write.
+
+`ModelBinding.fastModeAllowed` (boolean, default false, ADR 0334): lets the
+session `/fast` switch request OpenAI's priority service tier
+(`service_tier: "priority"`) for this model. Model settings enable the checkbox
+only for Responses wires: `openai_codex_responses` (ChatGPT subscription; the
+tier spends plan limits faster) and `responses` (billed per token at the tier's
+higher price; a relay may ignore or rebill the field). The launcher sends
+`fastMode: true` to the sidecar only when the session switch is on and the
+stored binding allows it; the runtime adds the field to main-turn requests whose
+resolved wire is `openai-codex-responses` or `openai-responses`. Subagents,
+compaction, and one-shot requests keep the default tier. A trusted extension
+that moves the runtime to one of its own models clears the switch, because that
+model has no binding to opt in; the next launch re-applies it from the
+session's stored binding.
 
 `ModelBinding.availableForSubagents` (boolean, default false): opt-in flag that
 makes the model available for AI-driven subagent delegation. When enabled, the

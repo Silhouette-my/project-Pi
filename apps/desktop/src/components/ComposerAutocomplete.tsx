@@ -14,6 +14,7 @@ import {
   IconSparkles,
 } from "./icons";
 import { AnchoredMenu } from "./settings/AnchoredMenu";
+import "../features/chat/mention/mention.css";
 
 /**
  * Composer autocomplete panel (D123–D125, spec 08 §11.8): full composer
@@ -43,6 +44,12 @@ function Highlighted({
   if (at < text.length) parts.push(<span key={`t${at}`}>{text.slice(at)}</span>);
   return <>{parts}</>;
 }
+
+const MENTION_GROUP_KEYS = {
+  project: "mention.groupProject",
+  recent: "mention.groupRecent",
+  other: "mention.groupOther",
+} as const;
 
 const GROUP_KEYS: Record<ComposerCommand["kind"], string> = {
   template: "chat.slashGroupTemplates",
@@ -90,7 +97,9 @@ export function ComposerAutocomplete({
           ? `c:${item.command.kind}:${item.command.name}`
           : item.kind === "plugin"
             ? `pl:${item.pluginId}:${index}`
-            : `p:${item.entry.path}`,
+            : item.kind === "conversation"
+              ? `s:${item.row.id}`
+              : `p:${item.entry.path}`,
       type: "button" as const,
       role: "option" as const,
       "aria-selected": active,
@@ -120,6 +129,16 @@ export function ComposerAutocomplete({
           ) : null}
           {item.command.description ? (
             <span className="composer-ac-desc">{item.command.description}</span>
+          ) : null}
+        </button>
+      );
+    }
+    if (item.kind === "conversation") {
+      return (
+        <button {...commonProps} className={`${rowClass} mention-row`} title={item.row.title}>
+          <span className="mention-row-title">{item.row.title}</span>
+          {item.row.secondary ? (
+            <span className="mention-row-secondary">{item.row.secondary}</span>
           ) : null}
         </button>
       );
@@ -166,6 +185,24 @@ export function ComposerAutocomplete({
           </div>,
         );
       }
+    } else if (item.kind === "conversation") {
+      const group = `conversation:${item.row.group}`;
+      if (group !== lastGroup) {
+        lastGroup = group;
+        rows.push(
+          <div key={`g:${group}`} className="composer-model-group-label">
+            {t(MENTION_GROUP_KEYS[item.row.group])}
+          </div>,
+        );
+      }
+    } else if (item.kind === "path" && lastGroup !== "files" && ac.items.some((x) => x.kind === "conversation")) {
+      // Files sit under their own heading only when conversations precede them.
+      lastGroup = "files";
+      rows.push(
+        <div key="g:files" className="composer-model-group-label">
+          {t("mention.groupFiles")}
+        </div>,
+      );
     } else if (item.kind === "plugin" && lastGroup !== `plugin:${item.pluginId}`) {
       // A plugin's rows sit under its own name, after the host's.
       lastGroup = `plugin:${item.pluginId}`;
@@ -181,7 +218,7 @@ export function ComposerAutocomplete({
   const emptyKey =
     ac.mode === "file"
       ? ac.noWorkspace
-        ? "chat.fileNoWorkspace"
+        ? "mention.empty"
         : "chat.fileEmpty"
       : "chat.slashEmpty";
 

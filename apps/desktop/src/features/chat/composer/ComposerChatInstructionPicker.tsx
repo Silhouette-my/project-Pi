@@ -11,26 +11,26 @@ type ChatInstructionMenuController = ReturnType<typeof useChatInstructionMenu>;
  * ChatGPT chat-mode instruction presets as a compact chip that opens one
  * menu (spec 03-runtime/11).
  *
- * The chip names only the committed selection: "Default" (the built-in chat
- * persona), "None" (no system prompt at all), or a discovered preset id.
+ * The chip names only the committed selection: "None" (no instruction),
+ * "Default" (the built-in chat persona; ChatGPT conversations only), or a
+ * preset id. A session type that cannot take an instruction shows the chip
+ * disabled with the reason as its tooltip.
  * Preset ids are file stems, so the menu lists ids, never file content.
  */
 export function ComposerChatInstructionPicker({
   t,
   controller,
-  currentPreset,
   controlsBlocked,
   onCloseOtherMenus,
 }: {
   t: TFunction;
   controller: ChatInstructionMenuController;
-  /** Session value; null/undefined means the built-in chat persona. */
-  currentPreset?: string | null;
   controlsBlocked: boolean;
   onCloseOtherMenus: () => void;
 }) {
-  const { open, setOpen, presets, select } = controller;
-  const selected = currentPreset ?? null;
+  const { open, setOpen, presets, select, selected, showDefault, unavailableKey } = controller;
+  const blocked = controlsBlocked || unavailableKey !== null;
+  const tooltip = unavailableKey ? t(unavailableKey) : t("chat.chatInstructions");
   const builtinLabels: Record<string, string> = {
     "casual-chat": t("chat.chatModeCasual"),
     exploration: t("chat.chatModeExploration"),
@@ -44,8 +44,8 @@ export function ComposerChatInstructionPicker({
         ? t("chat.chatInstructionsNone")
         : Object.hasOwn(builtinLabels, id) ? builtinLabels[id] : id;
   const options: Array<string | null> = [
-    null,
     CHAT_INSTRUCTION_NONE_ID,
+    ...(showDefault ? [null] : []),
     ...presets.map((preset) => preset.id),
   ];
   return (
@@ -64,11 +64,11 @@ export function ComposerChatInstructionPicker({
           type="button"
           className={`icon-btn mode-chip composer-chat-instruction-chip ${open ? "active" : ""}`}
           data-preset={selected ?? "default"}
-          tooltip={t("chat.chatInstructions")}
+          tooltip={tooltip}
           ariaLabel={`${t("chat.chatInstructions")}: ${labelOf(selected)}`}
           aria-haspopup="menu"
           aria-expanded={open}
-          disabled={controlsBlocked}
+          disabled={blocked}
           onClick={() => {
             onCloseOtherMenus();
             setOpen((current) => !current);
@@ -90,7 +90,8 @@ export function ComposerChatInstructionPicker({
           type="button"
           role="menuitemradio"
           aria-checked={selected === option}
-          disabled={controlsBlocked}
+          data-chat-instruction-option={option ?? "default"}
+          disabled={blocked}
           className={`composer-plus-item ${selected === option ? "active" : ""}`}
           onClick={() => {
             setOpen(false);

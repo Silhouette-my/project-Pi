@@ -13,6 +13,7 @@ import {
   Bell,
   BookOpen,
   Bot,
+  Box,
   Camera,
   Check,
   CheckCheck,
@@ -101,6 +102,7 @@ import {
   Workflow,
   Wrench,
   X,
+  Zap,
   type LucideIcon,
   type LucideProps,
 } from "lucide-react";
@@ -163,7 +165,10 @@ export const IconChat = icon(MessageSquare);
 export const IconNewSession = icon(MessageSquarePlus);
 export const IconFolder = icon(Folder);
 export const IconFolderOpen = icon(FolderOpen);
+/** Project glyph: an outlined cube. */
+export const IconCube = icon(Box);
 export const IconNewProject = icon(FolderPlus);
+export const IconNewFolder = icon(FolderPlus);
 export const IconGripVertical = icon(GripVertical);
 export const IconFileText = icon(FileText);
 export const IconGlobe = icon(Globe2);
@@ -192,6 +197,7 @@ export const IconDatabase = icon(Database);
 export const IconCheck = icon(Check);
 export const IconBell = icon(Bell);
 export const IconBot = icon(Bot);
+export const IconZap = icon(Zap);
 export const IconCheckCheck = icon(CheckCheck);
 export const IconShield = icon(Shield);
 export const IconChevronDown = icon(ChevronDown);

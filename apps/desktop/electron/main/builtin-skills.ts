@@ -1,9 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseSkillFrontmatter } from "@pi-desktop/plugin-sdk";
+import { GEN_UI_SKILL_ID } from "@pi-desktop/shared";
 import type { PluginSkillDef } from "@pi-desktop/agent-runtime";
 import type { LoadedSkillDocument } from "./skill-document";
 import { getModuleDirectory } from "./module-path";
+import { pluginWorkspaceContains } from "./plugin-workspace-contains";
 
 /**
  * Skills PI-Desktop ships itself.
@@ -21,8 +23,8 @@ export const IMAGE_GENERATION_SKILL_ID = "pi-desktop/imagegen";
 export const LATEX_SKILL_ID = "pi-desktop/latex";
 /** Bundled multi-pass research skill (directory package with references/). */
 export const DEEP_RESEARCH_SKILL_ID = "pi-desktop/deep-research";
-/** Bundled skill authoring in-conversation visualization fragments. */
-export const VISUALIZE_SKILL_ID = "pi-desktop/visualize";
+/** One skill id; the session selects the legacy or GenUI document. */
+export const VISUALIZE_SKILL_ID = GEN_UI_SKILL_ID;
 
 /** electron-builder copies `resources/skills` to `<resources>/skills`. */
 function resolveBuiltinSkillPath(fileName: string): string | null {
@@ -68,8 +70,7 @@ export function isPluginWorkspace(
       // An unparseable manifest is not evidence either way.
     }
   }
-  const prefix = workspacePath.endsWith("/") ? workspacePath : `${workspacePath}/`;
-  return pluginPaths.some((path) => path === workspacePath || path.startsWith(prefix));
+  return pluginPaths.some((pluginPath) => pluginWorkspaceContains(workspacePath, pluginPath));
 }
 
 /** Front matter carries the skill's title and applicability line. */
@@ -89,6 +90,13 @@ export type BuiltinSkillInput = {
   pluginPaths?: string[];
   /** User-disabled ids are withheld from the agent and composer catalog. */
   disabledIds?: readonly string[];
+  /**
+   * GenUI fragments are served locally; remote sessions retain the legacy
+   * contained-file visualization contract instead.
+   */
+  remote?: boolean;
+  /** Opt into the file-backed GenUI contract for local sessions. */
+  inlineVisualizations?: boolean;
 };
 
 /**
@@ -102,13 +110,24 @@ const BUILTIN_SKILL_SOURCES: ReadonlyArray<readonly [string, string]> = [
   [PLUGIN_DEV_SKILL_ID, "plugin-development.md"],
   [LATEX_SKILL_ID, "latex/SKILL.md"],
   [DEEP_RESEARCH_SKILL_ID, "deep-research/SKILL.md"],
-  [VISUALIZE_SKILL_ID, "visualize.md"],
+  [VISUALIZE_SKILL_ID, "visualize-legacy.md"],
 ];
 
+type VisualizationSkillOptions = Pick<BuiltinSkillInput, "remote" | "inlineVisualizations">;
+
+function visualizationSkillFile(options: VisualizationSkillOptions): string {
+  return options.inlineVisualizations === true && !options.remote ? "visualize.md" : "visualize-legacy.md";
+}
+
+function builtinSkillFile(id: string, options: VisualizationSkillOptions): string | null {
+  if (id === VISUALIZE_SKILL_ID) return visualizationSkillFile(options);
+  return BUILTIN_SKILL_SOURCES.find(([skillId]) => skillId === id)?.[1] ?? null;
+}
+
 /** All bundled skill entries, including ones whose applicability is conditional. */
-export function builtinSkillCatalog(): PluginSkillDef[] {
+export function builtinSkillCatalog(options: VisualizationSkillOptions = {}): PluginSkillDef[] {
   return BUILTIN_SKILL_SOURCES.flatMap(([id, file]) => {
-    const raw = readBuiltinSkill(file);
+    const raw = readBuiltinSkill(id === VISUALIZE_SKILL_ID ? visualizationSkillFile(options) : file);
     if (!raw?.raw.trim()) return [];
     const parsed = parseSkillFrontmatter(raw.raw);
     return parsed.body ? [{ id, name: parsed.name ?? id, description: parsed.description }] : [];
@@ -124,7 +143,7 @@ export function builtinSkills(input: BuiltinSkillInput): PluginSkillDef[] {
   if (isPluginWorkspace(input.workspacePath, input.pluginPaths)) ids.push(PLUGIN_DEV_SKILL_ID);
   const activeIds = new Set(ids);
   const disabled = new Set(input.disabledIds ?? []);
-  return builtinSkillCatalog().filter(
+  return builtinSkillCatalog(input).filter(
     (skill) => activeIds.has(skill.id) && !disabled.has(skill.id),
   );
 }
@@ -144,10 +163,13 @@ export async function assertBuiltinSkillEnabled(
  * Load a built-in skill body for the `Skill` tool. Returns null for any id the
  * host does not ship, which is the caller's cue to try the plugin registry.
  */
-export function loadBuiltinSkillBody(id: string): LoadedSkillDocument | null {
-  const source = BUILTIN_SKILL_SOURCES.find(([skillId]) => skillId === id);
-  if (!source) return null;
-  const raw = readBuiltinSkill(source[1]);
+export function loadBuiltinSkillBody(
+  id: string,
+  options: VisualizationSkillOptions = {},
+): LoadedSkillDocument | null {
+  const file = builtinSkillFile(id, options);
+  if (!file) return null;
+  const raw = readBuiltinSkill(file);
   if (!raw?.raw.trim()) return null;
   const parsed = parseSkillFrontmatter(raw.raw);
   if (!parsed.body) return null;

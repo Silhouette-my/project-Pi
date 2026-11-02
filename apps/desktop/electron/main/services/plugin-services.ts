@@ -1,5 +1,7 @@
 import { dialog, globalShortcut, shell, type BrowserWindow } from "electron";
 import { join } from "node:path";
+import { getActiveRemoteHostsBoot } from "../bootstrap/remote-hosts";
+import { createPluginWorkspaceReader } from "../remote/plugin-workspace-files";
 import {
   IPC,
   ErrorCodes,
@@ -50,12 +52,14 @@ import { PluginPanelHost } from "../plugin-panel-host";
 import { PluginViewHost } from "../plugin-view-host";
 import { SESSION_SCOPED_EVENTS, sessionEventScopeFilter } from "../plugin-session-scope";
 import { BrowserPane } from "../browser-view";
+import { BrowserBackingHost } from "../browser-backing-host";
 import { BrowserHost, BROWSER_PLUGIN_ID } from "../browser-host";
 import { OAUTH_AUTH_KIND, type VendorOAuth } from "../oauth";
 import type { ClipboardHistory } from "../clipboard-history";
 import type { TurnEndedPayload } from "../runtime/session-coordination";
 import type { HostProcess } from "../host-process";
 import { createPluginSessionContext } from "./plugin-session-context";
+import { createPluginProjectLister } from "./plugin-projects";
 import { createComposerSuggestionRelay } from "./composer-suggestion";
 import type { Logger } from "../logger";
 import type { PluginAppearance } from "../../shared/plugin-panel-chrome";
@@ -566,6 +570,8 @@ export function createPluginServices({
   const sessionProjects = new Map<string, string | null>();
   const emitBrowserState = (state: BrowserState) => {
     sendToRenderer(IPC.event.browserState, state);
+  };
+  const emitBrowserPresentationState = (state: BrowserState) => {
     pluginPanels.broadcast("browser:state", state);
     pluginViews.broadcast("browser:state", state);
   };
@@ -657,8 +663,9 @@ export function createPluginServices({
     });
   });
   pluginPanels.addSenderResolver((senderId) => pluginViews.pluginIdForSender(senderId));
+  const browserBackingHost = new BrowserBackingHost();
   const browserHost = new BrowserHost({
-    createPane: (onState, onOpenUrl) => new BrowserPane(onState, onOpenUrl),
+    createPane: (onState, onOpenUrl) => new BrowserPane(onState, onOpenUrl, browserBackingHost),
     onOpenUrl: (url, sessionId) => {
       void (async () => {
         const settings = await getHost()?.call<AppSettings>("settings.get");
@@ -694,19 +701,26 @@ export function createPluginServices({
       return join(dataDir, "scratch", sessionId);
     },
     onState: emitBrowserState,
-    onRevealView: (sessionId, tabId) =>
-      sendToRenderer(IPC.event.browserPreview, { sessionId, tabId, revealOnly: true }),
+    onPresentationState: emitBrowserPresentationState,
+    onRevealView: (sessionId, tabId, location) =>
+      sendToRenderer(IPC.event.browserPreview, { sessionId, tabId, ...(location ?? { revealOnly: true }) }),
   });
   pluginViews.onSurface = (surface) => {
     browserHost.setChromeSurface(surface);
   };
   plugins.setServices({
+    readRemoteWorkspaceFiles: createPluginWorkspaceReader({ getHost, getBoot: getActiveRemoteHostsBoot }),
     /**
      * The richer workspace payload, so `pi.workspace.get` and the
      * `workspace:changed` event both expose the open project's folder roots
      * (ADR 0263) instead of the bare primary path.
      */
     getWorkspaceInfo: () => pluginWorkspaceInfo(getWorkspacePath()),
+    listProjects: createPluginProjectLister(getHost, (operation) => {
+      logger.app("plugin", "warn", "plugin.projects.unavailable", {
+        code: "HOST_UNAVAILABLE", data: { operation },
+      });
+    }),
     openInBrowser: async (fullPath) => {
       const preview = await browserHost.previewFile();
       if (!preview.ok) {
@@ -757,15 +771,15 @@ export function createPluginServices({
       action: (action, sessionId, tabId) => browserHost.action(action, sessionId, tabId),
       setBounds: (pluginId, hole) => browserHost.setGuestHole(pluginId, hole),
       setVisible: (pluginId, visible) => browserHost.setGuestVisible(pluginId, visible),
-      getState: () => browserHost.getStateForPlugin(),
+      getState: (sessionId, tabId) => browserHost.getStateForPlugin(sessionId, tabId),
       openExternal: (sessionId, tabId) => browserHost.openExternal(sessionId, tabId),
-      snapshot: () => browserHost.snapshot(),
-      screenshot: (input, sessionId) => browserHost.screenshot(input, sessionId),
-      click: (uid) => browserHost.click(uid),
-      fill: (uid, text) => browserHost.fill(uid, text),
-      evaluate: (expression) => browserHost.evaluate(expression),
-      console: (limit) => browserHost.console(limit),
-      cdp: (method, params) => browserHost.cdpCommand(method, params),
+      snapshot: (sessionId, tabId) => browserHost.snapshot(sessionId, tabId),
+      screenshot: (input, sessionId, tabId) => browserHost.screenshot(input, sessionId, tabId),
+      click: (uid, sessionId, tabId) => browserHost.click(uid, sessionId, tabId),
+      fill: (uid, text, sessionId, tabId) => browserHost.fill(uid, text, sessionId, tabId),
+      evaluate: (expression, sessionId, tabId) => browserHost.evaluate(expression, sessionId, tabId),
+      console: (limit, sessionId, tabId) => browserHost.console(limit, sessionId, tabId),
+      cdp: (method, params, sessionId, tabId) => browserHost.cdpCommand(method, params, sessionId, tabId),
     },
     onPluginUnload: (pluginId) => {
       if (pluginId === BROWSER_PLUGIN_ID) browserHost.disposeGuest();

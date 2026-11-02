@@ -2,7 +2,7 @@ export const PROTOCOL_VERSION = 11 as const;
 export const SCHEMA_VERSION = 16 as const;
 export const APP_ID = "net.aiuo.pi-desktop";
 export const APP_NAME = "PI-Desktop";
-export const APP_VERSION = "0.21.0-beta.4";
+export const APP_VERSION = "0.21.0";
 
 export const APP_MENU_COMMANDS = [
   "newTask",
@@ -39,6 +39,16 @@ export const NATIVE_MENU_ACTIONS = [
 
 export type NativeMenuAction = (typeof NATIVE_MENU_ACTIONS)[number];
 
+export type WorkPanelTabMenuAction = "closeTab" | "closeOtherTabs" | "closeAllTabs";
+export type WorkPanelTabMenuRequest = {
+  closeTabLabel: string;
+  closeOtherTabsLabel: string;
+  closeAllTabsLabel: string;
+  canCloseOthers: boolean;
+  x: number;
+  y: number;
+};
+
 export const WINDOW_CONTROL_ACTIONS = [
   "getState",
   "minimize",
@@ -62,6 +72,10 @@ export const IPC = {
     projectWorkflowAction: "pi-desktop/projectWorkflow/action",
     projectWorkflowSearch: "pi-desktop/projectWorkflow/search",
     projectWorkflowOpenReference: "pi-desktop/projectWorkflow/openReference",
+    projectStructureGitSnapshot: "pi-desktop/projectStructure/gitSnapshot",
+    projectStructureGitDiff: "pi-desktop/projectStructure/gitDiff",
+    projectStructureArchitectureSnapshot: "pi-desktop/projectStructure/architectureSnapshot",
+    projectStructureReadFile: "pi-desktop/projectStructure/readFile",
     storageGet: "pi-desktop/storage/get",
     storageChoose: "pi-desktop/storage/choose",
     storageMigrate: "pi-desktop/storage/migrate",
@@ -177,6 +191,8 @@ export const IPC = {
     sessionImportRun: "pi-desktop/session/importRun",
     modelConfigImportScan: "pi-desktop/modelConfig/importScan",
     modelConfigImportRun: "pi-desktop/modelConfig/importRun",
+    sessionDeleteMessage: "pi-desktop/session/deleteMessage",
+    sessionRetractPendingPrompt: "pi-desktop/session/retractPendingPrompt",
     sessionReplaceMessages: "pi-desktop/session/replaceMessages",
     sessionSaveRevision: "pi-desktop/session/saveRevision",
     sessionListRevisions: "pi-desktop/session/listRevisions",
@@ -427,6 +443,7 @@ export const IPC = {
     browserSetVisible: "pi-desktop/browser/setVisible",
     browserOpenExternal: "pi-desktop/browser/openExternal",
     browserGetState: "pi-desktop/browser/getState",
+    browserGetPages: "pi-desktop/browser/getPages",
     fsList: "pi-desktop/fs/list",
     fsRead: "pi-desktop/fs/read",
     fsReadImageDataUrl: "pi-desktop/fs/readImageDataUrl",
@@ -434,6 +451,7 @@ export const IPC = {
     fsReveal: "pi-desktop/fs/reveal",
     fsOpen: "pi-desktop/fs/open",
     fsIndex: "pi-desktop/fs/index",
+    fsSearch: "pi-desktop/fs/search",
     fsResolveRef: "pi-desktop/fs/resolveRef",
     windowSetWorkPanelReservation:
       "pi-desktop/window/setWorkPanelReservation",
@@ -445,6 +463,7 @@ export const IPC = {
     lifecycleDialogReady: "pi-desktop/window/lifecycleDialog/ready",
     lifecycleDialogRespond: "pi-desktop/window/lifecycleDialog/respond",
     menuRendererReady: "pi-desktop/menu/rendererReady",
+    workPanelTabMenu: "pi-desktop/workPanel/tabMenu",
     traySetSessionPreferences: "pi-desktop/tray/setSessionPreferences",
     nativeMenuAction: "pi-desktop/menu/nativeAction",
   },

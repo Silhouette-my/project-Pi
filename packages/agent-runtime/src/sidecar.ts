@@ -117,6 +117,8 @@ type RuntimeParams = {
   turnId?: string;
   thinkingLevel?: SessionThinkingLevel;
   infiniteProviderRetry?: boolean;
+  /** Session `/fast` switch AND the model's opt-in, resolved by main (ADR 0334). */
+  fastMode?: boolean;
   /** Opt-in TypeSafe classifier credential resolved by Electron main. */
   jevApiKey?: string;
   provider: RuntimeProviderConfig;
@@ -132,6 +134,8 @@ type RuntimeParams = {
   /** Opted-in override keys, separate from definition-only pinned bindings. */
   subagentModelKeys?: string[];
   scratchDir?: string;
+  /** Per-session visualization directory; omitted for remote sessions. */
+  visualizationsDir?: string;
   /** Session-bound workspace root supplied by Electron main. */
   projectPath?: string;
   remoteWorkspace?: { hostKey: string; path: string };
@@ -142,8 +146,9 @@ type RuntimeParams = {
    * ChatGPT chat-mode system prompt content (spec 03-runtime/11). Encoding:
    * `undefined` = built-in chat persona (also the fallback for a stale preset
    * id); `""` = the "None" selection, send no system prompt at all; any other
-   * string = that preset's file content. Only consulted for
-   * `apiStyle: "chatgpt_conversation"` providers.
+   * string = that preset's file content. `chatgpt_conversation` providers use
+   * it as the whole system prompt; every other provider appends a non-empty
+   * value to the agent prompt (`undefined` and `""` add nothing).
    */
   chatInstructions?: string;
   /** Host-selected project workflow reference data; not repository instructions. */
@@ -256,7 +261,7 @@ async function runtimeFor(
       errorCode: "AGENT_BUSY",
     });
   }
-  const reusable = existing?.matches({
+  const config = {
     mode,
     provider,
     thinkingLevel,
@@ -273,14 +278,20 @@ async function runtimeFor(
     chatWorkflowContext: params.chatWorkflowContext,
     projectMemory: params.projectMemory,
     discussionOnly: params.discussionOnly,
+    visualizationsDir: params.visualizationsDir,
     projectPath: params.projectPath,
     remoteWorkspace: params.remoteWorkspace,
     workspaceRoot: params.workspaceRoot,
     commandShell: params.commandShell,
-  })
-    ? existing
-    : undefined;
+  };
+  // Name the first field that disagrees so a cache-invalidating rebuild can be
+  // attributed to its cause (#1948) instead of surfacing only as a reset.
+  const mismatch = existing?.firstMismatch(config) ?? null;
+  const reusable = existing && mismatch === null ? existing : undefined;
   if (existing && !reusable) {
+    console.error(
+      `[runtime] rebuilding ${sessionId}: runtime config mismatch (${mismatch ?? "unknown"})`,
+    );
     await existing.dispose();
     runtimes.delete(sessionId);
   }
@@ -288,38 +299,38 @@ async function runtimeFor(
     reusable.setPluginSkills(pluginSkills);
     reusable.setCompactionSettings(params.compactionSettings);
     reusable.setInfiniteProviderRetry(params.infiniteProviderRetry === true);
+    reusable.setFastMode(params.fastMode === true);
     reusable.setMode(mode);
     return reusable;
   }
 
-  let history: UiMessage[] = [];
-  let compaction: ContextCompactionRecord | undefined;
-  try {
-    const detail = await hostProxy.call<{
-      session?: {
-        messages?: UiMessage[];
-        compaction?: ContextCompactionRecord;
-      } | null;
-    }>("session.get", { id: sessionId });
-    let restoredMessages = detail?.session?.messages ?? [];
-    // The current prompt is sent separately below. Exclude its persisted row
-    // before attachment hydration so it cannot consume the history byte budget.
-    if (currentPrompt !== undefined && params.userMessageId) {
-      restoredMessages = restoredMessages.filter((message) =>
-        message.role !== "user" || message.id !== params.userMessageId,
-      );
-    }
-    const supportsVision = visionFromModelConfig(params.provider.modelConfig);
-    history = await hydrateAttachmentHistory(restoredMessages, {
-      scratchDir: params.scratchDir,
-      projectPath: params.remoteWorkspace ? undefined : params.projectPath,
-      attachmentsDir: params.attachmentsDir,
-      supportsVision,
+  const detail = await hostProxy.call<{
+    session?: {
+      messages?: UiMessage[];
+      compaction?: ContextCompactionRecord;
+    } | null;
+  }>("session.get", { id: sessionId });
+  if (!detail?.session) {
+    throw Object.assign(new Error("session not found while restoring history"), {
+      errorCode: "SESSION_NOT_FOUND",
     });
-    compaction = detail?.session?.compaction;
-  } catch {
-    // History restore is best-effort; a prompt can still start cleanly.
   }
+  let restoredMessages = detail.session.messages ?? [];
+  // The current prompt is sent separately below. Exclude its persisted row
+  // before attachment hydration so it cannot consume the history byte budget.
+  if (currentPrompt !== undefined && params.userMessageId) {
+    restoredMessages = restoredMessages.filter((message) =>
+      message.role !== "user" || message.id !== params.userMessageId,
+    );
+  }
+  const supportsVision = visionFromModelConfig(params.provider.modelConfig);
+  let history = await hydrateAttachmentHistory(restoredMessages, {
+    scratchDir: params.scratchDir,
+    projectPath: params.remoteWorkspace ? undefined : params.projectPath,
+    attachmentsDir: params.attachmentsDir,
+    supportsVision,
+  });
+  const compaction = detail.session.compaction;
   // Older callers without a stable message id retain the previous content match.
   if (currentPrompt !== undefined && !params.userMessageId) {
     const last = history.at(-1);
@@ -336,6 +347,7 @@ async function runtimeFor(
     commandShell: params.commandShell,
     thinkingLevel,
     infiniteProviderRetry: params.infiniteProviderRetry === true,
+    fastMode: params.fastMode === true,
     jevApiKey: params.jevApiKey,
     history,
     compaction,
@@ -358,6 +370,10 @@ async function runtimeFor(
     scratchDir:
       typeof params.scratchDir === "string" && params.scratchDir
         ? params.scratchDir
+        : undefined,
+    visualizationsDir:
+      typeof params.visualizationsDir === "string" && params.visualizationsDir
+        ? params.visualizationsDir
         : undefined,
     onEvent: (envelope: AgentEventEnvelope) => notify("agent.event", envelope),
     onDiagnostic: (diagnostic) => notify("agent.diagnostic", diagnostic),

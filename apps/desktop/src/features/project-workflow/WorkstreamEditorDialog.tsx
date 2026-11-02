@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { OverlayBackdrop, portalOverlay } from "../../components/ui";
 import { useBlockingOverlay } from "../../lib/blocking-overlay";
 
-/** Keep the full work contract available without making the project home a form. */
+/** Keep task details in a focused, keyboard-accessible dialog. */
 export function WorkstreamEditorDialog({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   useBlockingOverlay();
   const dialog = useRef<HTMLDivElement>(null);
@@ -14,7 +14,8 @@ export function WorkstreamEditorDialog({ children, onClose }: { children: ReactN
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); close.current(); }
       if (event.key !== "Tab") return;
-      const controls = [...(dialog.current?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex='0']") ?? [])];
+      const controls = [...(dialog.current?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex='0']") ?? [])]
+        .filter((element) => element.getClientRects().length > 0);
       const first = controls[0];
       const last = controls.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }

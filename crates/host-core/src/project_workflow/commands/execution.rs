@@ -17,7 +17,7 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                     "blocked work requires blocker owner and resume condition",
                 ));
             }
-            if next == "completed" {
+            if next == "completed" && work["executionMode"] != "session" {
                 if rows(&work, "acceptance").is_empty()
                     || !rows(&work, "acceptance")
                         .iter()
@@ -28,6 +28,23 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                     ));
                 }
                 validate_work(db, value, &work)?;
+            }
+            if next == "completed" && work["executionMode"] == "session" {
+                let terminal = rows(value, "runs").iter().rev().find(|run| {
+                    run["workstreamId"] == work["id"] && run["sessionId"] == work["mainSessionId"]
+                });
+                if terminal.is_none_or(|run| {
+                    run["state"] != "completed"
+                        || run["decisionRevision"] != work["decisionRevision"]
+                        || run.get("completionKey").is_none()
+                        || rows(run, "effects")
+                            .iter()
+                            .any(|effect| effect["state"] == "unknown")
+                }) {
+                    return Err(Error::conflict(
+                        "session task completion requires its current Agent terminal receipt",
+                    ));
+                }
             }
             if next == "executing" {
                 for dependency in rows(&work, "dependencyIds") {
@@ -67,6 +84,11 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                     "run must start at current workstream/decision revision",
                 ));
             }
+            if row.get("executionMode") != work.get("executionMode") {
+                return Err(Error::invalid(
+                    "run execution mode must match its workstream",
+                ));
+            }
             if !["ready", "executing"].contains(&work["status"].as_str().unwrap()) {
                 return Err(Error::conflict("workstream is not runnable"));
             }
@@ -94,7 +116,18 @@ pub(super) fn apply(db: &Database, value: &mut Value, command: &Value) -> Result
                     return Err(Error::conflict("workstream dependency is not completed"));
                 }
             }
-            let authorization = find(value, "authorizations", &row["authorizationId"])?;
+            if row["executionMode"] == "session" {
+                if row.get("authorizationId").is_some() {
+                    return Err(Error::invalid(
+                        "session execution uses session permissions, not workflow authorization",
+                    ));
+                }
+                return insert(value, "runs", row.clone());
+            }
+            let authorization_id = row.get("authorizationId").ok_or_else(|| {
+                Error::unauthorized("bounded execution requires workflow authorization")
+            })?;
+            let authorization = find(value, "authorizations", authorization_id)?;
             check_scope(authorization, row)?;
             if authorization["revoked"] == true
                 || authorization
