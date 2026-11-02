@@ -1,8 +1,14 @@
+<div align="center">
+
+<img src="docs/image/readme/logo.png" alt="PI-Desktop 图标" width="96" />
+
 # project-Pi
 
 **以项目为中心的 AI Agent 工作台：基于 [PI-Desktop](https://github.com/vastsa/PI-Desktop) 的个人二次开发。**
 
 [English](README.md) · [文档索引](docs/README.md) · [上游项目](https://github.com/vastsa/PI-Desktop)
+
+</div>
 
 project-Pi 的起点是一个实际问题：项目往往比一段对话更长。在使用 Codex 和原版 Pi 的过程中，跨会话追踪目标、决策、并行工作与结果，经常需要反复解释背景和手动交接。这个 fork 尝试以项目为中心，把这些信息和实际工作组织在一起。
 
@@ -16,6 +22,12 @@ project-Pi 的起点是一个实际问题：项目往往比一段对话更长。
 - **更丰富的回答**：可视化卡片在隔离的 frame 中展示交互内容；桌面应用内置 LaTeX 与 Deep Research 技能。
 
 这些能力仍在演进。项目执行依赖本地应用运行；持久化状态用于重启后的状态核对，并非云端常驻服务。具体行为还取决于模型提供商、运行环境和权限设置。
+
+## 工作台基础
+
+![PI-Desktop 工作台：对话、Agent 活动与文件面板](docs/image/readme/home_zh.webp)
+
+*此图来自 PI-Desktop 上游，用于展示继承的桌面工作台基础；project-Pi 开发版的界面与工作流可能有所不同。*
 
 ## 从源码运行
 

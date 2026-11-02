@@ -1,8 +1,14 @@
+<div align="center">
+
+<img src="docs/image/readme/logo.png" alt="PI-Desktop icon" width="96" />
+
 # project-Pi
 
 **A project-oriented AI agent workspace, built as a personal fork of [PI-Desktop](https://github.com/vastsa/PI-Desktop).**
 
 [简体中文](README.zh-CN.md) · [Documentation](docs/README.md) · [Upstream project](https://github.com/vastsa/PI-Desktop)
+
+</div>
 
 project-Pi starts from a practical problem: work often outlives a single conversation. When using Codex and the original Pi, keeping track of a project’s goals, decisions, parallel work and results across sessions can require repeated explanation and manual handoffs. This fork explores a project-oriented workspace that keeps those pieces closer to the work itself.
 
@@ -16,6 +22,12 @@ project-Pi starts from a practical problem: work often outlives a single convers
 - **Richer responses:** visualization cards render interactive content in an isolated frame; LaTeX and Deep Research skills are bundled with the desktop application.
 
 These features are evolving. Project execution runs while the local app is alive; persisted state supports reconciliation after restart, rather than an always-on cloud service. Availability and behavior can depend on the provider, environment and permissions.
+
+## The workspace foundation
+
+![PI-Desktop workspace showing a conversation, agent activity, and file panel](docs/image/readme/home.webp)
+
+*PI-Desktop upstream screenshot, shown to illustrate the inherited desktop foundation. The project-Pi development interface and workflow may differ.*
 
 ## Run from source
 
