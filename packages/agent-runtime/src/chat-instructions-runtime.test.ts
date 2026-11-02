@@ -167,6 +167,7 @@ describe("chat instruction system prompt gating", () => {
       expect(
         runtime.matches(matchConfig({ chatInstructions: "Answer in haiku." })),
       ).toBe(true);
+      expect(runtime.firstMismatch(matchConfig({ chatInstructions: "" }))).toBe("chatInstructions");
       expect(runtime.matches(matchConfig({ chatInstructions: "" }))).toBe(false);
       expect(
         runtime.matches(matchConfig({ chatInstructions: "Other preset." })),
@@ -189,6 +190,7 @@ describe("chat instruction system prompt gating", () => {
     try {
       expect(runtime.matches({ ...matchConfig({ chatInstructions: "" }), chatWorkflowContext: "decision 1" })).toBe(true);
       expect(runtime.matches({ ...matchConfig({ chatInstructions: "" }), chatWorkflowContext: "decision 2" })).toBe(false);
+      expect(runtime.firstMismatch({ ...matchConfig({ chatInstructions: "" }), chatWorkflowContext: "decision 2" })).toBe("chatWorkflowContext");
     } finally { await runtime.dispose(); }
   });
 

@@ -225,6 +225,13 @@ try {
   const PILL = ".work-panel [data-return-pill]";
   const pillText = () => page.evaluate(`document.querySelector(${json(PILL)})?.innerText.trim() ?? ''`);
   const pickMode = async (mode, label) => {
+    // Returning a quote focuses the parent draft; its unpinned panel may hide.
+    // Reopen it through the real panel shortcut before interacting again.
+    if ((await panelState()) !== "open") {
+      await page.call("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "j", code: "KeyJ", windowsVirtualKeyCode: 74, modifiers: process.platform === "darwin" ? 4 : 2 });
+      await page.call("Input.dispatchKeyEvent", { type: "keyUp", key: "j", code: "KeyJ", windowsVirtualKeyCode: 74, modifiers: process.platform === "darwin" ? 4 : 2 });
+      await until(async () => (await panelState()) === "open", "return panel revealed");
+    }
     await realClick(PILL, "return pill");
     await realClick(`[data-return-option="mode:${mode}"]`, `return mode ${mode}`);
     await until(async () => label.test(await pillText()), `pill shows ${label}`);

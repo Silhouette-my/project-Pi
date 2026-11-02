@@ -332,7 +332,7 @@ destination, chat as the home surface, tools and permissions inline.
   delete remain separate actions. Rename edits the task label only; archive
   never removes the transcript. Open folder is a project action, not a
   conversation action.
-- **Project color** (D670): the project menu holds a **Project color** submenu
+- **Project color** (F670): the project menu holds a **Project color** submenu
   listing Follow theme color plus the seven presets, each with a color dot and a
   check on the current choice. The choice is renderer-local sidebar preference
   metadata keyed by project path. It tints only the project's folder glyph in
@@ -394,6 +394,11 @@ destination, chat as the home surface, tools and permissions inline.
   focus.
 
 ### 3.3 Scheduled
+Settings → General → Scheduled tasks controls this feature, on by default
+(`scheduledTasksEnabled` absent or true). Off hides the footer and search page
+entries and prevents new runs without deleting tasks or run history. The
+settings switch remains searchable so the feature can be re-enabled.
+
 A task column beside the selected task's page, with an explicit create/edit form, a cadence dropdown, time,
 next occurrence, saved project, per-task permission/model selection, a per-task conversation mode (a new conversation per run, or one conversation every run continues), pause/resume and delete confirmation. Hourly
 schedules repeat at one-hour intervals without a time selector. An interval
@@ -624,7 +629,7 @@ resource conflicts retain the user's draft until explicit reload or close.
 | Model menu | Composer-right model × reasoning chip | configured provider/model choices + settings entry (D091) |
 | Profile menu | sidebar footer | Settings / Logs / Theme cycle (D041) |
 | Notification inbox | sidebar footer bell | All/Unread views, task failure rows only (successful completions are hidden, D295), mark-all-read and clear actions (D130/D117) |
-| Toasts | events (plugin toast, backend restored, copy) | top-center; 4s default, 8s for errors |
+| Toasts | events (plugin toast, backend restored, copy) | top-center of the live main-content safe area; viewport fallback; 4s default, 8s for errors |
 | Project switcher | empty-home underlined project name | sidebar open projects + search + clone git project + open project |
 
 ## 5. Navigation model

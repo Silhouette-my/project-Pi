@@ -91,14 +91,14 @@ HTTP 429 以账号限流错误呈现并附带服务端给出的重试等待时�
 或发生了自动 reasoning 切换时，assistant 消息附带 `chatgpt.model_route` 诊断，
 但不因此失败轮次。
 
-聊天指令是按会话设置的，适用于所有对话和侧聊，与提供商无关（D671，ADR
+聊天指令是按会话设置的，适用于所有对话和侧聊，与提供商无关（F671，ADR
 `chat-instructions-all-sessions`）。输入框在模型选择旁显示「聊天指令」按钮；侧聊、
 项目侧边对话和项目 Agent 的独立输入框显示同一按钮并绑定各自的会话（侧聊尚未创建时，
 选择先作为待应用配置保存，首次发送创建会话时应用）。新对话以及新侧聊（即使其父对话
 设置了指令）默认为**无**，即不追加任何指令。预设的作用因提供商而异：`chatgpt_conversation`
 模型没有本地工具，预设**替换**桌面 agent 系统提示词（聊天模式从不发送它）；**默认**
 （内置聊天人格：以用户语言回答，简洁、直接、可执行，不含工具规则）只在此类会话提供，
-也是 D671 之前保存、未设置预设的会话沿用的值，其「无」表示完全不发送系统提示词。
+也是 F671 之前保存、未设置预设的会话沿用的值，其「无」表示完全不发送系统提示词。
 其他提供商的预设**追加**到 agent 系统提示词末尾，工具、项目指令与记忆照常工作，「无」
 不追加任何内容。远程主机会话（RACP `session/configure` 不携带指令，且在另一台机器上运行）
 和导入的只读 pi-native 会话中，按钮保持可见但禁用，原因显示在提示中。项目 Agent 讨论同样
@@ -191,9 +191,14 @@ OpenAI 风格的 Copilot 线路 API 仍将令牌作为请求密钥签名；所�
 存成 `model.provider`，因此聚合网关与自定义端点会在无思考内容的助手回合漏掉
 `reasoning_content`。非官方 DeepSeek 端点还会设置 `requiresNonEmptyReasoningReplay`，
 用文档化的非空占位符而不是 `""` 填补缺失推理（OpenCode / 第三方中转在压缩后拒绝空回传；
-见 ADR 0256 / #296）。官方 `deepseek.com` 行仍使用空串回填（#223）。该覆盖不改
-`thinkingFormat`。官方与中转行都会设置 `supportsReasoningEffort: false`；即使开启思考，
-DeepSeek 也不接受通用 OpenAI 的 `reasoning_effort` 请求字段。
+见 ADR 0256 / #296）。官方 `deepseek.com` 行仍使用空串回填（#223）。每条回放的 assistant
+行只带一个推理字段，字段名取最新一条带真实推理的行；其他字段名下的真实推理会被移过去，
+因此只有没有推理的行才会被填充，已存储思考开头回显的占位符也不会被显示或回放（D677，#1945）。该覆盖不改
+`thinkingFormat`。中转行设置 `supportsReasoningEffort: false`，因为有 DeepSeek 系中转
+被报告拒绝通用 OpenAI 的 `reasoning_effort` 字段（#1664）。官方 `deepseek.com` 行把该标志
+交给 pi-ai，按 DeepSeek 文档在 `thinking: {type: "enabled"}` 旁发送 `reasoning_effort`
+（low / high / max），使所选思考等级真正下发（#1821，D672）。模型绑定上显式选择的
+`supportsReasoningEffort`（`send` 或 `omit`）在两类行上都仍优先于该自动规则。
 
 当 Pi catalog 记录发布了推理 `effort` 选项且没有 `budget_tokens` 选项时
 （例如 Opus 4.7+、Opus 5.x、Fable），Anthropic Messages 请求会设置
@@ -369,6 +374,7 @@ type ModelBinding = {
   thinkingLevels: ThinkingLevel[]
   defaultThinkingLevel: SessionThinkingLevel | null
   availableForSubagents?: boolean // opt-in for AI-driven delegation
+  fastModeAllowed?: boolean // opt-in for the session /fast switch (ADR 0334)
 }
 
 type SelectedModelRef = {
@@ -396,6 +402,16 @@ type ThinkingLevel =
 当前对话以及旧版运行时消费方的有效模型。对话级别的模型切换与跨数组路由仍属
 后续工作。只有 `defaultModelId` 的旧版提供商，在主机读取时会被具体化为一条
 回退 binding，并在下一次提供商写入时升级为 `models`。
+
+`ModelBinding.fastModeAllowed`（布尔值，默认 false，ADR 0334）：允许会话的 `/fast`
+开关为该模型请求 OpenAI 优先服务档位（`service_tier: "priority"`）。模型设置只在
+Responses 协议上启用该勾选框：`openai_codex_responses`（ChatGPT 订阅，优先档位会更快
+消耗订阅额度）和 `responses`（按优先档位更高的 token 单价计费；中转服务可能忽略或
+另行计费）。只有当会话开关打开且保存的 binding 允许时，启动器才向 sidecar 发送
+`fastMode: true`；运行时只在解析后的协议为 `openai-codex-responses` 或
+`openai-responses` 的主回合请求中加入该字段。子代理、压缩和一次性请求保持默认档位。
+可信扩展把运行时切换到它自己的模型时会清除该开关，因为该模型没有可供选择加入的
+binding；下一次启动会按会话保存的 binding 重新应用。
 
 `ModelBinding.availableForSubagents`（布尔值，默认 false）：这是一个选择加入
 的标志，让该模型可用于 AI 驱动的子代理委托。启用后，该模型会出现在注入父

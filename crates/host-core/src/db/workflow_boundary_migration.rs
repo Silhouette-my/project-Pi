@@ -1,3 +1,4 @@
+#[cfg(test)]
 use super::{create_migration_backup, Connection, Context, Path, Result};
 
 pub(crate) const WORKFLOW_BOUNDARY_DDL: &str = r#"
@@ -12,6 +13,7 @@ CREATE TABLE IF NOT EXISTS workflow_turn_bindings (
 );
 "#;
 
+#[cfg(test)]
 pub(crate) fn migrate_v25_to_v26(conn: &Connection, path: &Path) -> Result<()> {
     let backup = create_migration_backup(conn, path, 25)?;
     let tx = conn.unchecked_transaction()?;

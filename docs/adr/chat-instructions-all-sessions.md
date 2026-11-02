@@ -2,7 +2,7 @@
 
 - Status: Accepted for implementation
 - Date: 2026-10-25
-- Related: D671, `03-runtime/11-provider-model-system.md`, ADR `side-chats-on-detached-transcripts`
+- Related: F671, `03-runtime/11-provider-model-system.md`, ADR `side-chats-on-detached-transcripts`
 
 ## Context
 

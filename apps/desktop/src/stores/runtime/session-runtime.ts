@@ -43,7 +43,7 @@ export type SessionConfiguration = Pick<
   SessionSummary,
   "mode" | "providerId" | "modelId" | "thinkingLevel"
 > &
-  Partial<Pick<SessionSummary, "permissionMode">> & {
+  Partial<Pick<SessionSummary, "permissionMode" | "fastMode">> & {
     // ChatGPT chat-mode instruction preset id (spec 03-runtime/11). null
     // clears it back to the built-in chat persona; mergeSessionConfiguration
     // forwards null while skipping only undefined.
@@ -91,7 +91,7 @@ export type SessionRuntime = {
   retractOptimisticUserMessage: (sessionId: string, message: UiMessage) => void;
   cacheBackgroundTranscriptEvent: (envelope: AgentEventEnvelope) => void;
   mergeSessionConfiguration: (
-    current: SessionConfiguration | undefined,
+    current: Partial<SessionConfiguration> | undefined,
     next: SessionConfiguration,
   ) => SessionConfiguration;
   queueWorkspaceAlignment: <T>(task: () => Promise<T>) => Promise<T>;

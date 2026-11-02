@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { DiffFile, WorkspaceDiff } from "@pi-desktop/shared";
+import { useReviewFocusRequest } from "../../lib/review-focus-request";
 import { reviewChangesFromMessages, summarizeReviewChanges } from "../../lib/workspace-review";
 import { api } from "../../lib/api";
 import { useAppStore } from "../../stores/app-store";
@@ -10,6 +11,14 @@ import { SegmentedControl, Select, TooltipButton } from "../ui";
 import { WorkTabEmpty } from "./WorkTabEmpty";
 
 type Repository = { id: string; label: string; diff: WorkspaceDiff; error?: string };
+
+let handledFocusSeq = 0;
+type AppliedFocus = {
+  snapshotIds: ReadonlySet<string>;
+  anchor: string;
+  expand: boolean;
+  seq: number;
+};
 
 function GitFiles({ files }: { files: DiffFile[] }) {
   const { t } = useTranslation();
@@ -52,6 +61,26 @@ export function ReviewTab({ projectId }: { projectId?: string }) {
   const [loading, setLoading] = useState(false);
   const contextKey = projectId ? `project:${projectId}` : `session:${sessionId ?? ""}:${workspacePath ?? ""}`;
   const completedTools = messages.filter((message) => message.role === "tool" && message.toolStatus !== "running").length;
+  const focusRequest = useReviewFocusRequest();
+  const [focus, setFocus] = useState<AppliedFocus | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!focusRequest || focusRequest.seq === handledFocusSeq) return;
+    const wanted = new Set(focusRequest.snapshotIds);
+    const anchor = entries.find((entry) => wanted.has(entry.change.snapshotId));
+    if (!anchor) return;
+    handledFocusSeq = focusRequest.seq;
+    setSource("history");
+    setFocus({ snapshotIds: wanted, anchor: anchor.change.snapshotId, expand: focusRequest.expand, seq: focusRequest.seq });
+  }, [focusRequest, entries]);
+
+  useEffect(() => {
+    if (!focus || source !== "history") return;
+    scrollRef.current
+      ?.querySelector<HTMLElement>(`[data-snapshot-id="${CSS.escape(focus.anchor)}"]`)
+      ?.scrollIntoView({ block: "start" });
+  }, [focus, source]);
 
   useEffect(() => {
     const refresh = () => setRevision((value) => value + 1);
@@ -94,7 +123,7 @@ export function ReviewTab({ projectId }: { projectId?: string }) {
     {source === "history" ? <>
       {!entries.length ? <WorkTabEmpty icon={IconDiff} title={t("panel.review.noChanges")} /> : <>
         <div className="review-toolbar"><span className="review-summary">{t("panel.review.changes", { count: summary.changeCount })}</span><span className="diff-counts"><span className="diff-count-add">+{summary.additions}</span> <span className="diff-count-del">−{summary.deletions}</span></span></div>
-        <div className="review-scroll">{entries.map((entry) => <ReviewChangeCard key={entry.change.snapshotId} message={entry.message} compact />)}</div>
+        <div className="review-scroll" ref={scrollRef}>{entries.map((entry) => <ReviewChangeCard key={entry.change.snapshotId} message={entry.message} compact openRequest={focus?.expand && focus.snapshotIds.has(entry.change.snapshotId) ? focus.seq : undefined} />)}</div>
       </>}
     </> : <>
       <p className="review-git-scope">{t("panel.review.gitScope")}</p>

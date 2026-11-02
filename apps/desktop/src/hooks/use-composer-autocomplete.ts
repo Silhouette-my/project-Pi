@@ -310,7 +310,13 @@ export function useComposerAutocomplete({
   const items = useMemo<AutocompleteItem[]>(() => {
     if (!trigger || dismissed) return [];
     if (trigger.mode === "slash") {
-      return commands ? filterCommands(commands, trigger.query, trigger.tokenStart > 0) : [];
+      return commands
+        ? filterCommands(
+            commands,
+            trigger.query,
+            trigger.tokenStart > 0,
+          )
+        : [];
     }
     if (!files) return [];
     return filterFiles(

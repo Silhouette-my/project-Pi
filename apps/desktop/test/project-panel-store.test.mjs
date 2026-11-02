@@ -3,10 +3,10 @@ import { register } from "node:module";
 import test from "node:test";
 
 register(new URL("./helpers/ts-import-hooks.mjs", import.meta.url));
-const { switchWorkPanelPage, switchWorkPanelSession } = await import(
+const { createWorkPanelSlice, switchWorkPanelPage, switchWorkPanelSession } = await import(
   "../src/stores/slices/work-panel-slice.ts"
 );
-const { projectAgentWorkPanelTab, projectSideWorkPanelTab } = await import(
+const { projectAgentWorkPanelTab, projectSideWorkPanelTab, wasProjectAgentTabClosed, forgetProjectAgentTabClosed } = await import(
   "../src/lib/project-panel.ts"
 );
 
@@ -111,4 +111,61 @@ test("a session change underneath the project page does not disturb the project 
   const chatResult = switchWorkPanelSession(chat, "s2");
   assert.deepEqual(chatResult.workPanelTabs, []);
   assert.deepEqual(chatResult.workPanelContexts.s1.tabs, [review]);
+});
+
+test("bulk tab closing updates the presented project context, not the chat beneath it", () => {
+  for (const closeAll of [false, true]) {
+    forgetProjectAgentTabClosed();
+    const chat = chatState();
+    const chatContext = chat.workPanelContexts.s1;
+    let state = {
+      ...chat,
+      page: "project",
+      projectConsoleId: "p1",
+      workPanelTabs: [agent, side, review],
+      activeWorkPanelTabId: agent.id,
+      workPanelContexts: {
+        ...chat.workPanelContexts,
+        "project:p1": { open: true, tabs: [agent, side, review], activeTabId: agent.id, fileRequest: null },
+      },
+    };
+    const actions = createWorkPanelSlice({
+      get: () => state,
+      set: (update) => { state = { ...state, ...(typeof update === "function" ? update(state) : update) }; },
+      isSessionSelectionPending: () => false,
+    });
+    if (closeAll) actions.closeAllWorkPanelTabs();
+    else actions.closeOtherWorkPanelTabs("review");
+    assert.equal(state.workPanelContexts.s1, chatContext, "the underlying chat retains its context");
+    assert.deepEqual(state.workPanelTabs.map((tab) => tab.id), closeAll ? [] : ["review"]);
+    assert.deepEqual(state.workPanelContexts["project:p1"].tabs, state.workPanelTabs);
+    assert.equal(wasProjectAgentTabClosed("project:p1"), true);
+    assert.equal(wasProjectAgentTabClosed("s1"), false);
+  }
+  forgetProjectAgentTabClosed();
+});
+
+test("restoring a session browser does not merge the project panel into its underlying chat", () => {
+  const chat = chatState();
+  const projectContext = { open: true, tabs: [agent, side], activeTabId: side.id, fileRequest: null };
+  let state = {
+    ...chat,
+    page: "project",
+    projectConsoleId: "p1",
+    sessions: [{ id: "s1" }],
+    workPanelTabs: projectContext.tabs,
+    activeWorkPanelTabId: projectContext.activeTabId,
+    workPanelContexts: { ...chat.workPanelContexts, "project:p1": projectContext },
+  };
+  const actions = createWorkPanelSlice({
+    get: () => state,
+    set: (update) => { state = { ...state, ...(typeof update === "function" ? update(state) : update) }; },
+    isSessionSelectionPending: () => false,
+  });
+  actions.restoreBrowserWorkPanelTabs("s1", [{ sessionId: "s1", tabId: "browser-restored", url: "https://example.invalid/restored", title: "Restored browser" }]);
+  assert.equal(state.workPanelTabs, projectContext.tabs);
+  assert.equal(state.activeWorkPanelTabId, side.id);
+  assert.equal(state.workPanelContexts["project:p1"], projectContext);
+  assert.deepEqual(state.workPanelContexts.s1.tabs.map((tab) => tab.id), ["review", "browser-restored"]);
+  assert.equal(state.workPanelContexts.s1.tabs.at(-1).location, "https://example.invalid/restored");
 });

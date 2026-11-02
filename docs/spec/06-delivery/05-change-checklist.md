@@ -64,10 +64,10 @@ See [R6 — Land a linked pull request only when it fixes the root cause with a 
 Before editing any file for a new request:
 
 - [ ] Existing uncommitted work is identified and preserved.
-- [ ] `origin/main` is fetched and local `main` is fast-forwarded when its
-  worktree is clean.
-- [ ] A dedicated `<type>/<short-description>` request branch and worktree are
-  created from that updated `main` commit.
+- [ ] The applicable upstream revision is fetched without changing a divergent
+  local `main`.
+- [ ] A dedicated request branch and worktree are created; an authorized fork
+  integration preserves the fork base and incorporates the upstream there.
 - [ ] The request worktree reuses the primary checkout's host toolchains,
   compatible dependency tree, package stores, caches, and ignored local
   configuration where safe; no separate environment is installed for E2E.

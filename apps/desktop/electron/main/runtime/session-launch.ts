@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import {
+  GEN_UI_DIRECTORY_NAME,
   ErrorCodes as SharedErrorCodes,
   isActiveInProject,
   isCommandShellCatalog,
@@ -30,7 +31,7 @@ import {
   visionFromModelConfig,
   type UserSubagentDocument,
 } from "@pi-desktop/agent-runtime";
-import { builtinSkills } from "../builtin-skills";
+import { builtinSkills, VISUALIZE_SKILL_ID } from "../builtin-skills";
 import { OAUTH_AUTH_KIND, type VendorOAuth } from "../oauth";
 import {
   catalogModelConfigFor,
@@ -523,11 +524,16 @@ export function createSessionLaunchRuntime({
     // skills come first so a plugin's entry reads as a refinement of them, and
     // the user's own skills come last so they win a name clash in the model's
     // reading order.
+    // Local opt-in selects GenUI; other sessions retain the legacy skill.
+    // Explicit skill activation remains independent of that format choice.
+    const disabledSkillIds = await disabledBuiltinSkills();
     const pluginSkills = [
       ...builtinSkills({
         workspacePath: projectPath,
         pluginPaths: plugins.listLoaded().map((loaded) => loaded.path),
-        disabledIds: await disabledBuiltinSkills(),
+        disabledIds: disabledSkillIds,
+        remote: Boolean(remoteWorkspace),
+        inlineVisualizations: settings.inlineVisualizations === true,
       }),
       ...plugins
         .getSkills()
@@ -728,9 +734,17 @@ export function createSessionLaunchRuntime({
         ...(overrides.turnId ? { turnId: overrides.turnId } : {}),
         thinkingLevel,
         infiniteProviderRetry: settings.infiniteProviderRetry === true,
+        // The session `/fast` switch only reaches a model the user allowed it
+        // for in model settings (ADR 0334).
+        fastMode: session.fastMode === true && storedModel?.fastModeAllowed === true,
         ...(jevApiKey ? { jevApiKey } : {}),
         commandShell,
         scratchDir: join(dataDir, "scratch", sessionId),
+        // Remote-host tools write on that host; Main can only serve local files.
+        // Only the local GenUI skill advertises the file-backed directory.
+        ...(remoteWorkspace || settings.inlineVisualizations !== true || disabledSkillIds.includes(VISUALIZE_SKILL_ID)
+          ? {}
+          : { visualizationsDir: join(dataDir, GEN_UI_DIRECTORY_NAME, sessionId) }),
         attachmentsDir: join(dataDir, "attachments"),
         projectPath,
         ...(remoteWorkspace ? { remoteWorkspace } : {}),

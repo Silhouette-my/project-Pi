@@ -9,7 +9,7 @@
 
 ## Visual baseline (Codex-aligned)
 
-The desktop shell targets a 1:1 visual match with the local Codex desktop client (ChatGPT.app electron-dark): charcoal surfaces (`#181818`), neutral gray scale (not blue-slate), ~275px sidebar, 46px toolbar rhythm, and a floating pill composer. Semantic token names remain stable; values follow the Codex gray system. Shell chrome keeps the **neutral gray accent** (`--ds-accent`); a user-chosen **theme colour** (default blue, D670) is applied only to the small set of primitives listed in the Theme colour section.
+The desktop shell targets a 1:1 visual match with the local Codex desktop client (ChatGPT.app electron-dark): charcoal surfaces (`#181818`), neutral gray scale (not blue-slate), ~275px sidebar, 46px toolbar rhythm, and a floating pill composer. Semantic token names remain stable; values follow the Codex gray system. Shell chrome keeps the **neutral gray accent** (`--ds-accent`); a user-chosen **theme colour** (default blue, F670) is applied only to the small set of primitives listed in the Theme colour section.
 
 ## 2. Non-goals
 
@@ -27,7 +27,7 @@ The desktop shell targets a 1:1 visual match with the local Codex desktop client
 | **Clarity over decoration** | No ornamental borders, gradients, or hero images. Every visual element carries information. |
 | **Developer density** | Compact spacing, small-but-readable type, minimal marketing whitespace. Information-rich, not sparse. |
 | **Dark-base defaults** | Dark theme is the primary theme for a coding agent. Light must be fully supported but is secondary. |
-| **Restraint** | Chrome is neutral gray. The user's theme colour (D670) is one accent family used only on primary actions, switches, checkboxes, focus rings, and the enabled send button; a per-project colour tints only the project glyph and the Project Console accent. No rainbow status colors — success, warning, error, and purple stay semantic and are never replaced by either colour. |
+| **Restraint** | Chrome is neutral gray. The user's theme colour (F670) is one accent family used only on primary actions, switches, checkboxes, focus rings, and the enabled send button; a per-project colour tints only the project glyph and the Project Console accent. No rainbow status colors — success, warning, error, and purple stay semantic and are never replaced by either colour. |
 | **Motion as feedback** | Animations convey state change (streaming, loading, expand/collapse). Never decorative. |
 | **Keyboard-first** | Focus rings, tab order, and shortcut labels are primary UX, not afterthoughts. |
 | **Continuous shell chrome** | Titlebars stay borderless and continuous with their surfaces; reserve faint separators for boundaries that clarify ownership, such as the window-control side seam. |
@@ -221,7 +221,7 @@ actions sit on the `--ds-tile` fill with primary text and no stroke (D297).
 Hover states use the corresponding accent/tile-hover tokens rather than
 opacity-only changes, so actions remain legible in dark and light themes.
 
-#### Theme colour and project colour (D670)
+#### Theme colour and project colour (F670)
 
 `AppSettings.accentColor` is a preset id (`blue` default, `teal`, `green`,
 `amber`, `rose`, `violet`, `graphite`) or a custom `#rrggbb`. The renderer
@@ -1290,7 +1290,7 @@ Full component contract and usage rules: [08-component-spec.md §17](08-componen
 
 | Property | Value |
 |---|---|
-| Position | top-center viewport, 16px from the top edge, `width: min(360px, 100vw − 32px)` |
+| Position | 16px from the top edge; centered in the main-content safe area when the in-flow shell is visible, falling back to the viewport when no main-content anchor exists; `width: min(360px, safe area − 32px)` |
 | Surface | `bg-elevated-opaque` + 1px `border-subtle` + `shadow-dialog` (same family as floating menus) |
 | Radius | radius-md-plus |
 | Font | text-md, leading-compact-plus |
@@ -1502,7 +1502,7 @@ adjacent form inputs; dense surfaces may override that metric locally.
 - Floating composer plate: Codex elevated-primary (`#212121f5` / `color-mix(gray-800 96%, transparent)`) with standard elevation-prominent (`0 0 0 .5px` stroke + `0 3px 7.5px #0000000a` + `0 0 20px #0000000d`); no heavier night-only lift
 - Light workspace chips capsule: elevated gray `#f4f4f4` (not pure white-on-white)
 - Combined workspace chips: elevated translucent plate over main, not flat main gray
-- Stage Manager (macOS only): host re-asserts min bounds while collapsed (permanent watchdog). The watchdog does not run on Windows/Linux, so no platform re-layers its own window unprompted (D447)
+- Stage Manager (macOS only): host re-asserts min bounds while collapsed (permanent watchdog). The watchdog and temporary recovery pin are macOS-only; Windows/Linux bounds recovery stays at the normal window layer so switching to another app never leaves PI-Desktop above it (D447).
 
 ## Destination pages
 

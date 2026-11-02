@@ -989,6 +989,7 @@ pub(crate) fn migrate_v21_to_v22(conn: &Connection, path: &Path) -> Result<()> {
 /// 03-runtime/11). A plain nullable column: NULL keeps the built-in chat
 /// persona, so no backfill and no CHECK (ids are file stems discovered at
 /// launch). The column probe keeps a second run harmless.
+#[cfg(test)]
 pub(crate) fn migrate_v26_to_v27_tx(tx: &rusqlite::Transaction<'_>) -> Result<()> {
     let has_prompt_preset: bool = tx.query_row(
         "SELECT EXISTS(SELECT 1 FROM pragma_table_info('sessions') WHERE name = 'prompt_preset')",
@@ -1002,6 +1003,7 @@ pub(crate) fn migrate_v26_to_v27_tx(tx: &rusqlite::Transaction<'_>) -> Result<()
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn migrate_v26_to_v27(conn: &Connection, path: &Path) -> Result<()> {
     let backup = create_migration_backup(conn, path, 26)?;
     let tx = conn.unchecked_transaction()?;

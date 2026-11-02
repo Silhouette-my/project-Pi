@@ -41,7 +41,7 @@ import type {
   SessionSort,
 } from "../lib/sidebar-preferences";
 import type { PermissionQueues } from "../lib/pending-permissions";
-import type { AskQueues } from "../lib/pending-asks";
+import type { AskDraft, AskDrafts, AskQueues } from "../lib/pending-asks";
 import type {
   QueuedPromptDirection,
   QueuedPrompts,
@@ -109,7 +109,7 @@ export type RefreshSessionsOptions = {
   revealImportedProjects?: boolean;
 };
 
-/** Toolbar selections retained on the unpersisted new-task draft. */
+/** Configuration shared by active and detached conversations. */
 export type SessionConfigurationInput = {
   mode: Mode;
   providerId?: string;
@@ -118,15 +118,22 @@ export type SessionConfigurationInput = {
   permissionMode?: PermissionMode;
   /** Chat instruction preset id; null resets to the built-in chat persona. */
   promptPreset?: string | null;
+  fastMode?: boolean;
 };
 
+/**
+ * Toolbar selections retained on the unpersisted new-task draft. An absent
+ * field keeps the default the new session would otherwise start with.
+ */
 export type DraftSessionConfiguration = {
-  mode: Mode;
-  thinkingLevel: SessionThinkingLevel;
+  mode?: Mode;
+  thinkingLevel?: SessionThinkingLevel;
   providerId?: string;
   modelId?: string;
   permissionMode?: PermissionMode;
   promptPreset?: string | null;
+  /** Session `/fast` switch carried into the created session (ADR 0334). */
+  fastMode?: boolean;
 };
 
 
@@ -192,6 +199,8 @@ export type AppState = {
   pendingPermissions: PermissionQueues;
   /** Inline asktool requests, queued per session without an expiry. */
   pendingAsks: AskQueues;
+  /** In-progress AskTool answers keyed by requestId, so a remount keeps them. */
+  askDrafts: AskDrafts;
   /** Renderer-owned, in-memory prompt queue, isolated by session. */
   queuedPrompts: QueuedPrompts;
   /** Planning state is durable per session, including sessions outside view. */
@@ -405,6 +414,10 @@ export type AppState = {
     sessionId: string,
     resolution: AskToolResolution,
   ) => Promise<void>;
+  /** Persist one question card's in-progress answers by requestId. */
+  setAskDraft: (requestId: string, draft: AskDraft) => void;
+  /** Forget a request's draft once it is resolved or dismissed. */
+  dropAskDraft: (requestId: string) => void;
   resolvePlan: (resolution: PlanResolveRequest) => Promise<PlanResolutionResult>;
   showToast: (message: string, options?: ToastOptions) => void;
   dismissToast: (id: number) => void;
@@ -473,6 +486,8 @@ export type AppState = {
     insertAfter: boolean,
   ) => void;
   closeWorkPanelTab: (tabId: string) => void;
+  closeOtherWorkPanelTabs: (tabId: string) => void;
+  closeAllWorkPanelTabs: () => void;
   collapseWorkPanel: () => void;
   /** Hide the visible panel while retaining its session-owned context. */
   resetWorkPanelContext: () => void;
@@ -485,6 +500,7 @@ export type AppState = {
   ) => void;
   openUrlInWorkPanel: (url: string) => void;
   updateBrowserWorkPanelTab: (state: BrowserState) => void;
+  restoreBrowserWorkPanelTabs: (sessionId: string, pages: BrowserState[]) => void;
 };
 
 export type AppStateData = {

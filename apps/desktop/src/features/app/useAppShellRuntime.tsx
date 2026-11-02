@@ -75,6 +75,11 @@ export function useAppShellRuntime() {
   const handlePlansChanged = useAppStore((s) => s.handlePlansChanged);
   const abort = useAppStore((s) => s.abort);
   const settings = useAppStore((s) => s.settings);
+  useEffect(() => {
+    if (page === "scheduled" && settings?.scheduledTasksEnabled === false) {
+      useAppStore.getState().setPage("chat", { record: false });
+    }
+  }, [page, settings?.scheduledTasksEnabled]);
   const workPanelOpen = useAppStore((s) => s.workPanelOpen);
   const workPanelWidth = useAppStore((s) => s.workPanelWidth);
   const workPanelYieldedWidth = useAppStore((s) => s.workPanelYieldedWidth);
@@ -99,6 +104,21 @@ export function useAppShellRuntime() {
   const { sidebarPinned, workPanelPinned, leftReveal, rightReveal } =
     useSidePanelReveal({ ready, page, contextKey: panelContextKey, workPanelOpen, settings });
   const workPanelVisible = workPanelOpen && workPanelPinned;
+
+  useEffect(() => {
+    if (!ready || !activeSessionId || activeSessionId.startsWith("remote:")) return;
+    const state = useAppStore.getState();
+    const tabs = state.workPanelContexts[activeSessionId]?.tabs ?? state.workPanelTabs;
+    let current = true;
+    void api.browserGetPages(activeSessionId).then((pages) => {
+      if (!current) return;
+      const live = useAppStore.getState();
+      const liveTabs = live.workPanelContexts[activeSessionId]?.tabs ?? live.workPanelTabs;
+      if (live.activeSessionId !== activeSessionId || liveTabs !== tabs) return;
+      live.restoreBrowserWorkPanelTabs(activeSessionId, pages);
+    }).catch((error) => console.warn("Browser tab restore failed", error));
+    return () => { current = false; };
+  }, [ready, activeSessionId, workPanelOpen]);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [sidebarDockCollapsed, setSidebarCollapsed] = useState(false);
@@ -770,6 +790,7 @@ export function useAppShellRuntime() {
       }
       state.openWorkPanelTabForSession(event.sessionId, {
         ...browserPluginTab(event.path ?? event.url),
+        ...(event.tabId ? { id: event.tabId } : {}),
       });
     });
     const offBrowserOpenFile = api.onBrowserOpenFile(({ path }) => {

@@ -40,6 +40,7 @@ import { ShowThinkingRow } from "../../components/settings/ShowThinkingRow";
 import { AccentColorRow } from "../../components/settings/AccentColorRow";
 import { panelPinMode, setPanelPinMode } from "../../lib/panel-pin";
 import { TranscriptDisplayModeRow } from "../../components/settings/TranscriptDisplayModeRow";
+import { RadialMenuSettings } from "../../components/settings/RadialMenuSettings";
 import { FontSizeRow } from "../../components/settings/FontSizeRow";
 import { LanguageRow } from "../../components/settings/LanguageRow";
 import { SettingsMenuSelect } from "../../components/settings/SettingsMenuSelect";
@@ -493,6 +494,26 @@ export function SettingsPage() {
                 ))}
               </SettingsCard>
 
+              <SettingsCard title={t("settings.scheduledTasks")}>
+                <SettingsRow
+                  title={t("settings.scheduledTasks")}
+                  description={t("settings.scheduledTasksDesc")}
+                >
+                  <SettingsToggle
+                    checked={settings.scheduledTasksEnabled !== false}
+                    label={t("settings.scheduledTasks")}
+                    onChange={() => void saveSettings({
+                      scheduledTasksEnabled: settings.scheduledTasksEnabled === false,
+                    })}
+                  />
+                </SettingsRow>
+              </SettingsCard>
+
+              <RadialMenuSettings
+                settings={settings}
+                saveSettings={saveSettings}
+              />
+
               <NetworkProxySection settings={settings} saveSettings={saveSettings} />
 
               <StorageSettingsSection />
@@ -606,6 +627,20 @@ export function SettingsPage() {
                     checked={settings.smoothStreaming !== false}
                     label={t("settings.smoothStreaming")}
                     onChange={() => void saveSettings({ smoothStreaming: !(settings.smoothStreaming !== false) })}
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  title={t("settings.inlineVisualizations")}
+                  description={t("settings.inlineVisualizationsDesc")}
+                >
+                  <SettingsToggle
+                    checked={settings.inlineVisualizations === true}
+                    label={t("settings.inlineVisualizations")}
+                    onChange={() =>
+                      void saveSettings({
+                        inlineVisualizations: settings.inlineVisualizations !== true,
+                      })
+                    }
                   />
                 </SettingsRow>
                 <LargePasteThresholdRow

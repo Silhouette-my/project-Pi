@@ -7,6 +7,7 @@ import { catalogs, flattenCatalog } from "@pi-desktop/i18n";
 import { IPC } from "@pi-desktop/shared";
 import { ReviewTab } from "../../src/components/workpanel/ReviewTab";
 import { useAppStore } from "../../src/stores/app-store";
+import { requestReviewFocus } from "../../src/lib/review-focus-request";
 import "../../src/styles/globals.css";
 
 const calls = [];
@@ -65,8 +66,9 @@ window.gitReviewProbe = async () => {
   assert(document.body.textContent.includes("shell-created output"), "Actual Shell-created untracked patch is readable");
   assert(!document.querySelector(".review-change-rollback"), "Live Git changes have no historical rollback action");
   assert(calls.some((call) => call.channel === IPC.invoke.workspaceDiff && call.args[0].sessionId === "a"), "Git query is bound to current session");
-  button("工具记录").click();
+  requestReviewFocus(["history-snapshot"], { expand: true });
   await waitFor(() => document.querySelector(".review-change-card"), "Historical tool records remain available");
+  await waitFor(() => document.querySelector('.review-change-card-header[aria-expanded="true"]'), "A transcript focus request opens history and expands its change");
   assert(document.body.textContent.includes("historical-edit.txt"), "History stays separate from Git");
   button("工作区改动").click();
   await waitFor(() => document.querySelector('[data-review-git-path="script-output.txt"]'), "Return to Git view");
@@ -90,5 +92,5 @@ window.gitReviewProbe = async () => {
   const select = document.querySelector("select");
   select.value = "b"; select.dispatchEvent(new Event("change", { bubbles: true }));
   await waitFor(() => document.querySelector('[data-review-git-path="other-project.txt"]'), "Repository picker selects another project root");
-  return { passed: true, liveGit: true, sessionScope: true, stagedAndUnstaged: true, externalRefresh: true, separateHistory: true, nonGitAndErrors: true, projectRoots: true };
+  return { passed: true, liveGit: true, sessionScope: true, stagedAndUnstaged: true, externalRefresh: true, separateHistory: true, focusedHistory: true, nonGitAndErrors: true, projectRoots: true };
 };

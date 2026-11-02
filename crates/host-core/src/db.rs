@@ -7,7 +7,7 @@ pub(crate) use serde_json::Value;
 pub(crate) use std::path::{Path, PathBuf};
 
 /// Current SQLite schema version.
-pub const SCHEMA_VERSION: i64 = 27;
+pub const SCHEMA_VERSION: i64 = 28;
 
 /// Absolute approval deadline for a newly submitted Plan or Goal proposal.
 pub const PLAN_APPROVAL_TIMEOUT_MS: i64 = 30 * 60 * 1000;
@@ -15,23 +15,30 @@ pub const PLAN_APPROVAL_TIMEOUT_MS: i64 = 30 * 60 * 1000;
 /// Durable notification rows kept globally.
 pub const NOTIFICATION_KEEP: i64 = 200;
 
+mod fork_convergence_migration;
 mod migrations;
 mod model;
+#[cfg(test)]
+mod model_discovery_migration;
 mod plugin_providers_migration;
 mod project_groups;
 mod project_workflow_migration;
 mod repositories;
 mod schema;
 mod session_collaboration_migration;
+#[cfg(test)]
+mod session_fast_mode_migration;
 mod session_title_source_migration;
+#[cfg(test)]
+mod tool_image_storage_migration;
 mod workflow_boundary_migration;
 mod worktree_migration;
 pub(crate) use migrations::{
     archive_legacy_db, create_migration_backup, migrate_and_validate_top_level_mode,
     migrate_app_settings, migrate_v10_to_v15, migrate_v11_to_v15, migrate_v12_to_v15,
     migrate_v13_to_v15, migrate_v14_to_v15, migrate_v17_to_v18, migrate_v18_to_v19,
-    migrate_v19_to_v20, migrate_v20_to_v21, migrate_v26_to_v27, migrate_v7_to_v8,
-    migrate_v8_to_v15, migrate_v9_to_v15, migration_backup_path, validate_session_modes,
+    migrate_v19_to_v20, migrate_v20_to_v21, migrate_v7_to_v8, migrate_v8_to_v15, migrate_v9_to_v15,
+    migration_backup_path, validate_session_modes,
 };
 pub(crate) use model::PlanWorkRow;
 pub use model::{Database, ProjectMemoryEntryRecord, ProjectMemoryRecord, ProjectRecord};
@@ -39,7 +46,7 @@ pub use project_groups::{
     ProjectGroupContextRecord, ProjectGroupRecord, ProjectGroupRoot, RemoteWorkspace,
     REMOTE_PROJECT_PREFIX,
 };
-pub(crate) use project_workflow_migration::{migrate_v24_to_v25, PROJECT_WORKFLOW_DDL};
+pub(crate) use project_workflow_migration::PROJECT_WORKFLOW_DDL;
 pub(crate) use repositories::{
     canonical_project_path, normalize_project_path, project_display_name,
     strip_obsolete_plan_approval_permission_mode, upsert_project_row, MAX_PROJECT_MEMORY_BYTES,
@@ -47,7 +54,7 @@ pub(crate) use repositories::{
 };
 pub(crate) use schema::{PLAN_APPROVALS_SCHEMA, SCHEMA_LATEST, SESSION_TODO_DDL};
 pub(crate) use session_title_source_migration::migrate_v22_to_v23;
-pub(crate) use workflow_boundary_migration::{migrate_v25_to_v26, WORKFLOW_BOUNDARY_DDL};
+pub(crate) use workflow_boundary_migration::WORKFLOW_BOUNDARY_DDL;
 pub(crate) use worktree_migration::{migrate_v23_to_v24, WORKTREE_DDL};
 
 pub fn now_ms() -> i64 {

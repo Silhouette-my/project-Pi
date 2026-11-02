@@ -444,6 +444,7 @@ pub(super) async fn run_setup(
             allow_external_paths: false,
             canonical_path_limit: None,
             hashline: None,
+            visualization_root: None,
         },
     )
     .await;

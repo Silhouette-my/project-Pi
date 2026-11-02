@@ -26,6 +26,7 @@ import {
 import { sessionAllows } from "../../../lib/remote-session-safety";
 import { resolveShowThinking } from "../../../lib/thinking-visibility";
 import { resolveTranscriptDisplayMode } from "../../../lib/transcript-display-mode";
+import { reviewChangeFromMessage } from "../../../lib/workspace-review";
 import { cachedVisibleProcessSteps } from "../../../lib/transcript-activity-summary";
 import { useSlotSessionId } from "../../../plugins/renderer-slots/use-slots";
 import { useAppStore } from "../../../stores/app-store";
@@ -56,6 +57,7 @@ import { TurnProcess } from "./TurnProcess";
 import { ActionSlotSide } from "./ActionBarSlots";
 import { SideChatAction } from "../side-chat/SideChatAction";
 import { EntryExtraStack } from "./EntryExtraStack";
+import { TurnChangesCard } from "./TurnChangesCard";
 import { slotMessage } from "../../../plugins/renderer-slots/slot-message";
 
 type AssistantTurnProps = {
@@ -174,17 +176,23 @@ type TranscriptHistoryProps = {
   entries: TranscriptEntry[];
   isRunning: boolean;
   liveDelegations?: ReadonlyMap<string, true>;
+  /** The running session's live turn, when it renders inside the history list (#1949). */
+  liveTurnId?: string;
 };
 
 /**
  * Keep the completed transcript out of the streaming reconciliation path.
  * The projection is still rebuilt for correctness, but React can now bail out
- * before walking every historical row when only the active tail changed.
+ * before walking every historical row when only the active tail changed. A
+ * live turn that is not the tail entry still renders active via `liveTurnId`;
+ * its streaming rows rebuild the projection anyway, so the bail-out only ever
+ * skips settled rows.
  */
 export const TranscriptHistory = memo(function TranscriptHistory({
   entries,
   isRunning,
   liveDelegations,
+  liveTurnId,
 }: TranscriptHistoryProps) {
   return (
     <>
@@ -193,7 +201,7 @@ export const TranscriptHistory = memo(function TranscriptHistory({
           key={transcriptEntryKey(entry)}
           entry={entry}
           isRunning={isRunning}
-          isActive={false}
+          isActive={entry.kind === "assistant-turn" && entry.id === liveTurnId}
           delegationsLive={entry.kind === "assistant-turn" && liveDelegations?.has(entry.id)}
         />
       ))}
@@ -203,6 +211,7 @@ export const TranscriptHistory = memo(function TranscriptHistory({
   if (
     previous.isRunning !== next.isRunning ||
     previous.liveDelegations !== next.liveDelegations ||
+    previous.liveTurnId !== next.liveTurnId ||
     previous.entries.length !== next.entries.length
   ) {
     return false;
@@ -249,10 +258,17 @@ const StandaloneRunRow = memo(function StandaloneRunRow({
 }: {
   segment: TurnProcessRunSegment;
 }) {
+  // A review-backed edit is one tool-level row. It cannot become a run row
+  // today, but keeping the branch here prevents a future alias from rendering
+  // both the file header and the generic tool header.
+  const reviewed = reviewChangeFromMessage(segment.item.message) !== null;
   return (
     <div className="turn-run-row" data-run-row="true">
-      <ToolRow imagesInTurn message={segment.item.message} />
-      <ReviewChangeCard message={segment.item.message} />
+      {reviewed ? (
+        <ReviewChangeCard message={segment.item.message} asToolRow />
+      ) : (
+        <ToolRow imagesInTurn message={segment.item.message} />
+      )}
     </div>
   );
 });
@@ -412,12 +428,16 @@ export const AssistantTurn = memo(function AssistantTurn({
             produced, not part of what it did. */}
         <AssistantTurnParts parts={responses} {...partContext} />
         {generatedImages}
+        {/* Mounted with the reply slots, so a streaming turn never grows it;
+            plugin entry extras stay beneath it. */}
+        {slotReply ? <TurnChangesCard tools={tools} /> : null}
         {!isActive && metaMessage ? (
           <MessageMeta
             modelId={modelId}
             usage={usage}
             responseDurationMs={responseDurationMs}
             responseOutputTokens={responseOutputTokens}
+            responseOutputEstimated={summary.responseOutputEstimated}
           />
         ) : null}
         {complete && actionMessage ? (
