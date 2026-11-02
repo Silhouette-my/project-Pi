@@ -20,6 +20,7 @@ Each ADR includes:
 
 | ID | Title | Status |
 |---|---|---|
+| project-agent-discussion-boundary | [Project Agent discussion sessions](project-agent-discussion-boundary.md) | Accepted |
 | isolated-visualize-frame-document | [Isolated visualization frame documents](isolated-visualize-frame-document.md) | Accepted for implementation |
 | chatgpt-conversation-browser-transport | [ChatGPT conversation browser transport](chatgpt-conversation-browser-transport.md) | Accepted for implementation |
 | provider-metadata-client-certificate-retry | [Provider metadata recovery from optional client certificates](provider-metadata-client-certificate-retry.md) | Implemented candidate |

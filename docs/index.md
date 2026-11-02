@@ -1,15 +1,15 @@
 ---
 layout: home
-title: PI-Desktop
-titleTemplate: A modular desktop workspace for AI agents
+title: project-Pi
+titleTemplate: A project-oriented AI agent workspace
 hero:
-  name: PI-Desktop
-  text: A desktop workspace for AI agents.
-  tagline: Bring projects, agents, models, plugins, and workflows into one persistent desktop environment.
+  name: project-Pi
+  text: A project-oriented AI agent workspace.
+  tagline: A personal PI-Desktop fork exploring continuity across conversations, decisions, and work. This development version is still evolving.
   actions:
     - theme: brand
-      text: Download
-      link: https://github.com/vastsa/PI-Desktop/releases/latest
+      text: Source and setup
+      link: https://github.com/Silhouette-my/project-Pi
     - theme: alt
       text: Documentation
       link: /guide/

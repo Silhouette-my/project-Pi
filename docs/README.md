@@ -1,5 +1,11 @@
 # PI-Desktop Docs
 
+This documentation accompanies [project-Pi](../README.md), a personal,
+project-oriented development fork of PI-Desktop. The guides and specifications
+include inherited upstream material and historical design records; verify
+fork-specific behavior against the current implementation. Upstream release
+and operational procedures do not automatically describe this fork.
+
 `docs/` is a VitePress project. The published site starts at [`index.md`](index.md);
 the repository's English technical source of truth remains organized under
 `spec/` and `adr/`.

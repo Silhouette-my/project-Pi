@@ -1091,7 +1091,7 @@ for roadmap details.
 
 ## 12. Reference map
 
-- [Example plugins](https://github.com/vastsa/PI-Desktop/tree/main/examples/plugins)
+- [Example plugins](https://github.com/Silhouette-my/project-Pi/tree/development/examples/plugins)
 - [Plugin system overview](spec/07-plugins/01-plugin-system.md)
 - [Manifest schema](spec/07-plugins/02-plugin-manifest-schema.md)
 - [Host API](spec/07-plugins/03-plugin-api.md)
@@ -1099,4 +1099,4 @@ for roadmap details.
 - [Packaging](spec/07-plugins/06-plugin-packaging.md)
 - [Developer experience](spec/07-plugins/10-plugin-devex.md)
 - [Permissions](spec/07-plugins/13-plugin-permissions-matrix.md)
-- [Hello reference plugin](https://github.com/vastsa/PI-Desktop/tree/main/examples/plugins/hello)
+- [Hello reference plugin](https://github.com/Silhouette-my/project-Pi/tree/development/examples/plugins/hello)

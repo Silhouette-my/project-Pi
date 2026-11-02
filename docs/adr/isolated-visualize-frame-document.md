@@ -1,4 +1,4 @@
-# Isolated visualization frame documents
+# ADR: Isolated visualization frame documents
 
 - Status: Accepted for implementation
 - Date: 2026-10-21
