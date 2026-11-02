@@ -23,11 +23,45 @@ project-Pi starts from a practical problem: work often outlives a single convers
 
 These features are evolving. Project execution runs while the local app is alive; persisted state supports reconciliation after restart, rather than an always-on cloud service. Availability and behavior can depend on the provider, environment and permissions.
 
-## The workspace foundation
+## A project-oriented workspace
 
-![PI-Desktop workspace showing a conversation, agent activity, and file panel](docs/image/readme/home.webp)
+The following screenshots are from an interactive **demo**, using example data. They illustrate the direction of the project workspace; the current development build may differ and some functions still need work.
 
-*PI-Desktop upstream screenshot, shown to illustrate the inherited desktop foundation. The project-Pi development interface and workflow may differ.*
+### See the project at a glance
+
+The overview brings together decisions that need attention, active work and recent results, with the Project Agent available alongside the page.
+
+![Demo project overview and Project Agent](docs/image/project-pi/overview.png)
+
+### Navigate conversations and project structure
+
+The project structure view groups related conversations and branches so it is easier to return to a particular line of work.
+
+![Demo conversation tree in the project structure view](docs/image/project-pi/structure.png)
+
+### Keep shared context visible
+
+References and decisions have a place alongside the project, rather than being scattered across conversations.
+
+![Demo project references and decisions](docs/image/project-pi/context.png)
+
+### Follow a workflow from goal to result
+
+The workflow view brings its candidate, acceptance criteria, work controls, related discussions and results together.
+
+![Demo workflow details, acceptance criteria and controls](docs/image/project-pi/workflow.png)
+
+### Inspect project changes
+
+The demo's Git view shows a history alongside workspace changes, placing code review in the project context.
+
+![Demo Git history and workspace changes](docs/image/project-pi/git.png)
+
+### Discuss without losing the project
+
+A conversation can sit beside the Project Agent, keeping discussion and project context within reach.
+
+![Demo conversation beside the Project Agent](docs/image/project-pi/conversation.png)
 
 ## Run from source
 

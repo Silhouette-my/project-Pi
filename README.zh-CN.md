@@ -23,11 +23,45 @@ project-Pi 的起点是一个实际问题：项目往往比一段对话更长。
 
 这些能力仍在演进。项目执行依赖本地应用运行；持久化状态用于重启后的状态核对，并非云端常驻服务。具体行为还取决于模型提供商、运行环境和权限设置。
 
-## 工作台基础
+## 以项目为中心的工作台
 
-![PI-Desktop 工作台：对话、Agent 活动与文件面板](docs/image/readme/home_zh.webp)
+以下截图来自使用示例数据的交互式 **demo**，用于展示项目工作台的设计方向。当前开发版的界面和功能可能有所不同，部分能力仍待完善。
 
-*此图来自 PI-Desktop 上游，用于展示继承的桌面工作台基础；project-Pi 开发版的界面与工作流可能有所不同。*
+### 一眼了解项目状态
+
+概览集中展示待处理事项、当前工作和最近成果，右侧可以同时与项目 Agent 讨论。
+
+![Demo 中的项目概览与项目 Agent](docs/image/project-pi/overview.png)
+
+### 找回相关对话和项目结构
+
+项目结构视图将相关对话及分支组织在一起，方便回到某一条工作线。
+
+![Demo 中的项目对话树](docs/image/project-pi/structure.png)
+
+### 让共享上下文有处可查
+
+参考资料和决策可以放在项目中查看，不必只在各段对话里寻找。
+
+![Demo 中的项目参考资料和决策](docs/image/project-pi/context.png)
+
+### 从目标跟进到成果
+
+工作流视图将候选版本、验收条件、工作控制、关联讨论和成果放在一起。
+
+![Demo 中的工作流详情、验收条件和工作控制](docs/image/project-pi/workflow.png)
+
+### 在项目中查看代码变更
+
+Demo 的 Git 视图将提交历史和工作区变更并排展示，让代码检查保留项目上下文。
+
+![Demo 中的 Git 历史和工作区变更](docs/image/project-pi/git.png)
+
+### 在对话中继续讨论
+
+对话与项目 Agent 可以并排显示，让讨论时仍能查看项目上下文。
+
+![Demo 中并排显示的对话和项目 Agent](docs/image/project-pi/conversation.png)
 
 ## 从源码运行
 
