@@ -11,9 +11,12 @@ They are not part of upstream `vastsa/PI-Desktop` and are not synchronized back.
   `--no-ff` merge. `development` is never rebased or force-pushed.
 - Upstream changes enter only through an `integrate/upstream-<version>` branch
   that is validated and then merged into `development`.
-- Fork builds use the version `<upstream version>-dev.<N>`, for example
-  `0.21.0-dev.1`. An installed build must come from a committed revision on
+- Fork builds use the version `<upstream version>-dev<N>`, for example
+  `0.21.0-dev1`. An installed build must come from a committed revision on
   `development`.
+- Fork tags are the bare version without a `v` prefix (`0.21.0-dev1`). The
+  inherited `release.yml` builds and publishes a GitHub Release for every pushed
+  `v*.*.*` tag, which this fork does not want.
 - The root `AGENTS.md` / `CLAUDE.md` stay as inherited from upstream to keep
   upstream merges clean. Their quality, architecture, testing, and security rules
   apply; their `origin/main` base, `check:pr-base`, and upstream PR steps do not.
