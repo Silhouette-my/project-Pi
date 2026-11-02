@@ -205,6 +205,7 @@ test("project memory keeps user notes separate and supports sourced agent notes,
   await writeFile(sharedStub, `export const IPC={invoke:{projectGroupList:'project.group.list',projectGroupMemoryGet:'project.group.memory.get',projectGroupMemorySave:'project.group.memory.save',projectMemoryGet:'project.memory.get',projectMemorySave:'project.memory.save',projectKnowledgeGet:'project.knowledge.get',projectKnowledgeForget:'project.knowledge.forget',projectKnowledgeClearHistory:'project.knowledge.clearHistory'}};
 export const defaultCommandShellForPlatform=()=>"bash", isCommandShellId=()=>true, normalizeLargePasteThreshold=(value)=>value,
 normalizeMode=(value)=>value, normalizeNetworkProxy=(value)=>value, normalizeNetworkPolicy=(value)=>value,
+normalizeRadialMenuPreferences=(value)=>value, radialMenuWriteError=()=>null,
 resolveFontScale=(value)=>value.fontScale, normalizeChatContentMaxWidth=(value)=>value,
 validateNetworkPolicy=(value)=>({ok:true,value}), validateNetworkProxy=(value)=>({ok:true,value}), validateSpeechSettings=(value)=>value,
 JEV_API_KEY_SECRET_REF="fixture";\n`);
