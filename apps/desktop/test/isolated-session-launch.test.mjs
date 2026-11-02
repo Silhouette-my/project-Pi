@@ -76,6 +76,7 @@ test("an isolated session launches in its worktree with its project's configurat
             },
           };
         }
+        if (method === "project.knowledge.forSession") return undefined;
         throw new Error("Unexpected fixture Host method: " + method);
       },
     };

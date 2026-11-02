@@ -35,6 +35,7 @@ test("launch resolves definition-only pins without granting Task.model selection
         if (method === "skills.active") return { skills: [] };
         if (method === "mcp.active") return { servers: [] };
         if (method === "project.memory.get") return {};
+        if (method === "project.knowledge.forSession") return undefined;
         throw new Error(`Unexpected host call ${method}`);
       },
     } },
