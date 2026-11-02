@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/image/readme/logo.png" alt="PI-Desktop icon" width="96" />
+<img src="docs/image/project-pi/icon.png" alt="project-Pi icon" width="96" />
 
 # project-Pi
 
