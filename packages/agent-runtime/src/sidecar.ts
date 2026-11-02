@@ -155,6 +155,7 @@ type RuntimeParams = {
   chatWorkflowContext?: string;
   projectInstructions?: ProjectInstructions;
   projectMemory?: string;
+  projectKnowledge?: import("@pi-desktop/shared").ProjectKnowledgeSnapshot;
   compactionSettings?: ContextCompactionSettings;
   attachmentsDir?: string;
   userMessageId?: string;
@@ -277,6 +278,7 @@ async function runtimeFor(
     chatInstructions: params.chatInstructions,
     chatWorkflowContext: params.chatWorkflowContext,
     projectMemory: params.projectMemory,
+    projectKnowledge: params.projectKnowledge,
     discussionOnly: params.discussionOnly,
     visualizationsDir: params.visualizationsDir,
     projectPath: params.projectPath,
@@ -366,6 +368,7 @@ async function runtimeFor(
     chatWorkflowContext: params.chatWorkflowContext,
     projectInstructions: params.projectInstructions,
     projectMemory: params.projectMemory,
+    projectKnowledge: params.projectKnowledge,
     discussionOnly: params.discussionOnly,
     scratchDir:
       typeof params.scratchDir === "string" && params.scratchDir

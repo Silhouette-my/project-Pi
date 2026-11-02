@@ -44,12 +44,36 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
   const [selectedId, setSelectedId] = useState("");
   const [tab, setTab] = useState<"overview" | "work" | "context" | "structure">("overview");
   const root = useRef<HTMLDivElement>(null);
+  const memorySourceNavigation = useRef(0);
   const [consoleWidth, setConsoleWidth] = useState(SPLIT_WORK_MIN_WIDTH);
   // The project Agent and side conversations live in the right work panel
   // (the project's own context); the console only asks for them to be shown.
   const openSide = (sessionId: string) => {
     const title = useAppStore.getState().sessions.find((item) => item.id === sessionId)?.title?.trim();
     openProjectSidePanel(projectId, sessionId, title || undefined);
+  };
+
+  const openMemorySource = async (sessionId: string, messageId: string) => {
+    const request = ++memorySourceNavigation.current;
+    try {
+      const current = useAppStore.getState();
+      if (current.activeSessionId === sessionId && !current.selectingSessionId)
+        current.setPage("chat");
+      else
+        await current.selectSession(sessionId);
+      let selected = useAppStore.getState();
+      if (request !== memorySourceNavigation.current || selected.activeSessionId !== sessionId) return;
+      if (selected.sessionMeta[sessionId]?.archived === true) {
+        selected.restoreSession(sessionId);
+        selected = useAppStore.getState();
+      }
+      if (request !== memorySourceNavigation.current || selected.page !== "chat") return;
+      await selected.navigateTranscript({ sessionId, messageId, query: "" });
+      if (request === memorySourceNavigation.current) setContextEditor(null);
+    } catch (cause) {
+      if (request === memorySourceNavigation.current)
+        setLocalError(cause instanceof Error ? cause.message : String(cause));
+    }
   };
   const [editing, setEditing] = useState<"new" | "edit" | null>(null);
   const [contextEditor, setContextEditor] = useState<"instructions" | "memory" | null>(null);
@@ -424,7 +448,11 @@ export function ProjectConsole({ projectId }: { projectId: string }) {
       {project && contextEditor === "memory" && (
         <ProjectMemoryDialog
           project={project}
-          onClose={() => setContextEditor(null)}
+          onClose={() => {
+            memorySourceNavigation.current += 1;
+            setContextEditor(null);
+          }}
+          onOpenSource={(sessionId, messageId) => void openMemorySource(sessionId, messageId)}
           onSaved={() => void refresh()}
           onError={fail}
         />

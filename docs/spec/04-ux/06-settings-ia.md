@@ -937,6 +937,15 @@ system while preserving their different data ownership:
   supports adding entries, shows an empty state, and keeps Cancel/Save
   actions. Saved entries are scoped to that project's path and are available
   in later chats for the project.
+- The same dialog separately lists Agent-maintained project records. Users can
+  inspect current content, its source conversation and update time, expand
+  history, and forget an active record. Forgetting updates Host immediately and
+  is independent of the editable notes' Save/Cancel actions. These records are
+  not presented as user-written instructions or verified facts. Loading and
+  conflict errors stay visible; changing projects discards stale responses.
+  The history section offers a confirmed Clear history action that removes
+  superseded/forgotten records while preserving active records and source chats.
+  See [Project knowledge](../03-runtime/project-knowledge.md).
 - Project search also matches session titles. Matching a session keeps its
   owning project in the index; opening that project lists the matching sessions
   ordered by latest activity, shows a count and relative update time, and reveals

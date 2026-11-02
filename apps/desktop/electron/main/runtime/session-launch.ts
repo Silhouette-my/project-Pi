@@ -717,6 +717,11 @@ export function createSessionLaunchRuntime({
       }
     }
     const workflowContext = await workflowContextForSession?.(sessionId);
+    // Native Pi transcripts are not Host-owned sessions and cannot authenticate
+    // a Desktop knowledge source. Preserve their existing context path.
+    const projectKnowledge = projectPath && !sessionId.startsWith("native-pi:")
+      ? await runtimeState.host!.call<import("@pi-desktop/shared").ProjectKnowledgeSnapshot>("project.knowledge.forSession", { sessionId })
+      : undefined;
     const discussionOnly = await isProjectAgentSession?.(sessionId) ?? false;
     if (workflowContext && apiStyle !== "chatgpt_conversation") {
       projectInstructions = { entries: [...(projectInstructions?.entries ?? []),
@@ -754,6 +759,7 @@ export function createSessionLaunchRuntime({
         ...(workflowContext && apiStyle === "chatgpt_conversation" ? { chatWorkflowContext: workflowContext } : {}),
         projectInstructions,
         projectMemory,
+        projectKnowledge,
         provider: {
           id: provider.id,
           name: provider.name,

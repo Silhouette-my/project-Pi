@@ -3363,6 +3363,23 @@ pub fn builtin_tool_defs() -> Value {
             }
         },
         {
+            "name": "ProjectKnowledgeRead",
+            "description": "Read or search sourced assistant notes for the calling session's project. Read before writing to obtain its revision.",
+            "risk": "low",
+            "parameters": {"type":"object","additionalProperties":false,"properties":{"query":{"type":"string","maxLength":512},"includeHistory":{"type":"boolean"},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":40}}}
+        },
+        {
+            "name": "ProjectKnowledgeWrite",
+            "description": "Remember, replace, or forget a sourced assistant note. Project and source come from the current session and running turn, not arguments. Existing user-authored memory is never changed.",
+            "risk": "medium",
+            "parameters": {"type":"object","additionalProperties":false,"properties":{
+                "action":{"type":"string","enum":["remember","replace","forget"]},
+                "expectedRevision":{"type":"integer","minimum":0},"expectedProjectId":{"type":"string"},"entryId":{"type":"string"},
+                "kind":{"type":"string","enum":["state","decision","knowledge"]},
+                "title":{"type":"string","maxLength":160},"content":{"type":"string"}},
+                "required":["action","expectedProjectId","expectedRevision"]}
+        },
+        {
             "name": "TodoWrite",
             "description": "Replace the current session's task checklist in display order, so the user can follow multi-step work. \
                  Send `{ todos: [...] }`; every call replaces the whole list (at most 50 items) and an empty array clears it. \

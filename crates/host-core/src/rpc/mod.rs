@@ -2,6 +2,7 @@ mod config_sync_rpc;
 mod file_batches;
 mod gen_ui;
 mod plugin_reviews_rpc;
+mod project_knowledge_rpc;
 mod project_workflow_rpc;
 #[cfg(test)]
 mod project_workflow_scope_tests;
@@ -2326,7 +2327,71 @@ async fn handle_request(
             st.db
                 .delete_project_memory(&path)
                 .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?;
+            crate::project_knowledge::delete_legacy_path(&st.db, &path)
+                .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?;
             Ok(json!({ "removed": removed, "sessionsRemoved": sessions_removed }))
+        }
+        "project.knowledge.get" => {
+            let group_id = params
+                .get("groupId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| rpc_err(1002, "groupId required", "INVALID_ARGUMENT"))?;
+            let st = state.lock().await;
+            serde_json::to_value(
+                crate::project_knowledge::get(&st.db, group_id)
+                    .map_err(project_knowledge_rpc::error)?,
+            )
+            .map_err(|error| rpc_err(1000, error.to_string(), "INTERNAL"))
+        }
+        "project.knowledge.forSession" => {
+            let session_id = params
+                .get("sessionId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| rpc_err(1002, "sessionId required", "INVALID_ARGUMENT"))?;
+            let st = state.lock().await;
+            serde_json::to_value(crate::project_knowledge::filtered(
+                crate::project_knowledge::for_session(&st.db, session_id)
+                    .map_err(project_knowledge_rpc::error)?,
+                None,
+                false,
+            ))
+            .map_err(|error| rpc_err(1000, error.to_string(), "INTERNAL"))
+        }
+        "project.knowledge.clearHistory" => {
+            let group_id = params
+                .get("groupId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| rpc_err(1002, "groupId required", "INVALID_ARGUMENT"))?;
+            let revision = params
+                .get("expectedRevision")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| rpc_err(1002, "expectedRevision required", "INVALID_ARGUMENT"))?;
+            let st = state.lock().await;
+            serde_json::to_value(
+                crate::project_knowledge::clear_history(&st.db, group_id, revision)
+                    .map_err(project_knowledge_rpc::error)?,
+            )
+            .map_err(|error| rpc_err(1000, error.to_string(), "INTERNAL"))
+        }
+        "project.knowledge.forget" => {
+            let group_id = params
+                .get("groupId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| rpc_err(1002, "groupId required", "INVALID_ARGUMENT"))?;
+            let entry_id = params
+                .get("entryId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| rpc_err(1002, "entryId required", "INVALID_ARGUMENT"))?;
+            let revision = params
+                .get("expectedRevision")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| rpc_err(1002, "expectedRevision required", "INVALID_ARGUMENT"))?;
+            let st = state.lock().await;
+            serde_json::to_value(
+                crate::project_knowledge::forget(&st.db, group_id, entry_id, revision)
+                    .map_err(project_knowledge_rpc::error)?,
+            )
+            .map_err(|error| rpc_err(1000, error.to_string(), "INTERNAL"))
         }
         "project.memory.get" => {
             let path = params
@@ -4874,7 +4939,9 @@ async fn handle_request(
                     });
                 }
 
-                let mut result = if p.tool_name == "TodoWrite" {
+                let mut result = if matches!(p.tool_name.as_str(), "ProjectKnowledgeRead" | "ProjectKnowledgeWrite") {
+                    project_knowledge_rpc::execute(&state, &p, call_started).await?
+                } else if p.tool_name == "TodoWrite" {
                     // The checklist body owns its own trusted-transport checks,
                     // the atomic write, and the after-commit notification.
                     todos::execute_write(&state, &tx, &p, call_started).await?

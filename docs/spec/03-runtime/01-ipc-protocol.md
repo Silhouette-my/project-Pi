@@ -1401,6 +1401,14 @@ authorization code. `accountLabel` is a display string.
   entries; the host derives a readable `content` value, caps it at 32 KiB, and
   uses it as context in the next session launch. Legacy callers may still save
   plain `content`.
+- `project/knowledge/get({ groupId })`: read the separate Agent-maintained
+  project-knowledge snapshot, including inactive history.
+- `project/knowledge/forget({ groupId, entryId, expectedRevision })`: retire an
+  active record without changing user-authored memory.
+- `project/knowledge/clear-history({ groupId, expectedRevision })`: clear
+  inactive history after explicit user confirmation. Active records and source
+  conversations remain. All three return `ProjectKnowledgeSnapshot`; stale
+  writes fail with `CONFLICT`. See [Project knowledge](project-knowledge.md).
 - `project/set(path)`: set workspace
 - `project/clear()`
 

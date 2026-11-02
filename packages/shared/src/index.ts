@@ -2,6 +2,7 @@ export * from "./activation.js";
 export * from "./protocol.js";
 export * from "./chatgpt-chat.js";
 export * from "./project-workflow.js";
+export * from "./project-knowledge.js";
 export * from "./project-structure.js";
 export * from "./file-batches.js";
 export * from "./errors.js";

@@ -6,6 +6,7 @@ import type { ProjectMemory, ProjectMemoryEntry } from "@pi-desktop/shared";
 import { api } from "../lib/api";
 import { OverlayBackdrop, Button, Input, Textarea, TooltipButton } from "./ui";
 import { IconClose, IconPlus, IconSparkles, IconTrash } from "./icons";
+import { ProjectKnowledgeSection } from "./ProjectKnowledgeSection";
 
 function newEntry(): ProjectMemoryEntry {
   const id =
@@ -40,11 +41,13 @@ export function ProjectMemoryDialog({
   onClose,
   onSaved,
   onError,
+  onOpenSource,
 }: {
   project: { name: string; path: string; groupId?: string; legacy?: boolean };
   onClose: () => void;
   onSaved: () => void;
   onError: (error: unknown) => void;
+  onOpenSource: (sessionId: string, messageId: string) => void;
 }) {
   useBlockingOverlay();
   const { t } = useTranslation();
@@ -141,10 +144,20 @@ export function ProjectMemoryDialog({
           </TooltipButton>
         </div>
         <p className="project-memory-dialog-description">{t("project.memoryDescription")}</p>
+        {project.path ? (
+          <ProjectKnowledgeSection
+            groupId={project.groupId}
+            projectPath={project.path}
+            onOpenSource={(sessionId, messageId) => onOpenSource(sessionId, messageId)}
+          />
+        ) : null}
         <div className="project-memory-dialog-toolbar">
-          <span className="project-memory-dialog-count">
-            {t("project.memoryCount", { count: entries.length })}
-          </span>
+          <div className="project-memory-own-heading">
+            <strong>{t("project.memoryYourNotes")}</strong>
+            <span className="project-memory-dialog-count">
+              {t("project.memoryCount", { count: entries.length })}
+            </span>
+          </div>
           <Button
             type="button"
             size="sm"

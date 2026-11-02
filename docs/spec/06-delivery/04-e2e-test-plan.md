@@ -2874,6 +2874,39 @@ identify the platform validation still needed.
 - **Milestone**: M5
 - **Status**: Unit/source covered; full provider/UI journey Draft
 
+#### E2E-PROJECT-knowledge-continuity: Retain, correct, and forget project findings across conversations
+
+- **Preconditions**: Isolated Host data, two projects, ordinary Agent sessions,
+  and a deterministic provider boundary. Existing user-authored memory is
+  populated. No Workflow task is required.
+- **Steps**: 1) Let session A remember a project finding through the Agent tool.
+  2) Open a new session in the same project and inspect its actual model
+  context. 3) Correct the finding in another turn and replace the old record.
+  4) Start another session, then inspect revision history. 5) Open Project
+  memory, follow the source conversation, and forget the active record. 6)
+  Restart Host and start a session in each project. 7) Attempt a stale write,
+  a forged source, and a write through Plan or Project Agent discussion.
+- **Expected**: The new session receives the active finding under an explicit
+  Agent-maintained context label, alongside unchanged user notes. Replacement
+  preserves the original source and content as superseded history; only the
+  replacement enters later current context. Forgetting excludes it from later
+  projections without changing user notes. The second project never receives
+  the first project's records. Host rejects stale revisions and unauthorized
+  source/scope/write paths without partial persistence. UI source navigation,
+  history, error handling, and project-switch isolation work through the real
+  component entry point. No real model success rate is inferred from fixtures.
+- **Specs linked**: [Project knowledge](../03-runtime/project-knowledge.md),
+  `03-runtime/04-data-storage.md`, `04-ux/06-settings-ia.md`.
+- **Acceptance**: C (conversation), D (project UI), F (persistence), Security.
+- **Milestone**: Project continuity.
+- **Status**: Automated isolated coverage implemented and passed:
+  `scripts/e2e-project-knowledge.mjs` exercises Desktop, AgentHost, the runtime
+  sidecar, and Rust Host with a loopback fixture provider;
+  `apps/desktop/test/project-knowledge-dialog-user-path.test.mjs` covers the
+  real memory dialog, including legacy projects and source navigation. Host
+  and runtime tests cover provenance, limits, permission modes, and migration.
+  Real-provider selection and semantic note quality remain unmeasured.
+
 #### E2E-011f: Send while running queues per-session prompts and supports Send now
 
 - **Preconditions**: Provider configured; session A can produce a delayed
@@ -11094,6 +11127,7 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 | C / D / Quality — Project session history resets after collapse | E2E-263 |
 | D — Workspace (project ordering) | E2E-253 |
 | Project Workflow MVP — AC01–AC12 | E2E-PROJECT-workflow-durable-loop |
+| C / D / F / Security — Agent-maintained project knowledge | E2E-PROJECT-knowledge-continuity |
 | E — Tools & permissions | E2E-008a, E2E-014, E2E-015, E2E-016, E2E-017, E2E-018, E2E-019, E2E-024I, E2E-024K, E2E-040, E2E-049, E2E-074, E2E-093, E2E-097, E2E-099, E2E-100, E2E-101, E2E-102, E2E-102d, E2E-102e, E2E-102g, E2E-103, E2E-105, E2E-106, E2E-107, E2E-111, E2E-112, E2E-113, E2E-114, E2E-115, E2E-116, E2E-119, E2E-121, E2E-122, E2E-142, E2E-145, E2E-147, E2E-155, E2E-158, E2E-166, E2E-181, E2E-PLUGIN-imported-pi-package-skills |
 | F — Persistence | E2E-020, E2E-021, E2E-021a, E2E-038, E2E-SETTINGS-inline-capability-imports, E2E-040, E2E-042, E2E-047, E2E-048, E2E-051, E2E-054, E2E-056, E2E-061, E2E-062, E2E-064, E2E-066, E2E-068, E2E-071, E2E-072, E2E-073, E2E-082, E2E-084, E2E-096, E2E-098, E2E-102, E2E-102b, E2E-102c, E2E-102d, E2E-102g, E2E-102i, E2E-103, E2E-AGENTS-001, E2E-061a, E2E-073a, E2E-104, E2E-106, E2E-107, E2E-108, E2E-109, E2E-110, E2E-112, E2E-118, E2E-119, E2E-120, E2E-121, E2E-123, E2E-142, E2E-146, E2E-146a, E2E-148, E2E-151, E2E-158, E2E-160, E2E-168, E2E-171, E2E-177, E2E-178, E2E-183, E2E-186, E2E-005J, E2E-PROVIDER-custom-endpoint-no-api-key, E2E-PLUGIN-session-orchestrator-real-workers, E2E-PLUGIN-provider-catalog-add-service, E2E-SESSION-outbox-unclassifiable-failure-does-not-stall-the-queue |
 | F — Persistence (project ordering) | E2E-251 |

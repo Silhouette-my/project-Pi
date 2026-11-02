@@ -5,9 +5,11 @@ import { readMainSource } from "./helpers/main-source.mjs";
 
 const read = (relativePath) => readFile(new URL(relativePath, import.meta.url), "utf8");
 
-const [dialog, page, api, protocol, main, runtime, sidecar, db, groups, rpc] = await Promise.all([
+const [dialog, page, sidebar, consolePage, api, protocol, main, runtime, sidecar, db, groups, rpc] = await Promise.all([
   read("../src/components/ProjectMemoryDialog.tsx"),
   read("../src/pages/ProjectsPage.tsx"),
+  read("../src/components/Sidebar.tsx"),
+  read("../src/features/project-workflow/ProjectConsole.tsx"),
   read("../src/lib/api.ts"),
   read("../../../packages/shared/src/protocol.ts"),
   readMainSource(),
@@ -30,6 +32,12 @@ test("project memory has a host-backed editor and project menu entry", () => {
   assert.match(dialog, /project\.memoryDescription/);
   assert.match(page, /ProjectMemoryDialog/);
   assert.match(page, /project\.editMemory/);
+  assert.match(page, /onOpenSource=\{\(sessionId, messageId\) => void openKnowledgeSource/);
+  assert.match(sidebar, /onOpenSource=\{\(sessionId, messageId\) => void openMemorySource/);
+  assert.match(consolePage, /onOpenSource=\{\(sessionId, messageId\) => void openMemorySource/);
+  for (const sourceView of [page, sidebar, consolePage]) {
+    assert.match(sourceView, /navigateTranscript\(\{ sessionId, messageId, query: "" \}\)/);
+  }
 });
 
 test("project memory crosses the IPC and runtime boundary", () => {

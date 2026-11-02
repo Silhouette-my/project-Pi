@@ -500,6 +500,12 @@ CREATE TABLE kv (
 | `plugin:<id>` | per-plugin settings; uninstall = `DELETE WHERE ns = ?` |
 | `projectMemory` | durable user-authored context keyed by canonical project path; structured values contain `format: "entries-v1"`, visual `entries`, derived `content`, and `updatedAt` |
 
+Agent-maintained project records are stored separately from `projectMemory`.
+Their versioned collection, source identity, compare-and-swap updates, and
+superseded/forgotten history are specified in
+[Project knowledge](project-knowledge.md). They do not change the author or
+meaning of existing user-written notes.
+
 The app settings JSON optionally stores `showThinking` (boolean) for transcript
 reasoning visibility. It is a portable application preference and synchronizes
 across devices like the legacy field. Missing values fall back to the legacy
@@ -611,6 +617,13 @@ CREATE TABLE projects (
   untitled entry when opened in the editor. The runtime labels it as
   user-provided context so it cannot become a replacement for safety, tool, or
   collaboration rules.
+
+- [Project knowledge](project-knowledge.md) supplies a separate Agent-maintained
+  context layer for ordinary project conversations. Only active entries enter
+  its current-context projection; corrections preserve the previous record as
+  history, and forgetting excludes a record from later projections. Host owns
+  the project scope and source binding. No database reset or conversion of
+  existing memory cards is required.
 
 ### 4.3 providers
 

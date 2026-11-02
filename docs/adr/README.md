@@ -40,6 +40,7 @@ Each ADR includes:
 | project-workflow-durable-state | [Project Workflow durable state](project-workflow-durable-state.md) | Accepted for local MVP implementation |
 | parallel-read-batches | [Ordered preparation and parallel file batches](parallel-read-batches.md) | Proposed |
 | host-file-batch-admission | [Host file identities and ordered batch admission](host-file-batch-admission.md) | Proposed |
+| project-knowledge-continuity | [Separate Agent-maintained project knowledge from user memory](project-knowledge-continuity.md) | Accepted |
 | composer-mcp-invocations | [Composer MCP Invocations](composer-mcp-invocations.md) | Accepted |
 | chronological-system-transcript | [Preserve chronological model system state](chronological-system-transcript.md) | Accepted |
 | mcp-tool-approval-risk | [User MCP tools keep the normal approval path](mcp-tool-approval-risk.md) | Accepted |
