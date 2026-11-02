@@ -1,15 +1,15 @@
 ---
 layout: home
-title: PI-Desktop
-titleTemplate: 可拆卸的 AI Agent 桌面工作台
+title: project-Pi
+titleTemplate: 以项目为中心的 AI Agent 工作台
 hero:
-  name: PI-Desktop
-  text: 可拆卸的 AI Agent 桌面工作台。
-  tagline: 把项目、Agent、模型、插件和工作流，装进一个长期可用的桌面环境。
+  name: project-Pi
+  text: 以项目为中心的 AI Agent 工作台。
+  tagline: 基于 PI-Desktop 的个人二开，探索跨对话、决策与执行的持续工作。目前仍是有待完善的开发版。
   actions:
     - theme: brand
-      text: 立即下载
-      link: https://github.com/vastsa/PI-Desktop/releases/latest
+      text: 源码与运行方法
+      link: https://github.com/Silhouette-my/project-Pi
     - theme: alt
       text: 使用文档
       link: /zh-CN/guide/

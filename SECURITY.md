@@ -1,5 +1,12 @@
 # Security Policy
 
+This fork is a development version. The release support, reporting address,
+response targets and advisory link below are the inherited **upstream
+PI-Desktop policy**, not commitments by project-Pi. For a vulnerability
+specific to this fork, use its private GitHub vulnerability reporting feature
+if enabled; do not disclose sensitive details in a public issue. For an
+upstream vulnerability, follow the upstream reporting instructions below.
+
 PI-Desktop is an early-preview, local-first desktop application. We take
 security reports seriously and appreciate responsible disclosure.
 

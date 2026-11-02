@@ -1,4 +1,4 @@
-# Project Agent discussion sessions
+# ADR: Project Agent discussion sessions
 
 - Status: Accepted
 - Date: 2026-10-20

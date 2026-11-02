@@ -931,7 +931,7 @@ SHA-256 并发布该版本，再把目录与安装包同步到
 
 ## 12.参考图
 
-- [示例插件](https://github.com/vastsa/PI-Desktop/tree/main/examples/plugins)
+- [示例插件](https://github.com/Silhouette-my/project-Pi/tree/development/examples/plugins)
 - [插件系统概述](/zh-CN/spec/07-plugins/01-plugin-system)
 - [Manifest Schema](/zh-CN/spec/07-plugins/02-plugin-manifest-schema)
 - [主机 API](/zh-CN/spec/07-plugins/03-plugin-api)
@@ -939,7 +939,7 @@ SHA-256 并发布该版本，再把目录与安装包同步到
 - [包装](/zh-CN/spec/07-plugins/06-plugin-packaging)
 - [开发者体验](/zh-CN/spec/07-plugins/10-plugin-devex)
 - [权限](/zh-CN/spec/07-plugins/13-plugin-permissions-matrix)
-- [Hello 参考插件](https://github.com/vastsa/PI-Desktop/tree/main/examples/plugins/hello)
+- [Hello 参考插件](https://github.com/Silhouette-my/project-Pi/tree/development/examples/plugins/hello)
 
 ### Fetch redirect policy (unreleased)
 
