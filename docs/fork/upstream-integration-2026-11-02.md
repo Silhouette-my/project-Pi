@@ -2,13 +2,13 @@
 
 ## Candidate and compatibility
 
-- Worktree: `PI-Desktop-worktrees/latest-dev-upstream-0.21.0`.
+- Worktree: a dedicated local integration worktree.
 - Branch: `integrate/latest-dev-upstream-0.21.0`.
 - Actual latest development base: `24d81bb20101b23aff90f297ec08cae340815f23`
   (`feat/workflow-agent-path`, 2026-10-27).
 - Upstream: `7763be22d08162f8f82729cd52a78816461daaeb` (`vastsa/PI-Desktop main`).
-- Integration is uncommitted until explicitly requested. Installation is now
-  authorized separately, with complete application/data/profile backup.
+- Committed as merge `605d3026c` and merged into `development` by `631c39b60`.
+  Installation was authorized separately, with complete application/data/profile backup.
 
 ## Baseline correction
 
@@ -24,8 +24,8 @@ navigation and default-None chat instructions for all providers.
 The first installation migrated the Test data directory to schema 28. Database
 integrity and identities of 147 sessions, 9 providers, 20 projects and 1 Workflow
 record were verified against the pre-upgrade backup, including session presets
-and model/permission selections. That backup remains untouched at
-`~/Library/Application Support/project-Pi-backups/2026-11-02-upstream-0.21.0`.
+and model/permission selections. That backup remains untouched in the local backup directory recorded in the
+private workspace notes.
 This candidate supports both the original schema27 and already-migrated28 data.
 
 Preserve Project Workflow, project navigation and side conversations, ChatGPT
@@ -90,10 +90,8 @@ was fixed and the actual bridge regression passes. No real accounts, paid APIs,
 real user databases, installed-app replacement, Windows/Linux runtime checks or
 the optional 384 MiB Review performance fixture were used.
 
-Evidence logs are in `/private/tmp/pi-upstream-*.log` and
-`/private/tmp/pi-host-*.log`; screenshots are in
-`/private/tmp/pi-upstream-workflow-evidence` and
-`/private/tmp/pi-upstream-visual-e2e`.
+Evidence logs and screenshots were kept in local temporary directories and are
+not part of the repository.
 
 ## Latest-baseline validation
 
@@ -127,8 +125,8 @@ After installation, schema 28 integrity and all 147 session, 9 provider, 20 proj
 and 1 Workflow identities, plus existing model/permission/preset selections, match the
 pre-correction snapshot. No real model request was sent. The app remains open.
 
-The complete pre-task backup and `RESTORE.md` / `restore.py` are at
-`/Users/michaeltan/Library/Application Support/project-Pi-backups/2026-11-02-upstream-0.21.0`.
+The complete pre-task backup and `RESTORE.md` / `restore.py` are kept in the
+local backup directory recorded in the private workspace notes.
 The `pre-corrected` subdirectory separately retains data/profile after the first
 candidate, so later local state was not discarded. The rejected first bundle is
 also retained there and must not be used as the latest development baseline.
